@@ -7,7 +7,7 @@
 
 <h1 align="center">Rinten</h1>
 
-<p align="center">A C# game engine, forked from s&box.</p>
+<p align="center">A C# multiplatform game engine</p>
 
 The editor runs on Windows and Linux. Games export to Windows, Linux, Steam Frame (Linux Arm), Android and the web, and run in VR through OpenXR or WebXR.
 
