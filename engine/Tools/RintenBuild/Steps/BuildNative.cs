@@ -39,7 +39,7 @@ internal class BuildNative( bool clean = false )
 
 		if ( !built )
 		{
-			Log.Error( "Native build failed. Pass --skip-native to build the managed engine against the rintencore already in game/bin." );
+			Log.Error( "Native build failed. Pass --skip-native to build the managed engine against a rintencore an earlier build put in game/bin." );
 			return ExitCode.Failure;
 		}
 

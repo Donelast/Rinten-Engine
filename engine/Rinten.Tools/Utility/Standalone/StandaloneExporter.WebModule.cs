@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace Editor;
@@ -301,9 +302,15 @@ partial class StandaloneExporter
 	//What one LLVM compile of the module holds at its peak, in gigabytes: the largest of the sixteen parts measured 1.96 (2026-10-05, /usr/bin/time -v).
 	private const int LlvmCompileGB = 2;
 
-	//What the kernel says is available, in gigabytes; null where it will not say.
+	//What the system says is available, in gigabytes; null where it will not say.
 	private static double? AvailableMemoryGB()
 	{
+		if ( OperatingSystem.IsWindows() )
+		{
+			var status = new MemoryStatus { Length = (uint)Marshal.SizeOf<MemoryStatus>() };
+			return GlobalMemoryStatusEx( ref status ) ? status.AvailablePhysical / 1073741824.0 : null;
+		}
+
 		try
 		{
 			foreach ( var line in File.ReadLines( "/proc/meminfo" ) )
@@ -316,11 +323,30 @@ partial class StandaloneExporter
 		}
 		catch
 		{
-			//Not Linux, or no /proc: nothing to check by.
+			//No /proc: nothing to check by.
 		}
 
 		return null;
 	}
+
+	//MEMORYSTATUSEX
+	[StructLayout( LayoutKind.Sequential )]
+	private struct MemoryStatus
+	{
+		public uint Length;
+		public uint MemoryLoad;
+		public ulong TotalPhysical;
+		public ulong AvailablePhysical;
+		public ulong TotalPageFile;
+		public ulong AvailablePageFile;
+		public ulong TotalVirtual;
+		public ulong AvailableVirtual;
+		public ulong AvailableExtendedVirtual;
+	}
+
+	[DllImport( "kernel32.dll" )]
+	[return: MarshalAs( UnmanagedType.Bool )]
+	private static extern bool GlobalMemoryStatusEx( ref MemoryStatus status );
 
 	//Runs the SDK with these arguments and this environment; true where it finished well. On Linux inside a scope
 	//of its own with a hard memory ceiling, so a build that wants more than it was given is the one that stops.

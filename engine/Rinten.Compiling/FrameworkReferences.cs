@@ -1,10 +1,9 @@
 ﻿using Microsoft.CodeAnalysis;
-using System.IO;
 using System.Reflection;
 
 namespace Rinten;
 
-//Loads the framework assemblies from the bin/ref folder and makes them available globally to every compiler.
+//The framework's reference assemblies, embedded at build (Rinten.Compiling.csproj), for every compiler
 [SkipHotload]
 static class FrameworkReferences
 {
@@ -16,8 +15,6 @@ static class FrameworkReferences
 		var resourceNames = assembly.GetManifestResourceNames()
 									.Where( name => name.EndsWith( ".dll", StringComparison.OrdinalIgnoreCase ) )
 									.ToArray();
-
-		var referenceFiles = new List<string>();
 
 		foreach ( var resourceName in resourceNames )
 		{
@@ -74,31 +71,5 @@ static class FrameworkReferences
 
 
 		return MetadataReference.CreateFromFile( assembly.Location );
-	}
-
-	private static List<string> LoadEmbeddedReferenceAssemblies()
-	{
-		var assembly = Assembly.GetExecutingAssembly();
-		var resourceNames = assembly.GetManifestResourceNames()
-			.Where( name => name.EndsWith( ".dll", StringComparison.OrdinalIgnoreCase ) )
-			.ToArray();
-
-		var tempDirectory = Path.Combine( Path.GetTempPath(), "EmbeddedRefs" );
-		Directory.CreateDirectory( tempDirectory );
-
-		var referenceFiles = new List<string>();
-
-		foreach ( var resourceName in resourceNames )
-		{
-			var outputPath = Path.Combine( tempDirectory, resourceName );
-			using ( var resourceStream = assembly.GetManifestResourceStream( resourceName ) )
-			using ( var fileStream = new FileStream( outputPath, FileMode.Create, FileAccess.Write ) )
-			{
-				resourceStream.CopyTo( fileStream );
-			}
-			referenceFiles.Add( outputPath );
-		}
-
-		return referenceFiles;
 	}
 }

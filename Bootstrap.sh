@@ -6,7 +6,7 @@ set -e
 
 cd "$(dirname "$0")"
 
-# Builds the native core then the managed engine; no cmake/C++ compiler: add --skip-native
+# Builds the native core then the managed engine; --skip-native keeps the rintencore an earlier build put in game/bin
 # Add --clean to remove stale obj/.generated output before rebuilding
 dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- build "$@"
 

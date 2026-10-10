@@ -58,7 +58,6 @@
 !/engine/Core/src/*.def
 !/engine/Launcher/RintenWeb/wwwroot/basis_transcoder.wasm
 !/engine/Launcher/RintenWeb/wwwroot/basis_transcoder.NOTICE.txt
-!/game/bin/wasm32/basis_transcoder.NOTICE.txt
 
 # Project descriptors; built-ins are named in Project.Static.cs
 !*.rinproj
@@ -133,9 +132,6 @@
 # Editor sounds
 !/game/core/sounds/editor/*.mp3
 
-# Reference assemblies Rinten.Compiling embeds (FrameworkReferences.cs); nothing regenerates them
-!/engine/Rinten.Compiling/EmbeddedRefs/*.dll
-
 #
 # Editors and local tooling
 #
@@ -195,8 +191,8 @@ game/core/shadercache/vulkan/shaders.cache
 /game/bin/**/*.xml
 /game/bin/**/*.json
 /game/bin/win64/logs
-# Our own core library, tracked so a checkout runs without building it first
-!/game/bin/win64/rintencore.dll
+# Written whole by engine/Core/build-web.sh
+/game/bin/wasm32/
 
 # Slang and SDL are fetched by `rintenbuild fetch-natives` (engine/natives.json); Skia and HarfBuzz come from NuGet
 /game/bin/**/slang-standard-module-*/

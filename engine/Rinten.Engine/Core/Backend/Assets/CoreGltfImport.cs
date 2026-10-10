@@ -244,6 +244,7 @@ internal static unsafe class CoreGltfImport
 
 						file.ReadFloat( jointsAccessor, v, scratch4 );
 
+						weightValues.Clear();
 						file.ReadFloat( weightsAccessor, v, weightValues );
 
 						//Weights come as floats summing to one; bytes summing to 255 is the same thing at

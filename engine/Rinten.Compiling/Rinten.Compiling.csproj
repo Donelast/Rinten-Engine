@@ -33,10 +33,15 @@
 		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.12.0-beta1.25218.8" />
 	</ItemGroup>
 
-    <ItemGroup>
-		<EmbeddedResource Include="EmbeddedRefs\*.dll">
-			<LogicalName>%(Filename)%(Extension)</LogicalName>
-		</EmbeddedResource>
-    </ItemGroup>
+	<!-- The framework's reference assemblies game code compiles against (FrameworkReferences.cs), out of the SDK's targeting pack -->
+	<Target Name="EmbedFrameworkReferences" AfterTargets="ResolveAssemblyReferences" BeforeTargets="PrepareResources">
+		<ItemGroup>
+			<EmbeddedResource Include="@(ReferencePath)" Condition="'%(ReferencePath.FrameworkReferenceName)' == 'Microsoft.NETCore.App'">
+				<LogicalName>%(Filename)%(Extension)</LogicalName>
+				<WithCulture>false</WithCulture>
+				<Type>Non-Resx</Type>
+			</EmbeddedResource>
+		</ItemGroup>
+	</Target>
   
 </Project>

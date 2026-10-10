@@ -1,3 +1,0 @@
-scenes/minimal.scene
-scenes/minimal.scene_d
-web-start.scene
