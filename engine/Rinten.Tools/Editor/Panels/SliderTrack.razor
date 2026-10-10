@@ -1,0 +1,274 @@
+@namespace Editor
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using Rinten.UI
+
+@inherits Panel
+
+@* The editor's one slider: the groove, the grip on it, the ruler under it and
+   the drag. Everything that is a slider is this - the inspector's SliderControl
+   is this with a value box and a presets button either side of it, a toolbar's
+   slider is this without the ruler, and FloatControlWidget hangs it in a
+   PanelWidget. There is no second one to keep looking like it.
+
+   The look is the old tool GUI's, read off it pixel for pixel: a groove of
+   hairlines filled in green up to the grip, a small bevelled grip, and a ruler
+   under it whose ticks and numbers always fall on round values - see Cut. *@
+
+<root class="slider-track">
+    <div @ref="Groove" class="track" onmousedown="@OnTrackMouseDown" onmousemove="@OnTrackMouseMove" onmouseup="@OnTrackMouseUp">
+        <div class="groove">
+            <div class="fill" style="width: @Percent( Fraction );"></div>
+        </div>
+        <div class="thumb" style="left: @Percent( Fraction );"></div>
+    </div>
+
+    @if ( ShowScale )
+    {
+        @* One row: a number stands where its tick would, on the same line. *@
+        <div class="scale">
+            @foreach ( var left in ticks )
+            {
+                <div class="tick" style="left: @left;"></div>
+            }
+            @foreach ( var (left, text) in labels )
+            {
+                <div class="label" style="left: @left;">@text</div>
+            }
+        </div>
+    }
+</root>
+
+@code
+{
+	//The left end.
+	[Parameter] public float Min { get; set { if ( field == value ) return; field = value; StateHasChanged(); } }
+
+	//The right end.
+	[Parameter] public float Max { get; set { if ( field == value ) return; field = value; StateHasChanged(); } } = 1f;
+
+	//What a dragged value is rounded to; 0 leaves it as it falls.
+	[Parameter] public float Step { get; set; } = 0.01f;
+
+	//Where the grip stands. Only drawn from - whoever owns the value keeps it, and hears of a drag through OnValueChanged.
+	[Parameter] public float Value { get; set { if ( field == value ) return; field = value; StateHasChanged(); } }
+
+	//The ruler under the groove: its ticks, and the round numbers under some of them.
+	//Off where there is no height for it - a toolbar, or a slider sharing a row.
+	[Parameter] public bool ShowScale { get; set { if ( field == value ) return; field = value; StateHasChanged(); } } = true;
+
+	//Whether a drag is refused.
+	[Parameter] public bool ReadOnly { get; set; }
+
+	//A value the pointer picked, already snapped and inside the ends.
+	[Parameter] public Action<float> OnValueChanged { get; set; }
+
+	//The pointer went down on the groove - one edit starts.
+	[Parameter] public Action OnEditStarted { get; set; }
+
+	//The pointer came up - the edit is over.
+	[Parameter] public Action OnEditFinished { get; set; }
+
+	//Whether somebody has hold of the grip right now. A slider showing something that moves on its own - a playhead - has to
+	//stop writing the value while it is being dragged, or the two fight each frame and the grip will not follow the pointer.
+	public bool IsDragging => Groove?.HasActive ?? false;
+
+	//About how far apart two ticks stand, in the sheet's pixels.
+	const float TickSpacing = 48f;
+
+	//How close two numbers under the ruler may come, in the sheet's pixels.
+	const float LabelSpacing = 100f;
+
+	//The round values the numbers under the ruler are written on.
+	static readonly double[] LabelMantissas = { 1, 2, 2.5, 5 };
+
+	//Where each tick stands, as a style's left.
+	readonly List<string> ticks = new();
+
+	//Where each number stands, and what it says.
+	readonly List<(string Left, string Text)> labels = new();
+
+	//The value between two ticks, which a drag with Ctrl held snaps to; 0 with no ruler.
+	double tickStep;
+
+	//What the ruler was last cut for.
+	float cutWidth = -1f, cutMin = float.NaN, cutMax = float.NaN;
+
+	Panel Groove { get; set; }
+
+	bool editing;
+
+	public SliderTrack()
+	{
+		EditorStyles.Apply( this, "SliderTrack.razor.scss" );
+	}
+
+	float Fraction => MathX.LerpInverse( Value, Min, Max, true );
+
+	//Formatted, not interpolated: a float a hair off zero prints as 1.9E-07, which
+	//the style parser throws out. Invariant, or a comma-decimal locale writes 12,5%.
+	static string Percent( float fraction ) => (fraction * 100f).ToString( "0.###", CultureInfo.InvariantCulture ) + "%";
+
+	//Cuts the ruler again when the width it was laid out at, or the ends, moved. The ticks and numbers
+	//stand in the ruler absolutely, so rebuilding them moves nothing else and cannot start the layout over.
+	public override void FinalLayout( Vector2 offset )
+	{
+		base.FinalLayout( offset );
+
+		if ( !ShowScale || Groove is null ) return;
+
+		var width = Groove.Box.Rect.Width / MathF.Max( ScaleToScreen, 0.01f );
+
+		if ( MathF.Abs( width - cutWidth ) < 0.5f && cutMin == Min && cutMax == Max ) return;
+
+		cutWidth = width;
+		cutMin = Min;
+		cutMax = Max;
+
+		Cut( width );
+		StateHasChanged();
+	}
+
+	//Picks round label steps (1, 2, 2.5, 5 x 10^n) at least LabelSpacing apart, then tick subdivisions
+	void Cut( float width )
+	{
+		ticks.Clear();
+		labels.Clear();
+		tickStep = 0;
+
+		double min = Min, max = Max, range = max - min;
+		if ( !(range > 0) || width <= 0f ) return;
+
+		var perPixel = range / width;
+
+		var (mantissa, labelStep) = LabelStep( min, max, perPixel * LabelSpacing );
+
+		//Only one number fits at that spacing: ask for less room rather than write one.
+		if ( Math.Floor( max / labelStep + 1e-9 ) - Math.Ceiling( min / labelStep - 1e-9 ) < 1 )
+			(mantissa, labelStep) = LabelStep( min, max, perPixel * LabelSpacing * 0.6 );
+
+		var perLabel = 1;
+		var bestGap = double.MaxValue;
+
+		foreach ( var cut in Cuts( mantissa ) )
+		{
+			var spacing = labelStep / cut / perPixel;
+			if ( spacing < 12 || Math.Abs( spacing - TickSpacing ) >= bestGap ) continue;
+
+			perLabel = cut;
+			bestGap = Math.Abs( spacing - TickSpacing );
+		}
+
+		tickStep = labelStep / perLabel;
+		var first = (long)Math.Ceiling( min / tickStep - 1e-9 );
+		var last = (long)Math.Floor( max / tickStep + 1e-9 );
+
+		if ( last - first > 400 ) return;
+
+		for ( var i = first; i <= last; i++ )
+		{
+			//From the index, not by adding: 0.1 added ten times is not 1.
+			var value = i * tickStep;
+			var left = Percent( (float)((value - min) / range) );
+
+			//A number stands in for its tick rather than under it.
+			if ( i % perLabel == 0 )
+				labels.Add( (left, Math.Round( value, 9 ).ToString( "0.#########", CultureInfo.InvariantCulture )) );
+			else
+				ticks.Add( left );
+		}
+	}
+
+	//The number step: the first few round values at least least, and the first of them both ends fall on - or the smallest when none does.
+	static (double Mantissa, double Step) LabelStep( double min, double max, double least )
+	{
+		var power = Math.Pow( 10, Math.Floor( Math.Log10( least ) ) );
+		(double, double) smallest = default;
+		var seen = 0;
+
+		while ( seen < 4 )
+		{
+			foreach ( var mantissa in LabelMantissas )
+			{
+				var step = mantissa * power;
+				if ( step < least - 1e-12 || seen >= 4 ) continue;
+
+				if ( seen++ == 0 ) smallest = (mantissa, step);
+				if ( OnStep( min, step ) && OnStep( max, step ) ) return (mantissa, step);
+			}
+
+			power *= 10;
+		}
+
+		return smallest;
+	}
+
+	static bool OnStep( double value, double step ) => Math.Abs( value / step - Math.Round( value / step ) ) < 1e-6;
+
+	//What a number step can be cut into and still tick on round values.
+	static int[] Cuts( double mantissa ) => mantissa switch
+	{
+		1 => CutsOfOne,
+		2 => CutsOfTwo,
+		_ => CutsOfFive,
+	};
+
+	static readonly int[] CutsOfOne = { 5, 2, 1 };
+	static readonly int[] CutsOfTwo = { 4, 2, 1 };
+	static readonly int[] CutsOfFive = { 5, 1 };
+
+	//A groove-local x as a value: inside the ends, snapped to Step - or, with Ctrl held, to the nearest tick. The grip is centred
+	//on its percentage and the ruler's ticks stand on the same percentages, so the whole width of the groove is the travel.
+	float ValueAt( float localX )
+	{
+		var width = Groove.Box.Rect.Width;
+		if ( width <= 0f ) return Value;
+
+		var value = MathX.Lerp( Min, Max, (localX / width).Clamp( 0f, 1f ) );
+
+		//Ctrl held: onto the ticks, which stand on round values.
+		if ( tickStep > 0 && ShowScale && Editor.Application.KeyboardModifiers.HasFlag( KeyboardModifiers.Ctrl ) )
+			value = (float)(Math.Round( value / tickStep ) * tickStep);
+		else if ( Step > 0 )
+			value = value.SnapToGrid( Step );
+
+		return value.Clamp( MathF.Min( Min, Max ), MathF.Max( Min, Max ) );
+	}
+
+	void Pick( MousePanelEvent e )
+	{
+		var value = ValueAt( Groove.ScreenPositionToPanelPosition( e.PointerPosition ).x );
+
+		Value = value;
+		OnValueChanged?.Invoke( value );
+	}
+
+	void OnTrackMouseDown( PanelEvent e )
+	{
+		if ( e is not MousePanelEvent mpe || mpe.MouseButton != MouseButtons.Left ) return;
+		if ( ReadOnly || Groove is null ) return;
+
+		editing = true;
+		OnEditStarted?.Invoke();
+
+		Pick( mpe );
+		e.StopPropagation();
+	}
+
+	void OnTrackMouseMove( PanelEvent e )
+	{
+		if ( e is not MousePanelEvent mpe || !IsDragging || !editing || ReadOnly ) return;
+
+		Pick( mpe );
+		e.StopPropagation();
+	}
+
+	void OnTrackMouseUp( PanelEvent e )
+	{
+		if ( !editing ) return;
+
+		editing = false;
+		OnEditFinished?.Invoke();
+	}
+}

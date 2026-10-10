@@ -1,0 +1,27 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Game Setup" ), Icon( "games" )]
+@using Editor.ProjectSettingsUI
+@using Editor.ProjectSettingPages.Categories.Settings
+@inherits ProjectSettingsCategoryPanel
+
+<root class="project-settings-category">
+	<div class="body" @ref="Body"></div>
+</root>
+
+@code
+{
+	GameSetupSettings settings;
+
+	protected override void OnInit( Project project )
+	{
+		settings = new GameSetupSettings();
+		settings.Load( project );
+		AddControlSheet( settings );
+	}
+
+	public override void OnSave()
+	{
+		settings.Apply( Project );
+		base.OnSave();
+	}
+}

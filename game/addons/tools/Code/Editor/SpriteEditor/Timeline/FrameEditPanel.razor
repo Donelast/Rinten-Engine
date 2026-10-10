@@ -1,0 +1,107 @@
+@namespace Editor.SpriteEditor
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Rinten.UI
+@using Editor.Inspectors
+@attribute [StyleSheet( "FrameEditPanel.razor.scss" )]
+@inherits Panel
+
+@* The properties of one frame, or of several at once, on a card held over the
+   window - the picture, the cell of it, the messages it broadcasts - with the same
+   control sheet the inspector uses. Every edit is a step of the sprite's undo. *@
+
+<root class="frame-edit">
+	<div class="head">
+		<i class="glyph">photo_library</i>
+		<label class="title">@Title</label>
+		<ToolbarButton Icon="close" ToolTip="Close" OnPressed="@Close" />
+	</div>
+
+	<div class="scroll">
+		<ControlSheet @ref="_sheet" />
+	</div>
+
+	<div class="foot">
+		<div class="btn good" onclick="@Close">Done</div>
+	</div>
+</root>
+
+@code
+{
+	public string Title { get; set; } = "Editing Frame";
+
+	//The frames, as one object - several are edited together.
+	public MultiSerializedObject Target { get; set; }
+
+	//Told of every change, with the property's name, to be made a step of undo.
+	public Action<SerializedProperty> OnChanged { get; set; }
+
+	public FrameEditPanel()
+	{
+		//So escape reaches it.
+		AcceptsFocus = true;
+	}
+
+	void Close() => SpriteEditorModal.Close( this );
+
+
+	public override void OnButtonTyped( ButtonEvent e )
+	{
+		base.OnButtonTyped( e );
+
+		if ( e.Pressed && e.Button == "escape" ) Close();
+	}
+
+	ControlSheet _sheet;
+	bool _wired;
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( _wired || Target is null || !_sheet.IsValid() ) return;
+		_wired = true;
+
+		Target.OnPropertyChanged += Changed;
+
+		_sheet.Target = Target;
+		_sheet.Rebuild();
+	}
+
+	public override void OnDeleted()
+	{
+		base.OnDeleted();
+
+		if ( _wired ) Target.OnPropertyChanged -= Changed;
+	}
+
+	void Changed( SerializedProperty property )
+	{
+		if ( property is not null ) OnChanged?.Invoke( property );
+	}
+
+	//Opens the editor over these frames of an animation.
+	public static void Open( ISpriteDocument document, Sprite.Animation animation, IReadOnlyCollection<int> indices )
+	{
+		var frames = animation?.Frames;
+		if ( frames is null ) return;
+
+		var target = new MultiSerializedObject();
+		var picked = indices.Where( i => i >= 0 && i < frames.Count ).OrderBy( i => i ).ToList();
+
+		foreach ( var index in picked )
+			target.Add( frames[index].GetSerialized() );
+
+		if ( picked.Count == 0 ) return;
+
+		target.Rebuild();
+
+		SpriteEditorModal.Open( new FrameEditPanel
+		{
+			Title = picked.Count == 1 ? $"Editing Frame {picked[0]}" : $"Editing {picked.Count} Frames",
+			Target = target,
+			OnChanged = property => document.Commit( $"Change Frame {property.DisplayName}", coalesce: true, source: target ),
+		} );
+	}
+}

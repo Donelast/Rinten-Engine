@@ -1,0 +1,15 @@
+﻿
+namespace Rinten;
+
+/// <summary>Forces an enum property to be shown as a group of buttons.</summary>
+[AttributeUsage( AttributeTargets.Property | AttributeTargets.Field )]
+public class EnumButtonGroupAttribute : System.Attribute
+{
+
+}
+
+/// <summary>Forces an enum property to be shown as a dropdown list.</summary>
+[AttributeUsage( AttributeTargets.Property | AttributeTargets.Field )]
+public class EnumDropdownAttribute : System.Attribute
+{
+}

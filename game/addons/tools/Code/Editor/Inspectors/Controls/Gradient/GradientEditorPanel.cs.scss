@@ -1,0 +1,93 @@
+GradientEditorPanel
+{
+	flex-direction: column;
+	flex-grow: 1;
+	width: 100%;
+	height: 100%;
+	padding: 8px;
+	gap: 6px;
+	overflow: hidden;
+	> .multiple
+	{
+		flex-shrink: 0;
+		color: $multiple-values;
+	}
+	> .gradient-stack
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		width: 100%;
+		position: relative;
+		GradientStopBarPanel
+		{
+			flex-shrink: 0;
+			width: 100%;
+			z-index: 3;
+		}
+		GradientPreviewPanel
+		{
+			flex-shrink: 0;
+			width: 100%;
+			z-index: 1;
+		}
+	}
+	> .controls
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		width: 100%;
+		gap: 8px;
+		padding: 8px;
+		background-color: $control-background;
+		border-radius: $control-radius;
+		border: 1px solid $border;
+		> .controls-row
+		{
+			flex-direction: row;
+			align-items: center;
+			width: 100%;
+			gap: 8px;
+			flex-wrap: nowrap;
+			> .control-field
+			{
+				flex-grow: 0;
+				flex-shrink: 1;
+				min-width: 0;
+				max-width: 300px;
+			}
+			> .controls-spacer
+			{
+				flex-grow: 1;
+				min-width: 8px;
+			}
+			> .controls-delete
+			{
+				flex-shrink: 0;
+			}
+			> .controls-toolbar
+			{
+				flex-direction: row;
+				align-items: center;
+				gap: 4px;
+				flex-shrink: 0;
+				margin-left: auto;
+			}
+			> .color-control,
+			> .alpha-control
+			{
+				flex-grow: 1;
+				flex-shrink: 1;
+				min-width: 0;
+				width: 100%;
+				max-width: none;
+			}
+		}
+	}
+	GradientPresetsPanel
+	{
+		flex-grow: 1;
+		flex-shrink: 1;
+		min-height: 0;
+		width: 100%;
+	}
+}

@@ -1,0 +1,77 @@
+﻿//The strip of buttons above a dock's content. Quiet until pointed at, lit while what it turns on is on.
+
+.panel-toolbar
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+
+	height: 26px;
+	padding: 0px 4px;
+	gap: 2px;
+
+	background-color: $sidebar-background;
+
+	> .separator
+	{
+		width: 1px;
+		height: 14px;
+		flex-shrink: 0;
+		margin: 0px 4px;
+
+		background-color: $border;
+	}
+
+	> .stretch
+	{
+		flex-grow: 1;
+	}
+
+	//The filter takes what the buttons leave, and may be squeezed below the width of what is typed in it.
+	> .filter
+	{
+		flex-grow: 1;
+		min-width: 0;
+	}
+}
+
+.panel-toolbar-button
+{
+	@include quiet;
+
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+
+	height: 20px;
+	min-width: 20px;
+	padding: 0px 6px;
+	border-radius: 4px;
+
+	color: $ink;
+
+	> .icon
+	{
+		font-family: Material Icons;
+		font-size: $type-default;
+		color: inherit;
+	}
+
+	> .text
+	{
+		font-family: $font;
+		font-size: $type-small;
+		white-space: nowrap;
+		color: inherit;
+	}
+
+	//Lit rather than merely hovered: the thing it turns on is on.
+	&.active
+	{
+		opacity: 1;
+
+		background-color: $picked;
+		color: $ink;
+	}
+}

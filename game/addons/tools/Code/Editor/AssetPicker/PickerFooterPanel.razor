@@ -1,0 +1,48 @@
+@namespace Editor.AssetPickers
+@attribute [StyleSheet( "PickerFooterPanel.razor.scss" )]
+@inherits Panel
+
+<root class="picker-footer">
+	<div class="btn primary @ConfirmStateClass" onclick="@Confirm">@ConfirmText</div>
+	<div class="btn" onclick="@Cancel">@CancelText</div>
+</root>
+
+@code
+{
+	//Label on the button that takes the selection.
+	public string ConfirmText { get; set; } = "Select";
+
+	//Label on the button that walks away.
+	public string CancelText { get; set; } = "Cancel";
+
+	public Action OnConfirm { get; set; }
+	public Action OnCancel { get; set; }
+
+	bool confirmEnabled;
+
+	//Whether the current selection is one the picker will accept.
+	public bool ConfirmEnabled
+	{
+		get => confirmEnabled;
+		set
+		{
+			if ( confirmEnabled == value ) return;
+
+			confirmEnabled = value;
+			StateHasChanged();
+		}
+	}
+
+	string ConfirmStateClass => confirmEnabled ? null : "is-disabled";
+
+	void Confirm()
+	{
+		if ( !confirmEnabled ) return;
+
+		OnConfirm?.Invoke();
+	}
+
+	void Cancel() => OnCancel?.Invoke();
+
+	protected override int BuildHash() => HashCode.Combine( ConfirmText, CancelText, confirmEnabled );
+}

@@ -1,0 +1,57 @@
+AssetFilterGroupRow,
+.asset-filter-group {
+	flex-direction: row;
+	align-items: center;
+	position: relative;
+	flex-shrink: 0;
+	min-height: $control-row-height;
+	padding: 0px 10px;
+	cursor: pointer;
+	pointer-events: all;
+
+	&:hover {
+		background-color: $veil-hover;
+	}
+
+	//Part of the category is chosen: a breath of the accent. The whole of it: the picked plate, like anything else that is on.
+	&.partial {
+		background-color: rgba( $accent, 0.08 );
+	}
+
+	&.full {
+		background-color: $picked;
+	}
+
+	> .anchor {
+		position: absolute;
+		top: 0px;
+		width: 0px;
+		height: 0px;
+		pointer-events: none;
+
+		&.left { left: 0px; }
+		&.right { right: 0px; }
+	}
+
+	> .name {
+		flex-grow: 1;
+		font-size: $type-body;
+		color: $text-control;
+		@include one-line;
+		pointer-events: none;
+	}
+
+	> i {
+		flex-shrink: 0;
+		font-family: Material Icons;
+		font-size: $type-large;
+		color: $text-disabled;
+		pointer-events: none;
+	}
+
+	&:hover > .name,
+	&.full > .name,
+	&.partial > .name {
+		color: $text;
+	}
+}

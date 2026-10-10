@@ -1,0 +1,173 @@
+//The canvas: a toolbar, and under it the viewport with the stage - the document at screen size, scaled down to fit - and the overlay over it.
+
+.design-canvas
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+
+	.readout.zoom
+	{
+		min-width: 44px;
+		text-align: center;
+	}
+
+	.readout
+	{
+		padding: 0 8px;
+		font-family: $font-family;
+		font-size: $type-body;
+		color: rgba( $text, 0.5 );
+		white-space: nowrap;
+	}
+}
+
+//The project does not compile: said over the canvas, a click opens the place.
+.design-canvas > .trouble
+{
+	flex-shrink: 0;
+	padding: 6px 12px;
+	background-color: rgba( #c0392b, 0.25 );
+	border-bottom: 1px solid rgba( #c0392b, 0.5 );
+	cursor: pointer;
+
+	&.hidden { display: none; }
+
+	> .text
+	{
+		font-family: $font-family;
+		font-size: $type-body;
+		color: $text;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		overflow: hidden;
+	}
+
+	&:hover { background-color: rgba( #c0392b, 0.4 ); }
+}
+
+.design-canvas > .viewport
+{
+	flex-grow: 1;
+	position: relative;
+	overflow: hidden;
+	background-color: $ground;
+}
+
+//The stage is a style boundary - see DesignCanvasPanel - so no rule here reaches it; it is dressed in code.
+
+.design-canvas > .viewport > .overlay
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	cursor: default;
+
+	//Interact: the pointer goes through to the document - the wheel too, so a list in the document scrolls; the toolbar still zooms.
+	&.interact
+	{
+		pointer-events: none;
+	}
+
+	> .box
+	{
+		position: absolute;
+		pointer-events: none;
+	}
+
+	> .box.hidden
+	{
+		display: none;
+	}
+
+	> .margin
+	{
+		background-color: rgba( #f9a825, 0.18 );
+	}
+
+	> .padding
+	{
+		background-color: rgba( #7cb342, 0.18 );
+	}
+
+	> .hover
+	{
+		border: 1px solid rgba( $accent, 0.7 );
+	}
+
+	//A tag armed in the palette: the pointer says it draws.
+	&.armed { cursor: crosshair; }
+
+	//The words of a tag, edited where they are: over the panel, at its size.
+	> .text-edit
+	{
+		position: absolute;
+		padding: 0 4px;
+		background-color: rgba( #101418, 0.96 );
+		border: 1px solid $accent;
+		border-radius: 2px;
+		color: white;
+		font-family: $font-family;
+		pointer-events: all;
+	}
+
+	//The rest of a selection of several.
+	> .other
+	{
+		border: 1px solid rgba( $accent, 0.8 );
+		background-color: rgba( $accent, 0.06 );
+	}
+
+	> .selection
+	{
+		border: 1px solid $accent;
+
+		//The grips can be taken hold of; the frame itself cannot.
+		> .grip
+		{
+			position: absolute;
+			width: 7px;
+			height: 7px;
+			background-color: $accent;
+			border: 1px solid white;
+			pointer-events: none;
+
+			&.n  { left: 50%; top: 0; transform: translate( -50%, -50% ); }
+			&.s  { left: 50%; top: 100%; transform: translate( -50%, -50% ); }
+			&.e  { left: 100%; top: 50%; transform: translate( -50%, -50% ); }
+			&.w  { left: 0; top: 50%; transform: translate( -50%, -50% ); }
+			&.ne { left: 100%; top: 0; transform: translate( -50%, -50% ); }
+			&.nw { left: 0; top: 0; transform: translate( -50%, -50% ); }
+			&.se { left: 100%; top: 100%; transform: translate( -50%, -50% ); }
+			&.sw { left: 0; top: 100%; transform: translate( -50%, -50% ); }
+
+			//The turn: a ring above the top edge, on a stem.
+			&.rotate
+			{
+				left: 50%;
+				top: -22px;
+				width: 9px;
+				height: 9px;
+				border-radius: 50%;
+				background-color: white;
+				border: 2px solid $accent;
+				transform: translate( -50%, 0 );
+			}
+		}
+
+		> .readout
+		{
+			position: absolute;
+			left: -1px;
+			bottom: 100%;
+			padding: 1px 6px;
+			background-color: $accent;
+			color: white;
+			font-family: $font-family;
+			font-size: 11px;
+			white-space: nowrap;
+		}
+	}
+}

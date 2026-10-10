@@ -1,0 +1,48 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Rendering" ), Icon( "view_in_ar" )]
+@using Editor.ProjectSettingsUI
+@inherits ProjectSettingsCategoryPanel
+
+@*
+	How the project draws its world. Every setting is written into the renderer
+	once, when the project is loaded - see RenderingSettings - so what is here is
+	what the build ships with rather than something the frame asks about.
+*@
+<root class="project-settings-category">
+	<div class="body" @ref="Body">
+		<SettingsCalloutPanel Html="These are read once, as the project loads, and written into the renderer. Nothing here is tested for while a frame is being drawn." />
+
+		<div @ref="sheetHost"></div>
+
+		<SettingsCalloutPanel Html="An export for a machine that cannot run a setting ships with it off, whatever it says here. Every one of these is also a console variable - <b>r_occlusion</b>, <b>r_occlusion_grain</b>, <b>r_mesh_lod_pixels</b>, <b>r_cull_pixels</b> - so a value can be tried without a rebuild." />
+	</div>
+</root>
+
+@code
+{
+	RenderingSettings settings;
+	Panel sheetHost;
+
+	protected override void OnInit( Project project )
+	{
+		settings = EditorUtility.LoadProjectSettings<RenderingSettings>( "Rendering.config" );
+
+		var so = settings.GetSerialized();
+
+		var sheet = sheetHost.AddChild<Editor.Inspectors.ControlSheet>();
+		sheet.Target = so;
+		sheet.Rebuild();
+
+		ListenForChanges( so );
+	}
+
+	public override void OnSave()
+	{
+		EditorUtility.SaveProjectSettings( settings, "Rendering.config" );
+
+		//The project's renderer reads these again on its next frame.
+		settings.Apply();
+
+		base.OnSave();
+	}
+}

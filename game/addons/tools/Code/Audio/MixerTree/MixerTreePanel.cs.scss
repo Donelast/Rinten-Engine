@@ -1,0 +1,31 @@
+MixerTreePanel
+{
+	flex-direction: column;
+	background-color: $control-background;
+	border-radius: $control-radius;
+	pointer-events: all;
+	color: $text;
+
+	> .body
+	{
+		flex-direction: column;
+		overflow: scroll;
+		pointer-events: all;
+	}
+
+	Label
+	{
+		color: $text;
+
+		&.expander,
+		&.icon
+		{
+			color: $text-light;
+		}
+
+		&.voices
+		{
+			color: rgba( $green, 0.5 );
+		}
+	}
+}

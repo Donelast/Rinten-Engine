@@ -1,0 +1,10 @@
+//A gap between the tree's sections: the shared row with nothing drawn on it.
+.tree-row.asset-tree-spacer
+{
+	height: 10px;
+	background-color: transparent;
+	border-color: transparent;
+	pointer-events: none;
+
+	> * { display: none; }
+}

@@ -1,0 +1,89 @@
+//A value that is either written down or the name of a parameter: one button that says which, and then whatever that half needs.
+
+ParticleFloatBindingControl.control.no-background,
+ParticleVectorBindingControl.control.no-background,
+ParticleColorBindingControl.control.no-background
+{
+	flex-direction: row;
+	align-items: flex-start;
+	flex-grow: 1;
+	min-width: 0;
+	gap: 2px;
+	padding: 0;
+
+	//As tall as its lines, not one row: a bound value is the value and then the parameter
+	//under it, and a control held to a row's height drew the second line over the first.
+	height: auto;
+	min-height: $control-row-height;
+}
+
+ParticleFloatBindingControl.control,
+ParticleVectorBindingControl.control,
+ParticleColorBindingControl.control
+{
+	> .toolbarbutton
+	{
+		flex-shrink: 0;
+		width: $control-row-height;
+		height: $control-row-height;
+	}
+
+	//Lit while the value is coming from a parameter, so a sheet says at a glance which of its rows the effect leaves open.
+	> .toolbarbutton.bound
+	{
+		color: $blue;
+	}
+
+	//The value on the first line, and the parameter that has a say in it on the lines under it - so a bound row still shows what it was authored as.
+	> .controls
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+		gap: 2px;
+
+		> .line
+		{
+			flex-direction: row;
+			align-items: stretch;
+			min-width: 0;
+			gap: 2px;
+
+			> .control
+			{
+				flex-grow: 1;
+				min-width: 0;
+			}
+
+			> NumberControl
+			{
+				flex-grow: 0;
+				flex-shrink: 0;
+				width: 64px;
+			}
+
+			> .control.channel
+			{
+				flex-grow: 0;
+				flex-shrink: 0;
+				width: 72px;
+			}
+
+			> .toolbarbutton.mode
+			{
+				flex-shrink: 0;
+				width: $control-row-height;
+				height: $control-row-height;
+			}
+
+			> .hint
+			{
+				flex-shrink: 0;
+				align-items: center;
+				padding: 0 6px;
+				font-size: $type-micro;
+				color: rgba( $text-control, 0.5 );
+			}
+		}
+	}
+}

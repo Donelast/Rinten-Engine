@@ -1,0 +1,79 @@
+//The tile map tool's sidebar - see TileMapToolPanel.razor.
+.tilemap-tool
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	row-gap: 8px;
+	padding: 6px 4px 10px 4px;
+	font-family: $font;
+	pointer-events: all;
+
+	i
+	{
+		font-family: Material Icons;
+		font-size: 15px;
+		flex-shrink: 0;
+	}
+
+	label
+	{
+		font-size: $type-body;
+		color: $ink;
+	}
+
+	> .heading
+	{
+		flex-direction: row;
+		align-items: center;
+		column-gap: 6px;
+		padding: 2px 6px;
+
+		> .title { font-size: $type-default; }
+	}
+
+	> .section
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		row-gap: 6px;
+		padding: 0 4px;
+
+		> .caption
+		{
+			color: $ink-dim;
+			font-size: $type-small;
+		}
+
+		> .note
+		{
+			color: $ink-dim;
+			white-space: normal;
+		}
+	}
+
+	.chips
+	{
+		flex-direction: row;
+		flex-wrap: wrap;
+		gap: 4px;
+	}
+
+	.chip, .button
+	{
+		flex-direction: row;
+		align-items: center;
+		column-gap: 6px;
+		min-height: 24px;
+		padding: 2px 8px;
+		border-radius: $radius-1;
+		background-color: $chip;
+		cursor: pointer;
+		transition: background-color $fast $ease;
+
+		> label, > i { pointer-events: none; white-space: nowrap; }
+
+		&:hover { background-color: $chip-hover; }
+
+		&.selected { background-color: $chip-on; }
+	}
+}

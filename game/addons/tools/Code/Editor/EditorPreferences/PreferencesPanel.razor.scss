@@ -1,0 +1,140 @@
+PreferencesPanel,
+.preferences
+{
+	flex-direction: row;
+	flex-grow: 1;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	pointer-events: all;
+	color: $ink;
+
+	> .content
+	{
+		flex: 1 1 0;
+		flex-direction: column;
+		min-width: 0;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: scroll;
+
+		> .content-inner
+		{
+			flex-direction: column;
+			flex-shrink: 0;
+			width: 100%;
+			min-width: 0;
+			gap: 16px;
+			padding: 24px 32px 32px 32px;
+
+			> *
+			{
+				flex-shrink: 0;
+				width: 100%;
+				min-width: 0;
+			}
+
+			> .page-header
+			{
+				flex-direction: column;
+
+				> .title
+				{
+					font-size: $type-large;
+					font-weight: 600;
+					color: $ink;
+				}
+
+				> .description
+				{
+					margin-top: 4px;
+					font-size: 12px;
+					color: $ink-dim;
+				}
+			}
+
+			> .page-host
+			{
+				flex-direction: column;
+			}
+		}
+	}
+
+	//Page styles live here because [StyleSheet] isn't inherited; the sheet cascades to every page
+
+	PreferencesPage,
+	.preferences-page
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		width: 100%;
+		min-width: 0;
+
+		> .body
+		{
+			flex-direction: column;
+			flex-shrink: 0;
+			width: 100%;
+			min-width: 0;
+			gap: 8px;
+
+			> *
+			{
+				flex-shrink: 0;
+				width: 100%;
+				min-width: 0;
+			}
+		}
+	}
+
+	.section-header
+	{
+		padding-top: 8px;
+		font-size: $type-body;
+		font-weight: 600;
+		color: $ink;
+	}
+
+	//Blocks a page shows only sometimes: the custom code editor's own settings.
+	.hidden
+	{
+		display: none;
+	}
+
+	TextField.search
+	{
+		flex-shrink: 0;
+		width: 100%;
+	}
+
+	ControlSheet,
+	.controlsheet
+	{
+		flex-grow: 0;
+		flex-shrink: 0;
+		width: 100%;
+		min-width: 0;
+
+		> .body
+		{
+			flex-direction: column;
+			flex-grow: 0;
+			overflow: visible;
+		}
+	}
+
+	.button-row
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		gap: 8px;
+	}
+
+	.status
+	{
+		font-size: 12px;
+		color: $ink-dim;
+	}
+}

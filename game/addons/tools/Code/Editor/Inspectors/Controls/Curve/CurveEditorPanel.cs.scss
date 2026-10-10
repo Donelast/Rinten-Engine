@@ -1,0 +1,83 @@
+CurveEditorPanel
+{
+	flex-direction: column;
+	flex-grow: 1;
+	width: 100%;
+	height: 100%;
+	padding: 8px;
+	gap: 6px;
+	overflow: hidden;
+
+	> .multiple
+	{
+		flex-shrink: 0;
+		color: $multiple-values;
+	}
+
+	> .chart-area
+	{
+		position: relative;
+		flex-direction: column;
+		flex-grow: 1;
+		flex-shrink: 1;
+		min-height: 200px;
+		width: 100%;
+
+		> .value-max,
+		> .value-min,
+		> .time-min,
+		> .time-max
+		{
+			position: absolute;
+			width: 84px;
+			min-width: 84px;
+			max-width: 84px;
+			height: 22px;
+			min-height: 22px;
+			z-index: 2;
+		}
+
+		> .value-max
+		{
+			left: 8px;
+			top: 8px;
+		}
+
+		> .value-min
+		{
+			left: 8px;
+			bottom: 34px;
+		}
+
+		> .time-min
+		{
+			left: 100px;
+			bottom: 2px;
+		}
+
+		> .time-max
+		{
+			right: 8px;
+			bottom: 2px;
+		}
+
+		> .toolbar
+		{
+			position: absolute;
+			left: 8px;
+			bottom: 2px;
+			flex-direction: row;
+			gap: 4px;
+			z-index: 2;
+		}
+	}
+
+	CurvePresetsPanel
+	{
+		flex-grow: 0;
+		flex-shrink: 0;
+		height: 148px;
+		min-height: 148px;
+		width: 100%;
+	}
+}

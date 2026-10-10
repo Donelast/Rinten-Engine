@@ -1,0 +1,111 @@
+ParticleFloatControl.control.no-background,
+ParticleVector3Control.control.no-background
+{
+	flex-direction: row;
+	align-items: stretch;
+	flex-grow: 1;
+	min-width: 0;
+	gap: 2px;
+	padding: 0;
+}
+
+ParticleFloatControl.control
+{
+	> .toolbarbutton
+	{
+		flex-shrink: 0;
+		width: $control-row-height;
+		height: $control-row-height;
+	}
+
+	//Whatever the mode needs - one number, two of them, or a curve.
+	> .controls
+	{
+		flex-direction: row;
+		align-items: stretch;
+		flex-grow: 1;
+		min-width: 0;
+		gap: 2px;
+	}
+}
+
+ParticleVector3Control.control
+{
+	> ParticleFloatControl
+	{
+		flex-grow: 1;
+		min-width: 0;
+	}
+}
+
+ParticleFloatModePopup.popup-panel
+{
+	flex-direction: column;
+	width: 300px;
+	padding: 4px;
+	background-color: $popup-background;
+	border: $popup-border;
+	border-radius: $control-radius;
+
+	> .mode
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 8px;
+		border-radius: $control-radius;
+		pointer-events: all;
+		cursor: pointer;
+
+		> .icon
+		{
+			flex-shrink: 0;
+			width: 32px;
+			font-size: 26px;
+			color: $text-light;
+		}
+
+		> .text
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			min-width: 0;
+
+			> .title
+			{
+				color: $text-control;
+				font-size: $control-text-size;
+				font-weight: bold;
+			}
+
+			> .description
+			{
+				color: $text-light;
+				font-size: $type-micro;
+				white-space: pre-wrap;
+			}
+		}
+
+		//The mode the value is already in, so the list says where it stands.
+		&.active
+		{
+			background-color: $primary;
+		}
+
+		&:hover,
+		&.active
+		{
+			> .icon,
+			> .text > .title,
+			> .text > .description
+			{
+				color: $text;
+			}
+		}
+
+		&:hover
+		{
+			background-color: $primary;
+		}
+	}
+}

@@ -1,0 +1,29 @@
+@namespace Editor.TreeBrowser
+@attribute [StyleSheet( "BrowserTab.razor.scss" )]
+@inherits Panel
+
+<root class="browser-tab @(Active ? "active" : null)" onclick="@Select">
+	<i>@Icon</i>
+	<span>@Title</span>
+	@if ( ShowClose )
+	{
+		<i class="close" onclick:stopPropagation onclick="@Close">close</i>
+	}
+</root>
+
+@code
+{
+	public string Icon { get; set; }
+	public string Title { get; set; }
+	public bool Active { get; set; }
+	public bool ShowClose { get; set; } = true;
+
+	public Action OnSelected;
+	public Action OnCloseRequested;
+
+	void Select() => OnSelected?.Invoke();
+
+	void Close() => OnCloseRequested?.Invoke();
+
+	protected override int BuildHash() => HashCode.Combine( Icon, Title, Active, ShowClose );
+}

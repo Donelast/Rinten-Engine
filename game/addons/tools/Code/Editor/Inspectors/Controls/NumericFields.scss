@@ -1,0 +1,19 @@
+//Shared layout for vectors, angles, margins and rectangles. Each number keeps
+//enough width to be edited; wrapped rows contribute to the control's height.
+@mixin numeric-fields
+{
+	flex-direction: row;
+	flex-grow: 1;
+	min-width: 0;
+	height: auto;
+	min-height: $control-row-height;
+	flex-wrap: wrap;
+
+	//Three wells apart, the way the letter and its number are.
+	gap: $gap-items;
+
+	> NumberControl.control
+	{
+		min-width: 34px;
+	}
+}

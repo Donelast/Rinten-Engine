@@ -1,0 +1,190 @@
+﻿//One map: its name, the square that is the picture, and beside the square its path with the numbers
+//that belong to it under that. The rows in that sheet are the inspector's own - see ControlSheet.
+
+.material-map
+{
+	flex-direction: column;
+	gap: 4px;
+
+	> .title
+	{
+		font-size: $type-small;
+		color: $ink-dim;
+	}
+
+	> .row
+	{
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 10px;
+
+		> .beside
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			min-width: 0;
+			gap: 2px;
+		}
+	}
+}
+
+//Map square: big enough to tell maps apart, small enough for its numbers to fit beside it
+.map-frame
+{
+	position: relative;
+	width: 96px;
+	height: 96px;
+	flex-shrink: 0;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	padding: 0px 6px;
+	overflow: hidden;
+	cursor: pointer;
+	border: 1px solid transparent;
+	border-radius: $control-radius;
+	background-color: $control-background;
+
+	> .picture
+	{
+		position: absolute;
+		left: 4px;
+		top: 4px;
+		width: 88px;
+		height: 88px;
+		border-radius: 2px;
+	}
+
+	> .glyph
+	{
+		font-size: 26px;
+		color: $ink-off;
+	}
+
+	> .caption
+	{
+		font-size: $type-micro;
+		text-align: center;
+		white-space: pre-wrap;
+		color: $ink-off;
+	}
+
+	//Only what the state calls for is on the square.
+	&:not( .image ) > .picture { display: none; }
+	&.image > .glyph, &.image > .caption { display: none; }
+	&.builtin > .glyph { display: none; }
+
+	//The edge that says "drop here" - kept on a slot holding a stand-in, which is still a slot to drop a picture on.
+	&.empty, &.builtin { border-color: $edge; }
+
+	//Against the colour rather than a fixed ink: white on white is a caption nobody can read, and so is black on black.
+	&.builtin > .caption { color: rgba( 255, 255, 255, 0.6 ); }
+	&.builtin.light > .caption { color: rgba( 0, 0, 0, 0.6 ); }
+
+	&.missing > .glyph, &.missing > .caption { color: $red; }
+
+	&:hover
+	{
+		border-color: $edge-lit;
+
+		> .glyph, > .caption { color: $ink; }
+	}
+
+	&.drop-target
+	{
+		border-color: $green;
+		background-color: rgba( $green, 0.12 );
+	}
+}
+
+//The path beside the picture: the folder dim, the name bright, and the front of the folder dropped where it will not fit.
+.map-path
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	height: 18px;
+	min-width: 0;
+	overflow: hidden;
+
+	> .folder
+	{
+		flex-shrink: 1;
+		min-width: 0;
+		font-size: $type-micro;
+		white-space: nowrap;
+		overflow: hidden;
+		color: $ink-dim;
+	}
+
+	> .name
+	{
+		flex-shrink: 0;
+		font-size: $type-micro;
+		white-space: nowrap;
+		color: $ink;
+	}
+
+	&.empty > .folder { color: $ink-off; }
+}
+
+//Fill this slot with one colour rather than a picture. Sits under the path, which is the other thing that says what the slot holds.
+.map-colour
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 6px;
+	margin-top: 4px;
+	padding: 0px 6px;
+	min-height: $row;
+	border-radius: $radius-2;
+	border: 1px solid $edge;
+	background-color: $veil;
+	cursor: pointer;
+	pointer-events: all;
+
+	&:hover
+	{
+		background-color: $veil-hover;
+
+		@include lit;
+	}
+
+	> .swatch
+	{
+		flex-shrink: 0;
+		width: 14px;
+		height: 14px;
+		border-radius: 3px;
+		border: 1px solid $edge-lit;
+	}
+
+	> .text
+	{
+		flex-grow: 1;
+		min-width: 0;
+		font-size: $type-small;
+		color: $ink-dim;
+		@include one-line;
+	}
+
+	//Holding a picture rather than a colour: the swatch has nothing to show, so it reads as the hole it is instead of as black.
+	&.unset > .swatch
+	{
+		background-color: $sunken;
+	}
+}
+
+//On: the slot is a colour rather than an image, so the row that says so is lit the way everything else that is switched on is.
+.map-colour.on
+{
+	border-color: transparent;
+	background-color: $picked;
+
+	> .text
+	{
+		color: $ink;
+	}
+}

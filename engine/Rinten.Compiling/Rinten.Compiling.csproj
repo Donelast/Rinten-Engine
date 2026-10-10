@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <VersionPrefix>1.0.1</VersionPrefix>
+    <TargetFramework>net10.0</TargetFramework>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AssemblyName>Rinten.Compiling</AssemblyName>
+    <PackageId>Rinten.Compiling</PackageId>
+    <NoWarn>1701;1702;1591</NoWarn>
+	<LangVersion>latest</LangVersion>
+	<SatelliteResourceLanguages></SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rinten.Filesystem\Rinten.Filesystem.csproj" />
+    <ProjectReference Include="..\Rinten.Generator\Rinten.Generator.csproj" />
+    <ProjectReference Include="..\Rinten.Razor\Rinten.Razor.csproj" />
+    <ProjectReference Include="..\Rinten.System\Rinten.System.csproj" />
+  </ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0-2.final" />
+		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.12.0-beta1.25218.8" />
+	</ItemGroup>
+
+    <ItemGroup>
+		<EmbeddedResource Include="EmbeddedRefs\*.dll">
+			<LogicalName>%(Filename)%(Extension)</LogicalName>
+		</EmbeddedResource>
+    </ItemGroup>
+  
+</Project>

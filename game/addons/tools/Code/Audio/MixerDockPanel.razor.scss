@@ -1,0 +1,25 @@
+MixerDockPanel
+{
+	flex-direction: row;
+	flex-grow: 1;
+	min-width: 0;
+	min-height: 0;
+	column-gap: 4px;
+	padding: 4px;
+	pointer-events: all;
+
+	> .tree
+	{
+		flex: 0 0 20%;
+		min-width: 0;
+		min-height: 0;
+	}
+
+	> .detail
+	{
+		flex: 1 1 0;
+		min-width: 0;
+		min-height: 0;
+		pointer-events: all;
+	}
+}

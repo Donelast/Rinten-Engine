@@ -1,0 +1,376 @@
+@namespace Editor.TreeBrowser
+@using System.IO
+@attribute [StyleSheet( "IconGridPanel.razor.scss" )]
+@inherits Panel
+@implements IBrowserPanel
+
+<root class="icon-grid-panel">
+	<div class="toolbar">
+		<ToolbarButton Icon="arrow_upward" ToolTip="Go to Parent Folder" Disabled="@(!CanGoUp)" OnPressed="@GoUp" />
+		<span class="path">@PathLabel</span>
+		<ToolbarButton Icon="@ViewModeIcon" ToolTip="View Mode" OnPressed="@OpenViewModeMenu" />
+		@if ( ShowMoveLeft )
+		{
+			<ToolbarButton Icon="chevron_left" ToolTip="Move Panel Left" OnPressed="@(() => OnMoveLeftRequested?.Invoke())" />
+		}
+		@if ( ShowMoveRight )
+		{
+			<ToolbarButton Icon="chevron_right" ToolTip="Move Panel Right" OnPressed="@(() => OnMoveRightRequested?.Invoke())" />
+		}
+		@if ( ShowClose )
+		{
+			<ToolbarButton Icon="close" ToolTip="Close Panel" OnPressed="@(() => OnCloseRequested?.Invoke())" />
+		}
+	</div>
+	<IconGridCanvasPanel @ref="canvas" class="grid" />
+</root>
+
+@code
+{
+	public Panel Root => this;
+
+	public Action OnCloseRequested { get; set; }
+	public Action OnMoveLeftRequested { get; set; }
+	public Action OnMoveRightRequested { get; set; }
+
+	public Action<Asset> OnAssetHighlighted { get; set; }
+	public Action<Asset> OnAssetActivated { get; set; }
+	public Action<string> OnFileActivated { get; set; }
+	public Action<IReadOnlyList<Asset>> OnSelectionChanged { get; set; }
+
+	//Is there a tree section above this branch root to step back out to?
+	public Func<string, bool> HasSectionAbove { get; set; }
+
+	//Steps out of a branch root into the section that holds it.
+	public Action<string> OnLeaveRoot { get; set; }
+
+	IconGridCanvasPanel canvas;
+	TreeBrowserOptions options = TreeBrowserOptions.Dock;
+	IAssetFilter filter = AllAssetsFilter.Instance;
+
+	bool ShowClose;
+	bool ShowMoveLeft;
+	bool ShowMoveRight;
+	bool CanGoUp;
+	string PathLabel = "Select a folder...";
+	string ViewModeIcon = "grid_view";
+
+	//The shared watch on the folder on show - see WatchFolder.
+	IDisposable folderWatch;
+	string currentFolder;
+	AssetBrowser.Location currentLocation;
+	string pendingReveal;
+	string searchText = string.Empty;
+	bool reloadQueued;
+	RealTimeSince reloadDebounce;
+
+	public override void OnDeleted()
+	{
+		base.OnDeleted();
+
+		WatchFolder( null );
+	}
+
+	//Mode this panel runs in; handed straight to the canvas.
+	public TreeBrowserOptions Options
+	{
+		get => options;
+		set
+		{
+			options = value ?? TreeBrowserOptions.Dock;
+
+			if ( canvas.IsValid() )
+				canvas.Options = options;
+		}
+	}
+
+	//Which files this panel may show; handed straight to the canvas.
+	public IAssetFilter Filter
+	{
+		get => filter;
+		set
+		{
+			filter = value ?? AllAssetsFilter.Instance;
+
+			if ( canvas.IsValid() )
+				canvas.Filter = filter;
+		}
+	}
+
+	//Assets selected in the grid, in grid order.
+	public IReadOnlyList<Asset> GetSelectedAssets() => canvas.IsValid() ? canvas.GetSelectedAssets() : [];
+
+	public void FilterChanged() => canvas?.FilterChanged();
+
+	//Nothing in the new scope is being browsed yet.
+	public void SetScope( AssetTreeScope scope )
+	{
+		pendingReveal = null;
+		currentFolder = null;
+		currentLocation = null;
+		PathLabel = "Select a folder...";
+		CanGoUp = false;
+
+		WatchFolder( null );
+
+		canvas?.Clear();
+		StateHasChanged();
+	}
+
+	//Something appeared, went or was renamed in the folder: look again once it settles.
+	void QueueReload()
+	{
+		reloadQueued = true;
+		reloadDebounce = 0;
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( reloadQueued && reloadDebounce > 0.25f )
+		{
+			reloadQueued = false;
+			Reload();
+		}
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+		if ( canvas is null ) return;
+
+		canvas.Options = options;
+		canvas.Filter = filter;
+		canvas.OnFolderNavigate = ShowFolder;
+		canvas.OnLocationNavigate = ShowBrowseLocation;
+		canvas.OnAssetHighlighted = asset => OnAssetHighlighted?.Invoke( asset );
+		canvas.OnAssetActivated = asset => OnAssetActivated?.Invoke( asset );
+		canvas.OnFileActivated = path => OnFileActivated?.Invoke( path );
+		canvas.OnSelectionChanged = assets => OnSelectionChanged?.Invoke( assets );
+		canvas.ApplySearch( searchText );
+
+		if ( firstTime )
+			Reload();
+	}
+
+	public bool ShowCloseButton
+	{
+		get => ShowClose;
+		set { ShowClose = value; StateHasChanged(); }
+	}
+
+	public bool ShowMoveLeftButton
+	{
+		get => ShowMoveLeft;
+		set { ShowMoveLeft = value; StateHasChanged(); }
+	}
+
+	public bool ShowMoveRightButton
+	{
+		get => ShowMoveRight;
+		set { ShowMoveRight = value; StateHasChanged(); }
+	}
+
+	public void ApplySearch( string text )
+	{
+		searchText = text ?? string.Empty;
+		canvas?.ApplySearch( searchText );
+	}
+
+	public void Refresh() => Reload();
+
+	public void Reveal( string fullPath )
+	{
+		if ( string.IsNullOrEmpty( fullPath ) ) return;
+
+		var folder = Path.GetDirectoryName( fullPath );
+		if ( !string.IsNullOrEmpty( folder ) )
+			ShowFolder( folder );
+
+		//Held until the grid has the folder in it: a picker asks for this before it has rendered.
+		pendingReveal = fullPath;
+		ApplyPendingReveal();
+	}
+
+	void ApplyPendingReveal()
+	{
+		if ( pendingReveal is null || !canvas.IsValid() )
+			return;
+
+		if ( canvas.SelectByPath( pendingReveal ) )
+			pendingReveal = null;
+	}
+
+	//Opens a folder, whether or not it is still on disk: a pin can outlive what it points at.
+	public void ShowFolder( string folderPath )
+	{
+		if ( string.IsNullOrEmpty( folderPath ) )
+			return;
+
+		pendingReveal = null;
+		currentFolder = FullPathOf( folderPath );
+		currentLocation = null;
+		PathLabel = BrowseRoots.Format( currentFolder );
+		CanGoUp = BrowseRoots.CanGoUp( currentFolder ) || (HasSectionAbove?.Invoke( currentFolder ) ?? false);
+
+		WatchFolder( Directory.Exists( currentFolder ) ? currentFolder : null );
+
+		Reload();
+		StateHasChanged();
+	}
+
+	static string FullPathOf( string folderPath )
+	{
+		try
+		{
+			return Path.GetFullPath( folderPath );
+		}
+		catch
+		{
+			return folderPath;
+		}
+	}
+
+	//Points the grid at a browse location: a mount, Recents, Everything or a pinned folder.
+	public void ShowBrowseLocation( AssetBrowser.Location location )
+	{
+		if ( location is null ) return;
+
+		if ( location is DiskLocation disk )
+		{
+			ShowFolder( disk.Path );
+			return;
+		}
+
+		pendingReveal = null;
+		currentFolder = null;
+		currentLocation = location;
+		PathLabel = FormatLocation( location );
+		CanGoUp = location.CanGoUp() && ParentLocation( location ) is not null;
+
+		WatchFolder( null );
+
+		Reload();
+		StateHasChanged();
+	}
+
+	static string FormatLocation( AssetBrowser.Location location )
+	{
+		if ( string.IsNullOrEmpty( location.RootTitle ) || string.IsNullOrEmpty( location.RelativePath ) )
+			return location.Name;
+
+		var relative = location.RelativePath.Replace( '\\', '/' ).Trim( '/' );
+		return relative.Length == 0 ? location.RootTitle : $"{location.RootTitle}/{relative}";
+	}
+
+	//The mount folder above this one, or null at the mount's own root.
+	static AssetBrowser.Location ParentLocation( AssetBrowser.Location location )
+	{
+		if ( location is not MountLocation mount || mount.IsRoot )
+			return null;
+
+		var path = mount.Path.TrimEnd( '/' );
+		var cut = path.LastIndexOf( '/' );
+		if ( cut <= "mount://".Length )
+			return new MountLocation( mount.Source );
+
+		return new MountLocation( mount.Source, path[..cut] );
+	}
+
+	public void ShowTreeItems( string title, IReadOnlyList<AssetTreeItem> items )
+	{
+		currentFolder = null;
+		currentLocation = null;
+		PathLabel = title;
+		CanGoUp = false;
+
+		WatchFolder( null );
+
+		canvas?.LoadTreeItems( items );
+		StateHasChanged();
+	}
+
+	//Watches the shown folder via the editor's shared watcher, since inotify instances are scarce
+	void WatchFolder( string folderPath )
+	{
+		folderWatch?.Dispose();
+		folderWatch = null;
+
+		if ( string.IsNullOrEmpty( folderPath ) ) return;
+
+		//The callback is on the watcher's thread; the grid is looked at on the main one.
+		folderWatch = global::Editor.FileSystem.WatchFolder( folderPath, _ => MainThread.Queue( QueueReload ) );
+	}
+
+	void GoUp()
+	{
+		if ( currentLocation is not null )
+		{
+			if ( ParentLocation( currentLocation ) is { } parentLocation )
+				ShowBrowseLocation( parentLocation );
+
+			return;
+		}
+
+		if ( BrowseRoots.Parent( currentFolder ) is { } parent )
+		{
+			ShowFolder( parent );
+			return;
+		}
+
+		//At a branch root the way up is out of it, into the tree section that holds it.
+		if ( !string.IsNullOrEmpty( currentFolder ) )
+			OnLeaveRoot?.Invoke( currentFolder );
+	}
+
+	void OpenViewModeMenu()
+	{
+		var menu = new ContextMenu();
+
+		void Option( string title, AssetListViewMode mode )
+		{
+			var option = menu.AddOption( title, IconFor( mode ), () => SetViewMode( mode ) );
+			option.Checkable = true;
+			option.Checked = BrowserSettings.ViewMode == mode;
+		}
+
+		Option( "List View", AssetListViewMode.List );
+		Option( "Small Icons", AssetListViewMode.SmallIcons );
+		Option( "Medium Icons", AssetListViewMode.MediumIcons );
+		Option( "Large Icons", AssetListViewMode.LargeIcons );
+
+		menu.OpenAtCursor( this );
+	}
+
+	void SetViewMode( AssetListViewMode mode )
+	{
+		BrowserSettings.ViewMode = mode;
+		ViewModeIcon = IconFor( mode );
+		canvas?.ViewModeChanged();
+		StateHasChanged();
+	}
+
+	static string IconFor( AssetListViewMode mode ) => mode switch
+	{
+		AssetListViewMode.List => "view_headline",
+		AssetListViewMode.SmallIcons => "apps",
+		AssetListViewMode.LargeIcons => "grid_view",
+		_ => "grid_on",
+	};
+
+	void Reload()
+	{
+		if ( canvas is null || !canvas.IsValid() )
+			return;
+
+		if ( currentLocation is not null )
+			canvas.LoadBrowseLocation( currentLocation );
+		else if ( !string.IsNullOrEmpty( currentFolder ) )
+			canvas.LoadFolder( currentFolder );
+
+		ApplyPendingReveal();
+	}
+
+	protected override int BuildHash() => HashCode.Combine( ShowClose, ShowMoveLeft, ShowMoveRight, CanGoUp, PathLabel, ViewModeIcon );
+}

@@ -1,0 +1,15 @@
+AndConditionControl.control
+{
+	flex-grow: 1;
+	min-width: 0;
+	align-items: flex-start;
+	justify-content: center;
+	min-height: $control-row-height;
+	padding-left: 8px;
+
+	> .name
+	{
+		font-size: $control-text-size;
+		color: $text;
+	}
+}

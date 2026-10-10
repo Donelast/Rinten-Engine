@@ -1,0 +1,164 @@
+//A tile set, opened - see TileSetEditorPanel.razor.
+.tileset-editor
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	row-gap: 12px;
+	padding: 10px;
+	font-family: $font;
+	pointer-events: all;
+
+	i
+	{
+		font-family: Material Icons;
+		font-size: 15px;
+		flex-shrink: 0;
+	}
+
+	label
+	{
+		font-size: $type-body;
+		color: $ink;
+	}
+
+	> .section
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		row-gap: 6px;
+
+		> .caption
+		{
+			color: $ink-dim;
+			font-size: $type-small;
+		}
+
+		> .note
+		{
+			color: $ink-dim;
+			white-space: normal;
+		}
+	}
+
+	.legend
+	{
+		flex-direction: row;
+		column-gap: 12px;
+
+		> label { font-size: $type-small; }
+		> .solid { color: rgb( 255, 120, 90 ); }
+		> .oneway { color: rgb( 120, 200, 255 ); }
+		> .animated { color: rgb( 255, 220, 90 ); }
+	}
+
+	.chips
+	{
+		flex-direction: row;
+		flex-wrap: wrap;
+		gap: 4px;
+	}
+
+	.chip
+	{
+		flex-direction: row;
+		align-items: center;
+		column-gap: 6px;
+		min-height: 24px;
+		padding: 2px 8px;
+		border-radius: $radius-1;
+		background-color: $chip;
+		cursor: pointer;
+		transition: background-color $fast $ease;
+
+		> label, > i { pointer-events: none; white-space: nowrap; }
+
+		&:hover { background-color: $chip-hover; }
+
+		&.selected { background-color: $chip-on; }
+	}
+
+	.chip > .remove
+	{
+		pointer-events: all;
+		font-size: 13px;
+		margin-left: 2px;
+		color: $ink-dim;
+		border-radius: $radius-1;
+
+		&:hover { color: $ink; background-color: $chip-hover; }
+	}
+
+	//The sixteen, as the pieces fit: a lone tile and a strip on top, a pillar down the left, the block beside it - set a little apart.
+	.blob
+	{
+		flex-direction: column;
+		align-self: flex-start;
+		row-gap: 2px;
+
+		> .blob-row
+		{
+			flex-direction: row;
+			column-gap: 2px;
+
+			&.apart { margin-bottom: 8px; }
+		}
+
+		.slot
+		{
+			position: relative;
+			width: 46px;
+			height: 46px;
+			padding: 3px;
+			border-radius: $radius-1;
+			background-color: $chip;
+			cursor: pointer;
+
+			&.apart { margin-right: 8px; }
+			&:hover { background-color: $chip-hover; }
+			&.empty { background-color: rgba( 255, 90, 70, 0.18 ); }
+
+			> .picture
+			{
+				flex-grow: 1;
+				background-repeat: no-repeat;
+				image-rendering: pixelated;
+				pointer-events: none;
+			}
+
+			//The sides this slot touches its own terrain on.
+			> .mark
+			{
+				position: absolute;
+				background-color: $accent;
+				border-radius: 2px;
+				pointer-events: none;
+
+				&.up { top: 0; left: 17px; width: 12px; height: 3px; }
+				&.down { bottom: 0; left: 17px; width: 12px; height: 3px; }
+				&.left { left: 0; top: 17px; width: 3px; height: 12px; }
+				&.right { right: 0; top: 17px; width: 3px; height: 12px; }
+			}
+		}
+	}
+
+	.preview
+	{
+		flex-direction: column;
+		align-self: flex-start;
+		padding: 6px;
+		border-radius: $radius-1;
+		background-color: rgba( 0, 0, 0, 0.25 );
+
+		> .preview-row { flex-direction: row; }
+
+		.cell
+		{
+			width: 20px;
+			height: 20px;
+			background-repeat: no-repeat;
+			image-rendering: pixelated;
+
+			&.missing { background-color: rgba( 255, 70, 50, 0.7 ); }
+		}
+	}
+}

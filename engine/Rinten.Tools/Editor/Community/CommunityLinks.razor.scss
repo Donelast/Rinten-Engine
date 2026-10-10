@@ -1,0 +1,36 @@
+//A row of glyph squares like the title bar's own buttons; the launcher restyles them for its corner
+
+CommunityLinks,
+.community
+{
+	flex-direction: row;
+	align-items: center;
+	gap: 2px;
+	pointer-events: all;
+
+	> .link
+	{
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border-radius: $radius-1;
+		cursor: pointer;
+
+		> svg
+		{
+			width: 15px;
+			height: 15px;
+		}
+
+		.mark { fill: $ink-dim; }
+
+		&:hover
+		{
+			background-color: $veil-hover;
+
+			.mark { fill: $ink; }
+		}
+	}
+}

@@ -1,0 +1,63 @@
+PreferencesNavPanel,
+.preferences-nav
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 220px;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	pointer-events: all;
+	border-right: 1px solid $edge;
+
+	> .list
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		padding: 8px;
+		overflow: scroll;
+
+		> .section
+		{
+			flex-shrink: 0;
+			padding: 12px 8px 4px 8px;
+			color: $ink-faint;
+		}
+
+		> .nav-item
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 8px;
+			height: $row;
+			padding: 0px 8px;
+			border-radius: $radius-2;
+			color: $ink-dim;
+
+			> .icon
+			{
+				flex-shrink: 0;
+				font-size: $type-default;
+				color: inherit;
+			}
+
+			> .title
+			{
+				flex-grow: 1;
+				font-size: 12px;
+				@include one-line;
+				color: inherit;
+			}
+
+			&:hover { color: $ink; background-color: $veil-hover; }
+
+			//Where you are: the picked plate, the words on it white.
+			&.is-selected
+			{
+				@include picked;
+			}
+		}
+	}
+}

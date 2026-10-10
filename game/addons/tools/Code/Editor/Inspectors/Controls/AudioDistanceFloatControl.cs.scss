@@ -1,0 +1,41 @@
+﻿AudioDistanceFloatControl.control
+{
+	flex-direction: row;
+	align-items: stretch;
+	gap: 2px;
+	flex-grow: 1;
+	min-width: 0;
+
+	> .presets
+	{
+		flex-shrink: 0;
+		flex-direction: row;
+		align-items: center;
+		width: 110px;
+		min-height: $control-row-height;
+		padding: $control-text-padding;
+		background-color: $control-background;
+		border: $control-border;
+		border-radius: $control-radius;
+		pointer-events: all;
+		cursor: pointer;
+
+		&:hover
+		{
+			border-color: $border-light;
+		}
+
+		&.readonly
+		{
+			cursor: default;
+			pointer-events: none;
+		}
+
+		> .name
+		{
+			flex-grow: 1;
+			font-size: $control-text-size;
+			@include one-line;
+		}
+	}
+}

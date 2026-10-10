@@ -1,0 +1,14 @@
+//An object's component list: sheets stacked, each its own height.
+ComponentListPanel
+{
+	flex-direction: column;
+	flex-shrink: 0;
+
+	> .body
+	{
+		flex-direction: column;
+
+		//The same room between two components as between the cards above them.
+		gap: $gap-section;
+	}
+}

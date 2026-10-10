@@ -1,0 +1,28 @@
+NullableControl.control.no-background.multiple-rows
+{
+	flex-direction: row;
+	align-items: stretch;
+	gap: 2px;
+	flex-grow: 1;
+	min-height: $control-row-height;
+
+	&.inline-body
+	{
+		align-items: flex-start;
+	}
+
+	> .toolbarbutton
+	{
+		width: $control-row-height;
+		min-width: $control-row-height;
+		height: $control-row-height;
+		flex-shrink: 0;
+	}
+
+	> .body
+	{
+		flex-grow: 1;
+		min-width: 0;
+		min-height: $control-row-height;
+	}
+}

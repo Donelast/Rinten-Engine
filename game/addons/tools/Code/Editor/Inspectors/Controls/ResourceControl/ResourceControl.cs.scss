@@ -1,0 +1,191 @@
+﻿//Every control that puts a ResourceFieldPanel in itself has to be named here. These are element selectors, so they match the
+//runtime type and nothing it derives from - which is why MovieResourceControl is listed beside the ResourceControl it inherits from.
+ResourceControl.control,
+MovieResourceControl.control,
+TextureImageControl.control,
+AssetPathControl.control {
+  cursor: pointer;
+  flex-grow: 1;
+  min-width: 0;
+  min-height: $control-row-height;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+
+  &.drop-target:not(.no-background) {
+    border-color: $green;
+    background-color: rgba($green, 0.12);
+  }
+
+  &.multiple-rows {
+    min-height: $control-row-height;
+    height: auto;
+  }
+
+  > .field.missing > .text > .path,
+  &.multiple-rows > .field.set > .text > .path {
+    display: flex;
+  }
+
+  > .field {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    min-width: 0;
+    min-height: $control-row-height;
+    padding-left: 2px;
+    padding-right: 2px;
+    gap: 0;
+
+    > .thumb {
+      position: relative;
+      flex-shrink: 0;
+      width: $control-row-height - 4px;
+      height: $control-row-height - 4px;
+      border-radius: 2px;
+      align-items: center;
+      justify-content: center;
+      background-color: rgba($control-background-light, 0.4);
+
+      &.error {
+        background-color: rgba($red, 0.35);
+      }
+
+      &:not( .image ) > .thumb-image {
+        display: none;
+      }
+
+      &:not( .error ) > .icon.error {
+        display: none;
+      }
+
+      > .thumb-image {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      > .icon.error {
+        color: $red;
+        font-size: $type-large;
+        align-items: center;
+        justify-content: center;
+      }
+    }
+
+    > .text {
+      flex-direction: column;
+      flex-grow: 1;
+      min-width: 0;
+      padding-left: 10px;
+      padding-right: 6px;
+
+      > .title {
+        color: rgba($text-control, 0.9);
+        font-size: $control-text-size;
+        font-weight: 450;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        &.multiple {
+          color: $multiple-values;
+        }
+      }
+
+      //Smaller than the name and held back by its alpha: it is what the name is short for, not a second thing to read.
+      > .path {
+        display: none;
+        color: rgba($text-control, 0.5);
+        font-size: $control-text-size-small;
+        @include one-line;
+      }
+    }
+
+    //The type's name where nothing is picked yet, and one line of it: it used to wrap in
+    //a narrow row, "Render / Texture" and "Materi / al" stacked in a box one line tall.
+    > .placeholder {
+      flex-grow: 1;
+      padding-left: 10px;
+      color: rgba($text-control, 0.2);
+      font-size: $control-text-size-small;
+      @include one-line;
+    }
+
+    &.placeholder > .thumb.empty {
+      background-color: rgba($control-background-light, 0.4);
+    }
+  }
+
+  &.has-sound-preview > .sound-preview {
+    flex-shrink: 0;
+    width: $control-row-height;
+    height: $control-row-height;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    color: $text-control;
+    transition: opacity 0.1s ease;
+  }
+
+  > .open-editor {
+    flex-shrink: 0;
+    width: $control-row-height;
+    height: $control-row-height;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgba($text-control, 0.6);
+
+    &:hover {
+      color: $text-control;
+    }
+
+    &.hidden {
+      display: none;
+    }
+  }
+
+  &.has-sound-preview:hover > .sound-preview {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  &.readonly {
+    cursor: default;
+
+    > .field {
+      cursor: default;
+    }
+  }
+
+  &.override-active > .field > .text > .title,
+  &.override-active > .field > .text > .path {
+    color: $green;
+  }
+
+  &.override-default > .field > .text > .title,
+  &.override-default > .field > .text > .path {
+    color: $text-light;
+  }
+}
+
+//Path field shows name then path on one line, bottom-aligned, since the path is the value
+AssetPathControl.control > .field > .text {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 6px;
+
+  > .title,
+  > .path {
+    min-width: 0;
+  }
+}
+
+AssetPathControl.control > .field.set > .text > .path {
+  display: flex;
+}

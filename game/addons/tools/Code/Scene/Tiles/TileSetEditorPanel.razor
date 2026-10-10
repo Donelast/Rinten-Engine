@@ -1,0 +1,121 @@
+@using Rinten.Tiles
+@using System
+@using System.Linq
+@using Rinten
+@using Rinten.UI
+@using Editor.Inspectors
+@namespace Editor.Tiles
+@inherits Panel
+
+@* A tile set, opened. The sheet and how it is cut at the top; the sheet itself
+   to pick a tile off, marked with what each tile is; what the picked tile is;
+   and the terrains, each a table of sixteen tiles by which of their four sides
+   are joined. What the buttons do is TileSetEditorPanel.razor.cs. *@
+
+<root class="tileset-editor">
+
+	<div class="section">
+		<label class="caption">Sheet</label>
+		<ControlSheet Target=@sheetProperties PropertyFilter=@IsSheetProperty />
+		<label class="note">@Summary</label>
+	</div>
+
+	<div class="section">
+		<label class="caption">Tiles - click one to describe it</label>
+		<TilePalette TileSet=@set Selected=@selected OnPick=@(( int tile ) => Select( tile )) />
+		<div class="legend">
+			<label class="solid">solid</label>
+			<label class="oneway">one-way</label>
+			<label class="animated">animated</label>
+		</div>
+	</div>
+
+	@if ( selected > 0 )
+	{
+		<div class="section">
+			<label class="caption">Tile @selected</label>
+
+			<div class="chips">
+				<div class="chip @(Collision == TileCollision.None ? "selected" : "")" onclick=@(() => SetCollision( TileCollision.None ))><label>Passable</label></div>
+				<div class="chip @(Collision == TileCollision.Solid ? "selected" : "")" onclick=@(() => SetCollision( TileCollision.Solid ))><label>Solid</label></div>
+				<div class="chip @(Collision == TileCollision.OneWay ? "selected" : "")" onclick=@(() => SetCollision( TileCollision.OneWay ))><label>One-way</label></div>
+			</div>
+
+			@if ( InfoSheet is not null )
+			{
+				<ControlSheet Target=@InfoSheet />
+			}
+			else
+			{
+				<div class="chip" onclick=@Describe><i>edit</i><label>Name, tags, animation...</label></div>
+			}
+		</div>
+	}
+
+	<div class="section">
+		<label class="caption">Terrains - tiles that fit themselves to their neighbours</label>
+
+		<div class="chips">
+			@if ( set.Terrains is not null )
+			{
+				@for ( var i = 0; i < set.Terrains.Count; i++ )
+				{
+					var at = i;
+					<div class="chip @(at == terrain ? "selected" : "")" onclick=@(() => terrain = at)>
+						<i>terrain</i>
+						<label>@( set.Terrains[at]?.Name ?? "?" )</label>
+						<i class="remove" onclick=@(( PanelEvent e ) => RemoveTerrain( at, e ))>close</i>
+					</div>
+				}
+			}
+			<div class="chip" onclick=@AddTerrain><i>add</i><label>New</label></div>
+		</div>
+
+		@if ( Terrain is { } chosen )
+		{
+			<ControlSheet Target=@TerrainSheet PropertyFilter=@IsTerrainProperty />
+
+			<label class="note">A terrain is sixteen tiles: one for each way a cell can touch the same terrain above, right, below and left - the marks on a slot are the sides it touches. They are laid out the way they fit together: a lone tile, a strip, a pillar and a block. Pick a tile in the sheet above, then click a slot; right click empties it.</label>
+
+			<div class="blob">
+				@for ( var row = 0; row < 4; row++ )
+				{
+					<div class="blob-row @(row == 0 ? "apart" : "")">
+						@for ( var column = 0; column < 4; column++ )
+						{
+							var mask = SlotMask( row, column );
+							var tile = chosen.Tile( mask );
+							<div class="slot @(column == 0 ? "apart" : "") @(tile > 0 ? "" : "empty")" onclick=@(() => Assign( mask )) onrightclick=@(() => Clear( mask ))>
+								<div class="picture" style="@TileStyle( tile, 40 )"></div>
+								@if ( ( mask & TilePainter.Above ) != 0 ) { <div class="mark up"></div> }
+								@if ( ( mask & TilePainter.Right ) != 0 ) { <div class="mark right"></div> }
+								@if ( ( mask & TilePainter.Below ) != 0 ) { <div class="mark down"></div> }
+								@if ( ( mask & TilePainter.Left ) != 0 ) { <div class="mark left"></div> }
+							</div>
+						}
+					</div>
+				}
+			</div>
+
+			<label class="caption">Preview - painted with this terrain</label>
+			<div class="preview">
+				@for ( var y = 0; y < PreviewShape.Length; y++ )
+				{
+					<div class="preview-row">
+						@for ( var x = 0; x < PreviewShape[y].Length; x++ )
+						{
+							var tile = PreviewTile( chosen, x, y );
+							<div class="cell @(tile < 0 ? "missing" : "")" style="@TileStyle( tile, 20 )"></div>
+						}
+					</div>
+				}
+			</div>
+
+			@if ( MissingSlots( chosen ) is > 0 and var missing )
+			{
+				<label class="note">@missing of the sixteen slots are empty - those cells show red in the preview.</label>
+			}
+		}
+	</div>
+
+</root>

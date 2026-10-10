@@ -1,0 +1,29 @@
+//Closed shader field shows the name, not the path; look and arrow come from design.scss
+ShaderNameControl.control
+{
+	flex-direction: row;
+	align-items: center;
+
+	min-height: $control-row-height;
+
+	//Room on the right for the arrow, which is positioned against the edge rather than laid out - so nothing else knows it is there.
+	padding: $control-text-padding;
+	padding-right: 24px;
+
+	font-family: $font-family;
+	font-size: $control-text-size;
+	color: $text-control;
+	cursor: pointer;
+
+	> .name
+	{
+		flex-grow: 1;
+
+		@include one-line;
+
+		&.multiple
+		{
+			color: $multiple-values;
+		}
+	}
+}

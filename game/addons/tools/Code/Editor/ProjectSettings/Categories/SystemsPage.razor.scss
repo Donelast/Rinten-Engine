@@ -1,0 +1,32 @@
+.systems-mode-row
+{
+	flex-direction: row;
+	gap: 4px;
+	flex-shrink: 0;
+	margin-bottom: 8px;
+
+	.mode-btn
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 10px;
+		border-radius: 4px;
+		border: 1px solid rgba( $text, 0.1 );
+		pointer-events: all;
+		cursor: pointer;
+		color: $text;
+
+		&.active
+		{
+			background-color: rgba( $accent, 0.2 );
+			border-color: rgba( $accent, 0.4 );
+		}
+	}
+}
+
+.systems-content
+{
+	flex-direction: column;
+	gap: 8px;
+}

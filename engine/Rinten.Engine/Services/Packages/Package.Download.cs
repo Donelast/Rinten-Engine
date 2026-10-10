@@ -1,0 +1,286 @@
+﻿using Rinten.Engine;
+using Rinten.Menu;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Threading;
+
+namespace Rinten;
+
+
+public partial class Package
+{
+	//How many files to download at once. Bound by requests in flight, not bandwidth.
+	internal const int MaxParallelDownloads = 64;
+
+	struct FileDownloadEntry
+	{
+		public ManifestSchema.File File;
+		public string AbsolutePath;
+		public ulong Crc;
+	}
+
+	//Don't blindly download every file in the manifest. We can filter them here.
+	static bool FilterFileDownloads( ManifestSchema.File f )
+	{
+		if ( !AssetDownloadCache.IsLegalDownload( f.Path ) )
+			return false;
+
+		return true;
+	}
+
+	//Download a package to a temporary location and return a filesystem with its contents
+	internal async Task<PackageFileSystem> Download( CancellationToken token = default, PackageLoadOptions options = default )
+	{
+		//TODO - if we have a download in progress then return, or wait for it (?) The
+		//filesystem is technically immutable other than disposing and adding more shit to it
+		if ( Revision == null )
+			return null;
+
+		var rev = Revision;
+		if ( rev == null ) return null;
+
+		options.Loading?.LoadingProgress( LoadingProgress.Create( $"Fetching '{Title}' Information" ) );
+
+		//make sure manifest is downloaded
+		await rev.DownloadManifestAsync( token );
+
+		if ( rev.Manifest == null ) return null;
+
+		var entries = rev.Manifest.Files ?? Array.Empty<ManifestSchema.File>();
+
+		//filter out files we're never going to download
+		entries = entries.Where( FilterFileDownloads ).ToArray();
+
+		if ( options.SkipAssetDownload )
+		{
+			entries = entries.Where( x => x.Path.StartsWith( ".bin" ) ).ToArray();
+		}
+
+		var downloadQueue = new ConcurrentBag<FileDownloadEntry>();
+		var fs = new PackageFileSystem();
+
+		var loopSw = Stopwatch.StartNew();
+		foreach ( var e in entries )
+		{
+			TryAddToDownloadQueue( e, fs, downloadQueue, token );
+			if ( loopSw.ElapsedMilliseconds > 8 ) { global::Rinten.LoadingScreen.Subtitle = System.IO.Path.GetFileName( e.Path ); await Task.Yield(); loopSw.Restart(); }
+		}
+
+		//nothing to download
+		if ( downloadQueue.Count <= 0 )
+		{
+			options.Loading?.LoadingProgress( new LoadingProgress { Title = $"Download '{Title}' Complete", Fraction = 1 } );
+			return fs;
+		}
+
+		var progress = LoadingProgress.Create( $"Downloading '{Title}'" );
+
+		var workers = MaxParallelDownloads;
+		var sw = Stopwatch.StartNew();
+		long totalSize = downloadQueue.Sum( x => x.File.Size );
+		long downloadedSize = 0;
+		Log.Trace( $"Downloading {downloadQueue.Count:n0} files ({totalSize.FormatBytes()}) for {FullIdent}.." );
+
+		progress.Title = $"Downloading '{Title}'";
+		progress.TotalSize = totalSize;
+
+		options.Loading?.LoadingProgress( progress );
+
+		var metric = new Api.Events.EventRecord( "package.download" );
+		metric.SetValue( "ident", FullIdent );
+		metric.SetValue( "files", downloadQueue.Count );
+		metric.SetValue( "size_sum", totalSize );
+		metric.SetValue( "size_avg", downloadQueue.Average( x => x.File.Size ) );
+
+		Utility.DataProgress.Callback progressCallback = ( p ) => { Interlocked.Add( ref downloadedSize, p.DeltaBytes ); };
+
+		//Download in a random order so small files come down alongside large ones; this beat
+		//downloading large files first every time.
+
+		bool hasError = false;
+
+		//Stop the other workers when one fails, they'd keep writing to a filesystem we've thrown away
+		using var downloadCancel = CancellationTokenSource.CreateLinkedTokenSource( token );
+
+		//Download any pending files
+		var task = downloadQueue
+			.OrderBy( x => Guid.NewGuid() )
+			.ForEachTaskAsync( async ( e ) =>
+			{
+				try
+				{
+					await DownloadFileAsync( e, fs, progressCallback, downloadCancel.Token );
+				}
+				//Only swallow if we're the ones who cancelled, a timeout mustn't pass as success
+				catch ( OperationCanceledException ) when ( downloadCancel.IsCancellationRequested ) { }
+				catch ( Exception ex )
+				{
+					Log.Warning( ex, $"Error when downloading {FullIdent}/{e.File.Url}" );
+					hasError = true;
+					downloadCancel.Cancel();
+				}
+
+			}, workers );
+
+		long oldSize = 0;
+		while ( !task.IsCompleted )
+		{
+			if ( hasError || token.IsCancellationRequested )
+				break;
+
+			if ( downloadedSize != oldSize )
+			{
+				var speed = downloadedSize / sw.Elapsed.TotalSeconds;
+				var mbps = (speed / 1024.0 / 1024.0) * 8;
+
+				oldSize = downloadedSize;
+				double frac = ((double)downloadedSize / (double)totalSize).Clamp( 0, 1 );
+
+				progress.Title = $"Downloading '{Title}'";
+				progress.Mbps = mbps;
+				progress.Fraction = frac;
+
+				options.Loading?.LoadingProgress( progress );
+			}
+
+			await Task.Delay( 16 );
+		}
+
+		//Wait for the cancelled workers to finish writing
+		await task;
+
+		token.ThrowIfCancellationRequested();
+
+		if ( hasError )
+			return null;
+
+		progress.Title = $"Download '{Title}' Complete";
+		progress.Fraction = 1;
+		options.Loading?.LoadingProgress( progress );
+		//Clear subtitle so download stats don't bleed into the next phase (e.g. Compiling).
+		global::Rinten.LoadingScreen.Subtitle = "";
+
+		Log.Trace( $"..done in {sw.Elapsed.TotalSeconds:0.00}s" );
+
+		metric.SetValue( "time", sw.Elapsed.TotalSeconds );
+		metric.SetValue( "workers", workers );
+		metric.SetValue( "order", "random" );
+		metric.Submit();
+
+		//Done with this
+		downloadQueue.Clear();
+		downloadQueue = null;
+
+
+		return fs;
+	}
+
+	private void TryAddToDownloadQueue( ManifestSchema.File entry, PackageFileSystem fs, ConcurrentBag<FileDownloadEntry> queue, CancellationToken token )
+	{
+		ThreadSafe.AssertIsMainThread();
+
+		var crc = Convert.ToUInt64( entry.Crc, 16 );
+
+		if ( AssetDownloadCache.TryMount( fs.Redirect, entry.Path, crc ) )
+			return;
+
+		var targetFile = AssetDownloadCache.GetAbsolutePath( entry.Path, crc );
+		System.IO.Directory.CreateDirectory( System.IO.Path.GetDirectoryName( targetFile ) );
+
+		token.ThrowIfCancellationRequested();
+
+		var fileInfo = new System.IO.FileInfo( targetFile );
+
+		var download = new FileDownloadEntry
+		{
+			File = entry,
+			AbsolutePath = targetFile,
+			Crc = crc
+		};
+
+		queue.Add( download );
+	}
+
+	//Make sure this manifest file entry is what it says it is
+	private ValueTask<bool> CheckFileCrc( string absoluteFilePath, ManifestSchema.File entry, CancellationToken token )
+	{
+		var fileInfo = new System.IO.FileInfo( absoluteFilePath );
+		if ( !fileInfo.Exists ) return ValueTask.FromResult( false );
+		if ( fileInfo.Length != entry.Size ) return ValueTask.FromResult( false );
+
+		//We can be selective on checking the crcs here. I'm turning it off for now because it's a few
+		//seconds loadtime. We can probnably skip it on listen servers and probably on serverside etc..
+
+		/*
+		using var stream = fileInfo.OpenRead();
+		var crc = await Rinten.Utility.Crc64.FromStreamAsync( stream );
+		if ( crc.ToString( "x" ) != entry.Crc ) return false;
+		*/
+
+		return ValueTask.FromResult( true );
+	}
+
+	static ConcurrentDictionary<string, SemaphoreSlim> activeDownloadLocks = new( StringComparer.OrdinalIgnoreCase );
+
+	//Download an individual file
+	private async Task DownloadFileAsync( FileDownloadEntry entry, PackageFileSystem fs, Rinten.Utility.DataProgress.Callback progress, CancellationToken token )
+	{
+		var semaphore = activeDownloadLocks.GetOrAdd( entry.AbsolutePath, key => new SemaphoreSlim( 1 ) );
+
+		await semaphore.WaitAsync( token );
+
+		try
+		{
+			if ( System.IO.File.Exists( entry.AbsolutePath ) )
+				return;
+
+			if ( entry.File.Size == 0 )
+			{
+				await System.IO.File.WriteAllTextAsync( entry.AbsolutePath, "", token );
+			}
+			else
+			{
+				var url = $"{entry.File.Url}";
+
+				var success = await Rinten.Utility.Web.DownloadFile( url, entry.AbsolutePath, token, progress );
+				if ( !success ) throw new System.Exception( $"Failed to download file {url} to {entry.AbsolutePath}" );
+			}
+
+			//Make sure crc matches
+			if ( !await CheckFileCrc( entry.AbsolutePath, entry.File, token ) )
+			{
+				//we should probably throw exception and abandon here?
+				Log.Warning( $"Downloaded file {entry.AbsolutePath} - checkfile failed" );
+			}
+
+			AssetDownloadCache.TryMount( fs.Redirect, entry.File.Path, entry.Crc );
+		}
+		finally
+		{
+			semaphore.Release();
+
+			if ( semaphore.CurrentCount == 1 )
+			{
+				activeDownloadLocks.TryRemove( entry.AbsolutePath, out _ );
+			}
+
+		}
+	}
+
+	/// <summary>Download and mount this package. If withCode is true we'll try to load the assembly if it exists.</summary>
+	public async Task<BaseFileSystem> MountAsync( bool withCode = false )
+	{
+		Log.Trace( $"Mounting {this.FullIdent}" );
+
+		int? version = Revision?.VersionId > 0 ? (int)Revision.VersionId : null;
+		var fs = await ServerPackages.DownloadAndMount( FormatIdent( Org.Ident, Ident, version, !IsRemote ) );
+		if ( fs is null ) return default;
+
+		if ( withCode )
+		{
+			await IGameInstanceDll.Current?.LoadPackageAssembliesAsync( this );
+		}
+
+		return fs;
+	}
+}

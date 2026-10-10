@@ -1,0 +1,74 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Input" ), Icon( "input" )]
+@using Editor.ProjectSettingsUI
+@inherits ProjectSettingsCategoryPanel
+
+<root class="project-settings-category">
+	<div class="body" @ref="Body">
+		<SettingsCalloutPanel Html="You can define your own input actions here. You can access them with Input.Down/Pressed/Released, using the name of the input action." />
+
+		<InputActionsPanel @ref="actionsPanel" Category="@this" />
+
+		<label class="settings-section-header">Control Modes</label>
+		<SettingsCalloutPanel Html="<p>This is <b>specifically</b> for informing users which control modes your game supports. It'll show on the game list this way.</p>" />
+
+		<div @ref="controlModesHost"></div>
+	</div>
+</root>
+
+@code
+{
+	internal InputSettings InputSettings { get; private set; }
+	ControlModeSettings controlSettings;
+	internal InputActionsPanel actionsPanel;
+	Panel controlModesHost;
+
+	protected override void OnInit( Project project )
+	{
+		InputSettings = EditorUtility.LoadProjectSettings<InputSettings>( "Input.config" );
+
+		CreateDefaultActions();
+		actionsPanel.Rebuild();
+
+		if ( !project.Config.TryGetMeta( "ControlModes", out controlSettings ) )
+			controlSettings = new();
+
+		var so = controlSettings.GetSerialized();
+		var sheet = controlModesHost.AddChild<Editor.Inspectors.ControlSheet>();
+		sheet.Target = so;
+		sheet.Rebuild();
+		ListenForChanges( so );
+	}
+
+	internal void CreateDefaultActions()
+	{
+		if ( InputSettings.Actions.Count > 0 ) return;
+
+		foreach ( var input in InputSystem.GetCommonInputs() )
+			AddAction( input, updateList: false );
+	}
+
+	internal void RemoveAction( InputAction action )
+	{
+		var index = InputSettings.Actions.IndexOf( action );
+		if ( index < 0 ) return;
+
+		InputSettings.Actions.RemoveAt( index );
+		actionsPanel.Rebuild();
+		StateHasChanged();
+	}
+
+	internal void AddAction( InputAction action, bool updateList = true )
+	{
+		InputSettings.Actions.Add( action );
+		StateHasChanged();
+		if ( updateList ) actionsPanel.Rebuild();
+	}
+
+	public override void OnSave()
+	{
+		EditorUtility.SaveProjectSettings( InputSettings, "Input.config" );
+		Project.Config.SetMeta( "ControlModes", controlSettings );
+		base.OnSave();
+	}
+}

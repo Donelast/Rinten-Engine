@@ -1,0 +1,198 @@
+@namespace Editor
+@attribute [StyleSheet( "WelcomeGuide.razor.scss" )]
+@using System
+@using System.Collections.Generic
+@using Rinten.UI
+@inherits Panel
+
+@* The first-run guide: the window dimmed but for the part a step is about, and a card that walks through them. *@
+
+<root class="welcome-guide">
+	<div @ref="DimTop" class="dim"></div>
+	<div @ref="DimLeft" class="dim"></div>
+	<div @ref="DimRight" class="dim"></div>
+	<div @ref="DimBottom" class="dim"></div>
+	<div @ref="Ring" class="ring"></div>
+
+	<div @ref="Card" class="card">
+		@if ( Index == 0 || IsLast )
+		{
+			<div class="head">
+				<label class="material-icon">waving_hand</label>
+				<label class="title">Welcome to the Rinten editor!</label>
+			</div>
+		}
+
+		<label class="message" IsRich="true">@Current?.Message</label>
+
+		<div class="checkbox @( NeverShowAgain ? "checked" : null )" onclick="@ToggleNeverShow">
+			<label class="checkmark material-icon">check</label>
+			<label>Don't show this again</label>
+		</div>
+
+		<div class="actions">
+			<div class="btn" onclick="@Close">Skip</div>
+			<div class="grow"></div>
+			<div class="step">@( Index + 1 ) / @Steps.Count</div>
+			<div class="btn @( Index == 0 ? "is-disabled" : null )" onclick="@Previous">Previous</div>
+			<div class="btn good" onclick="@Next">@( IsLast ? "Finish" : "Next" )</div>
+		</div>
+	</div>
+</root>
+
+@code
+{
+	/// <summary>The steps, in order.</summary>
+	public List<WelcomeStep> Steps { get; init; } = new();
+
+	/// <summary>Whether closing the guide keeps it from opening on its own again.</summary>
+	public bool NeverShowAgain { get; set; } = true;
+
+	int Index { get; set; }
+
+	bool IsLast => Index == Steps.Count - 1;
+
+	WelcomeStep Current => Index >= 0 && Index < Steps.Count ? Steps[Index] : null;
+
+	Panel DimTop { get; set; }
+	Panel DimLeft { get; set; }
+	Panel DimRight { get; set; }
+	Panel DimBottom { get; set; }
+	Panel Ring { get; set; }
+	Panel Card { get; set; }
+
+	//Gap between the lit widget and the dim, and between it and the card; overlay units
+	const float Padding = 4.0f;
+	const float Gap = 20.0f;
+	const float Edge = 10.0f;
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( firstTime ) Current?.OnEnter?.Invoke();
+	}
+
+	void Next()
+	{
+		if ( IsLast )
+		{
+			Close();
+			return;
+		}
+
+		Go( Index + 1 );
+	}
+
+	void Previous()
+	{
+		if ( Index > 0 ) Go( Index - 1 );
+	}
+
+	void Go( int index )
+	{
+		Index = index;
+		Current?.OnEnter?.Invoke();
+		StateHasChanged();
+	}
+
+	void ToggleNeverShow()
+	{
+		NeverShowAgain = !NeverShowAgain;
+		StateHasChanged();
+	}
+
+	/// <summary>Ends the guide, remembering the answer to "don't show this again".</summary>
+	public void Close()
+	{
+		if ( NeverShowAgain ) EditorCookie.Set( "editor.welcome.neverShowAgain", true );
+
+		Delete();
+	}
+
+	//The lit widget and the card follow the editor's layout, which can move under them any frame
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( Card is null || Parent is not EditorOverlay layer ) return;
+
+		var bounds = layer.Bounds;
+		var target = Current?.GetHighlightWidget?.Invoke();
+		Rect? lit = target is { IsValid: true, Visible: true } ? new Rect( target.ScreenPosition, target.Size ) : null;
+
+		PlaceDims( lit, bounds );
+		PlaceCard( lit, bounds );
+	}
+
+	void PlaceDims( Rect? lit, Vector2 bounds )
+	{
+		if ( Ring is null ) return;
+
+		if ( lit is not { } r )
+		{
+			Put( DimTop, 0, 0, bounds.x, bounds.y );
+			Put( DimLeft, 0, 0, 0, 0 );
+			Put( DimRight, 0, 0, 0, 0 );
+			Put( DimBottom, 0, 0, 0, 0 );
+			Ring.Style.Display = DisplayMode.None;
+			return;
+		}
+
+		Ring.Style.Display = null;
+
+		var top = r.Top - Padding;
+		var bottom = r.Bottom + Padding;
+		var left = r.Left - Padding;
+		var right = r.Right + Padding;
+
+		Put( DimTop, 0, 0, bounds.x, top );
+		Put( DimBottom, 0, bottom, bounds.x, bounds.y - bottom );
+		Put( DimLeft, 0, top, left, bottom - top );
+		Put( DimRight, right, top, bounds.x - right, bottom - top );
+		Put( Ring, left, top, right - left, bottom - top );
+	}
+
+	//Beside the lit widget on its roomiest side where it fits, else in the middle of the window
+	void PlaceCard( Rect? lit, Vector2 bounds )
+	{
+		var size = Card.Box.Rect.Size * Card.ScaleFromScreen;
+		var at = new Vector2( ( bounds.x - size.x ) * 0.5f, ( bounds.y * 0.4f ) - ( size.y * 0.5f ) );
+
+		if ( lit is { } r )
+		{
+			var spaceLeft = r.Left;
+			var spaceRight = bounds.x - r.Right;
+			var spaceTop = r.Top;
+			var spaceBottom = bounds.y - r.Bottom;
+			var most = MathF.Max( MathF.Max( spaceLeft, spaceRight ), MathF.Max( spaceTop, spaceBottom ) );
+
+			if ( most == spaceRight && spaceRight > size.x + Gap )
+				at = new Vector2( r.Right + Gap, r.Top + ( ( r.Height - size.y ) * 0.5f ) );
+			else if ( most == spaceLeft && spaceLeft > size.x + Gap )
+				at = new Vector2( r.Left - size.x - Gap, r.Top + ( ( r.Height - size.y ) * 0.5f ) );
+			else if ( most == spaceBottom && spaceBottom > size.y + Gap )
+				at = new Vector2( r.Left + ( ( r.Width - size.x ) * 0.5f ), r.Bottom + Gap );
+			else if ( most == spaceTop && spaceTop > size.y + Gap )
+				at = new Vector2( r.Left + ( ( r.Width - size.x ) * 0.5f ), r.Top - size.y - Gap );
+		}
+
+		at.x = Math.Clamp( at.x, Edge, MathF.Max( Edge, bounds.x - size.x - Edge ) );
+		at.y = Math.Clamp( at.y, Edge, MathF.Max( Edge, bounds.y - size.y - Edge ) );
+
+		Card.Style.Left = at.x;
+		Card.Style.Top = at.y;
+	}
+
+	static void Put( Panel panel, float x, float y, float width, float height )
+	{
+		if ( panel is null ) return;
+
+		panel.Style.Left = x;
+		panel.Style.Top = y;
+		panel.Style.Width = MathF.Max( width, 0.0f );
+		panel.Style.Height = MathF.Max( height, 0.0f );
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Index, NeverShowAgain, Steps.Count );
+}

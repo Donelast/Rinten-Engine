@@ -1,0 +1,162 @@
+//Shader list: name, path and first comment line; wider than its field; base look is .editor-popup
+ShaderPickerPopup.popup-panel,
+.shader-picker
+{
+	min-width: 340px;
+	max-height: 440px;
+	padding: 4px;
+
+	font-family: $font-family;
+
+	> .search
+	{
+		flex-shrink: 0;
+		min-height: $control-row-height;
+		margin-bottom: 4px;
+		padding: $control-text-padding;
+
+		background-color: $control-background;
+		border: $control-border;
+		border-radius: $control-radius;
+		color: $text-control;
+		font-size: $control-text-size;
+	}
+
+	> .list
+	{
+		flex-direction: column;
+		overflow: scroll;
+	}
+
+	> .list > .empty
+	{
+		padding: 8px;
+		color: $ink-faint;
+		font-size: $control-text-size;
+	}
+
+	//What a group is called, above the first of it. There is only one - the passes that paint a whole
+	//picture rather than a surface in one - and it is the last group, so nothing above it needs saying.
+	> .list > .heading
+	{
+		flex-shrink: 0;
+		padding: 10px 8px 4px 8px;
+
+		color: $ink-faint;
+		font-size: $type-small;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+
+		//A line rather than a separator panel: the heading is already the break, and a rule above it as well is two of them.
+		border-top: 1px solid $border;
+		margin-top: 4px;
+
+		&:first-child
+		{
+			border-top: 0;
+			margin-top: 0;
+		}
+	}
+
+	> .list > .row
+	{
+		flex-shrink: 0;
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+		padding: 5px 8px;
+
+		border-radius: $control-radius;
+		color: $text-control;
+		cursor: pointer;
+		transition: none;
+
+		> .kind
+		{
+			flex-shrink: 0;
+			font-size: $type-large;
+			color: $ink-faint;
+		}
+
+		> .words
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			min-width: 0;
+
+			> .head
+			{
+				flex-direction: row;
+				align-items: baseline;
+				gap: 8px;
+				min-width: 0;
+
+				> .title
+				{
+					font-size: $control-text-size;
+					@include one-line;
+				}
+
+				//Against the right edge and dim, the way a menu puts a shortcut there: present for the one time somebody wants it, and never the thing being read.
+				> .path
+				{
+					flex-grow: 1;
+					text-align: right;
+					color: $ink-off;
+					font-size: $type-micro;
+					@include one-line;
+				}
+			}
+
+			> .summary
+			{
+				color: $ink-faint;
+				font-size: $type-small;
+				@include one-line;
+			}
+		}
+
+		> .tick
+		{
+			flex-shrink: 0;
+			font-size: $type-large;
+			color: $ink;
+		}
+
+		&:hover
+		{
+			background-color: $primary;
+			color: $text;
+
+			> .kind,
+			> .tick
+			{
+				color: $text;
+			}
+
+			> .words > .head > .path,
+			> .words > .summary
+			{
+				//Legible against the green rather than the panel: the dim greys are a value away
+				//from the ground they were chosen for, and on the highlight they read as smudges.
+				color: rgba( $text, 0.8 );
+			}
+		}
+
+		//The one the material is on: the picked plate, its words left white - like everything else that is on.
+		&.active
+		{
+			background-color: $picked;
+		}
+
+		&.active > .words > .head > .title
+		{
+			color: $ink;
+		}
+
+		&.active:hover > .words > .head > .title
+		{
+			color: $text;
+		}
+	}
+}

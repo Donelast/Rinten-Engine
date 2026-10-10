@@ -1,0 +1,248 @@
+@using Rinten.Internal
+@namespace Editor.Inspectors
+@inherits Panel
+
+<root class="controlsheet">
+	<div class="body" @ref="Body"></div>
+</root>
+
+@code
+{
+	public object Target { get; set; }
+
+	public Func<SerializedProperty, bool> PropertyFilter { get; set; }
+
+	//Adds the raw property name to each row's tooltip, where it differs from the label.
+	public bool ShowPropertyNameInTooltip { get; set; }
+
+	internal Panel Body { get; private set; }
+
+	int _hash;
+	bool _needsRebuild;
+	List<SerializedProperty> _queuedRows;
+	List<IControlSheet.Group> _queuedGroups;
+	List<IControlSheet.Feature> _queuedFeatures;
+	List<SerializedProperty> _queuedProperties;
+	bool _queuedAllowFeatures;
+	ControlSheetFeatureTabs _featureTabs;
+
+	public void ClearBody()
+	{
+		//At once, not at the end of the frame. A sheet is emptied to be filled again in the same breath, and rows still waiting to go
+		//are rows the new ones get laid out under - which is how a sheet crept further down every time it was pointed at something else.
+		if ( Body is not null )
+			Body.DeleteChildren( true );
+
+		Target = null;
+		_hash = 0;
+		_needsRebuild = false;
+		_queuedRows = null;
+		_queuedGroups = null;
+		_queuedFeatures = null;
+		_queuedProperties = null;
+		_featureTabs = null;
+	}
+
+	public void AddPropertyRow( SerializedProperty property )
+	{
+		if ( property is null ) return;
+
+		if ( Body is null )
+		{
+			_queuedRows ??= new();
+			_queuedRows.Add( property );
+			_needsRebuild = true;
+			return;
+		}
+
+		var row = Body.AddChild<ControlSheetRow>();
+		row.Initialize( property );
+	}
+
+	void FlushQueuedRows()
+	{
+		if ( Body is null ) return;
+
+		if ( _queuedRows is not null )
+		{
+			foreach ( var property in _queuedRows )
+			{
+				var row = Body.AddChild<ControlSheetRow>();
+				row.Initialize( property );
+			}
+
+			_queuedRows = null;
+		}
+
+		if ( _queuedGroups is not null )
+		{
+			foreach ( var group in _queuedGroups )
+				AddGroup( group );
+
+			_queuedGroups = null;
+		}
+
+		if ( _queuedFeatures is not null )
+		{
+			foreach ( var feature in _queuedFeatures )
+				AddFeature( feature );
+
+			_queuedFeatures = null;
+		}
+
+		if ( _queuedProperties is not null )
+		{
+			var props = _queuedProperties;
+			var allow = _queuedAllowFeatures;
+			_queuedProperties = null;
+			BuildProperties( props, allow );
+		}
+
+		if ( _queuedRows is null && _queuedGroups is null && _queuedFeatures is null && _queuedProperties is null )
+			_needsRebuild = false;
+	}
+
+	public void BuildProperties( List<SerializedProperty> properties, bool allowFeatures = true )
+	{
+		if ( Body is null )
+		{
+			_queuedProperties = properties;
+			_queuedAllowFeatures = allowFeatures;
+			_needsRebuild = true;
+			return;
+		}
+
+		_queuedProperties = null;
+		_needsRebuild = false;
+		_featureTabs = null;
+		Body.DeleteChildren( true );
+
+		if ( properties is null || properties.Count == 0 ) return;
+
+		IControlSheet.AddProperties( this, properties, allowFeatures );
+	}
+
+	public void Rebuild()
+	{
+		if ( Body is null )
+		{
+			_needsRebuild = true;
+			return;
+		}
+
+		_needsRebuild = false;
+		_featureTabs = null;
+		Body.DeleteChildren( true );
+
+		if ( Target is null ) return;
+
+		if ( Target is List<SerializedProperty> propertyList )
+			IControlSheet.FilterSortAndAdd( this, propertyList );
+		else if ( Target is SerializedObject serializedObject )
+			IControlSheet.FilterSortAndAdd( this, serializedObject.ToList() );
+		else
+		{
+			var so = Game.TypeLibrary.GetSerializedObject( Target );
+			IControlSheet.FilterSortAndAdd( this, so.ToList() );
+		}
+
+		_hash = HashCode.Combine( Target );
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( _needsRebuild && Target is not null )
+			Rebuild();
+		else if ( _needsRebuild )
+			FlushQueuedRows();
+
+		var hash = HashCode.Combine( Target );
+		if ( hash != _hash )
+		{
+			_hash = hash;
+
+			//Only where there is something to rebuild from. A sheet filled row by row has no target at all, and rebuilding one of those empties
+			//it: the hash of no target is not zero, so the first tick after the rows went in read as a change and took them straight back out.
+			if ( Target is not null )
+				Rebuild();
+		}
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( firstTime )
+		{
+			if ( Target is not null )
+				Rebuild();
+			else if ( _queuedProperties is not null )
+				BuildProperties( _queuedProperties, _queuedAllowFeatures );
+			else
+				FlushQueuedRows();
+		}
+		else if ( _queuedProperties is not null && Body is not null )
+			BuildProperties( _queuedProperties, _queuedAllowFeatures );
+	}
+
+	public void AddFeature( IControlSheet.Feature feature )
+	{
+		if ( Body is null )
+		{
+			_queuedFeatures ??= new();
+			_queuedFeatures.Add( feature );
+			_needsRebuild = true;
+			return;
+		}
+
+		if ( _featureTabs is null || !_featureTabs.IsValid() )
+		{
+			_featureTabs = Body.AddChild<ControlSheetFeatureTabs>();
+			_featureTabs.SetPropertyFilter( PropertyFilter );
+			var guid = FindFeatureCookie( feature );
+			if ( guid != Guid.Empty )
+				_featureTabs.SetStateCookie( guid.ToString() );
+		}
+
+		_featureTabs.AddFeature( feature );
+	}
+
+	static Guid FindFeatureCookie( IControlSheet.Feature feature )
+	{
+		var sp = feature.Properties.FirstOrDefault();
+		return FindGuid( sp?.Parent );
+	}
+
+	static Guid FindGuid( SerializedProperty sp ) => FindGuid( sp?.Parent );
+
+	static Guid FindGuid( SerializedObject so )
+	{
+		if ( so is null ) return Guid.Empty;
+
+		foreach ( var target in so.Targets )
+		{
+			if ( target is GameObject go ) return go.Id;
+			if ( target is Component cmp ) return cmp.Id;
+			if ( target is Resource rc ) return new Guid( rc.ResourcePath.FastHash(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 );
+		}
+
+		return FindGuid( so.ParentProperty?.Parent );
+	}
+
+	public void AddGroup( IControlSheet.Group group )
+	{
+		if ( Body is null )
+		{
+			_queuedGroups ??= new();
+			_queuedGroups.Add( group );
+			return;
+		}
+
+		var g = Body.AddChild<ControlSheetGroup>();
+		g.QueueGroup( group );
+	}
+
+	public bool TestFilter( SerializedProperty prop ) => PropertyFilter?.Invoke( prop ) ?? true;
+}

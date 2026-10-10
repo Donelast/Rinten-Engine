@@ -1,0 +1,76 @@
+﻿<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Engine/" />
+  <Folder Name="/Engine/Dev/">
+    <Project Path="Rinten.CodeUpgrader/Rinten.CodeUpgrader.csproj" />
+    <Project Path="Rinten.Generator/Rinten.Generator.csproj" />
+    <Project Path="Tools/CodeGen/CodeGen.csproj" />
+    <Project Path="Tools/CreateGameCache/CreateGameCache.csproj" />
+    <Project Path="Tools/PackageBuild/PackageBuild.csproj" />
+  </Folder>
+  <Folder Name="/Engine/Exe/">
+    <Project Path="Launcher/Rinten/Rinten.csproj" DefaultStartup="true" />
+    <Project Path="Launcher/RintenServer/Rinten-Server.csproj" />
+    <Project Path="Launcher/RintenStandalone/Rinten-Standalone.csproj" />
+    <Project Path="Launcher/Shared/LaunchShared.shproj" />
+  </Folder>
+  <Folder Name="/Engine/Tier0/">
+    <Project Path="Microsoft.AspNetCore.Components/Microsoft.AspNetCore.Components.csproj" />
+    <Project Path="Rinten.Bind/Rinten.Bind.csproj" />
+    <Project Path="Rinten.Event/Rinten.Event.csproj" />
+    <Project Path="Rinten.Filesystem/Rinten.Filesystem.csproj" />
+    <Project Path="Rinten.Hotload/Rinten.Hotload.csproj" />
+    <Project Path="Rinten.Layout/Rinten.Layout.csproj" />
+    <Project Path="Rinten.NetCore/Rinten.NetCore.csproj" />
+    <Project Path="Rinten.Razor/Rinten.Razor.csproj" />
+    <Project Path="Rinten.Reflection/Rinten.Reflection.csproj" />
+    <Project Path="Rinten.Services/Rinten.Services.csproj" />
+    <Project Path="Rinten.SolutionGenerator/Rinten.SolutionGenerator.csproj" />
+    <Project Path="Rinten.System/Rinten.System.csproj" />
+    <Project Path="ThirdParty/Topten.RichTextKit/Topten.RichTextKit.csproj" />
+  </Folder>
+  <Folder Name="/Engine/Tier0/Compiling/">
+    <Project Path="Rinten.Compiling/Rinten.Compiling.csproj" />
+  </Folder>
+  <Folder Name="/Engine/Tier0/Networking/">
+    <Project Path="Networking/Rinten.Networking.Steam/Rinten.Networking.Steam.csproj" />
+  </Folder>
+  <Folder Name="/Engine/Tier0/Mounting/">
+    <Project Path="Mounting/Rinten.Mounting.GoldSrc/Rinten.Mounting.GoldSrc.csproj" />
+    <Project Path="Mounting/Rinten.Mounting.NS2/Rinten.Mounting.NS2.csproj" />
+    <Project Path="Mounting/Rinten.Mounting.Quake/Rinten.Mounting.Quake.csproj" />
+    <Project Path="Mounting/Rinten.Mounting.SE3/Rinten.Mounting.SE3.csproj" />
+    <Project Path="Mounting/Rinten.Mounting/Rinten.Mounting.csproj" />
+  </Folder>
+  <Folder Name="/Engine/Tier0/Porting/">
+    <Project Path="Porting/Rinten.Porting/Rinten.Porting.csproj" />
+  </Folder>
+  <Folder Name="/Engine/Tier1/">
+    <Project Path="Rinten.Engine/Rinten.Engine.csproj" />
+  </Folder>
+  <Folder Name="/Engine/Tier2/">
+    <Project Path="Porting/Rinten.Porting.SBox/Rinten.Porting.SBox.csproj" />
+    <Project Path="Rinten.AppSystem/Rinten.AppSystem.csproj" />
+    <Project Path="Rinten.Code/Rinten.Code.csproj" />
+    <Project Path="Rinten.GameInstance/Rinten.GameInstance.csproj" />
+    <Project Path="Rinten.Tools/Rinten.Tools.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Benchmark/Benchmark.csproj" />
+    <Project Path="Tests/Rinten.Test.Engine/Rinten.Test.Engine.csproj" />
+    <Project Path="Tests/Rinten.Test.Integration/Rinten.Test.Integration.csproj" />
+    <Project Path="Tests/Rinten.Test.Unit/Rinten.Test.Unit.csproj" />
+  </Folder>
+  <Folder Name="/Tests/Fixtures/">
+    <Project Path="Tests/Fixtures/HotloadTestAssembly/Rinten.Test.AfterHotload.csproj" />
+    <Project Path="Tests/Fixtures/HotloadTestAssembly/Rinten.Test.BeforeHotload.csproj" />
+    <Project Path="Tests/Fixtures/Rinten.Test.Generate/Rinten.Test.Generate.csproj" />
+  </Folder>
+</Solution>

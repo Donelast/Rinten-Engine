@@ -1,0 +1,14 @@
+{
+  "Shader": "",
+  "Tint": "1,0.28,0.05,1",
+  "ColorMap": "",
+  "Normal": "",
+  "RoughMetalAmbient": "",
+  "Emission": "",
+  "Roughness": 0.4,
+  "Metalness": 0,
+  "EmissionStrength": 0,
+  "TwoSided": false,
+  "Blend": "Opaque",
+  "AlphaCutoff": 0.5
+}

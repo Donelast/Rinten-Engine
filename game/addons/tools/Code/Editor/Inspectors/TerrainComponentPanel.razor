@@ -1,0 +1,147 @@
+@using Rinten
+@using Rinten.UI
+@namespace Editor.Inspectors
+@inherits ComponentPanel
+
+<root class="terrain-inspector">
+	@if ( terrain.IsValid() && terrain.Storage is null )
+	{
+		<div class="page">
+			<div class="heading">
+				<label class="title">No Terrain File</label>
+				<label class="note">The ground is kept in a .terrain file, and there is none until one is set.</label>
+			</div>
+
+			<ControlSheet Target=@storageProperties />
+
+			<div class="buttons">
+				<div class="button" onclick=@NewTerrainFile><i>add</i><label>New Terrain File...</label></div>
+			</div>
+		</div>
+	}
+	else if ( terrain.IsValid() )
+	{
+		@if ( InScene )
+		{
+			<div class="page">
+				<div class="heading">
+					<label class="title">Kept In The Scene</label>
+					<label class="note">This ground was made before terrains had files of their own. Save it to one.</label>
+				</div>
+
+				<div class="buttons">
+					<div class="button" onclick=@SaveToFile><i>save</i><label>Save To File...</label></div>
+				</div>
+			</div>
+		}
+
+		<div class="tabbar">
+			<div class="tab @(page == Page.Layers ? "selected" : "")" onclick=@(() => page = Page.Layers)>
+				<i>layers</i>
+				<label>Layers</label>
+			</div>
+			<div class="tab @(page == Page.Ground ? "selected" : "")" onclick=@(() => page = Page.Ground)>
+				<i>terrain</i>
+				<label>Ground</label>
+			</div>
+			<div class="tab @(page == Page.Mesh ? "selected" : "")" onclick=@(() => page = Page.Mesh)>
+				<i>view_in_ar</i>
+				<label>Mesh</label>
+			</div>
+		</div>
+
+		@if ( page == Page.Layers )
+		{
+			<div class="page">
+				<div class="heading">
+					<label class="title">Painted Layers</label>
+					<label class="note">Pick one to paint with. Right click for more.</label>
+				</div>
+
+				<div class="layers">
+					@for ( var i = 0; i < terrain.Storage.Materials.Count; i++ )
+					{
+						var index = i;
+						var material = terrain.Storage.Materials[index];
+
+						<div class="layer @(PaintedLayer == index ? "selected" : "")"
+							onclick=@(() => PickLayer( index ))
+							onrightclick=@(() => LayerMenu( index ))>
+							<label class="index">@index</label>
+							<label class="name">@LayerName( material, index )</label>
+						</div>
+					}
+
+					@if ( terrain.Storage.Materials.Count == 0 )
+					{
+						<label class="empty">No layers yet - the ground is drawn as a grid until it has one.</label>
+					}
+				</div>
+
+				<div class="buttons">
+					<div class="button" onclick=@BrowseLayers><i>folder_open</i><label>Browse...</label></div>
+					<div class="button" onclick=@NewLayer><i>add</i><label>New Layer...</label></div>
+				</div>
+
+				<ControlSheet Target=@BlendSettings />
+			</div>
+		}
+		else if ( page == Page.Ground )
+		{
+			<div class="page">
+				<ControlSheet Target=@groundProperties />
+
+				<div class="heading">
+					<label class="title">Import</label>
+					<label class="note">Replaces what is sculpted or painted now.</label>
+				</div>
+
+				<div class="buttons">
+					<div class="button" onclick=@ImportHeightmap><i>landscape</i><label>Heightmap...</label></div>
+					<div class="button" onclick=@ImportSplatmap><i>palette</i><label>Splatmap...</label></div>
+				</div>
+			</div>
+		}
+		else
+		{
+			<div class="page">
+				<ControlSheet Target=@meshProperties />
+
+				<div class="status @(terrain.ChunksWaiting > 0 ? "busy" : "")">
+					<i>@(terrain.ChunksWaiting > 0 ? "hourglass_top" : "check_circle")</i>
+					<label>@BakeStatus</label>
+				</div>
+
+				<div class="status">
+					<i>change_history</i>
+					<label>@MeshSize</label>
+				</div>
+
+				@if ( Inserts.Any() )
+				{
+					<div class="heading">
+						<label class="title">Set In By Components</label>
+						<label class="note">Objects laid over the ground while they stand - still movable. The Embed Model tool makes one ground for good.</label>
+					</div>
+
+					<div class="inserts">
+						@foreach ( var insert in Inserts )
+						{
+							var target = insert;
+
+							<div class="insert" onclick=@(() => Select( target.GameObject ))>
+								<i>@InsertIcon( target )</i>
+								<label class="name">@target.GameObject?.Name</label>
+								<label class="kind">@InsertKind( target )</label>
+							</div>
+						}
+					</div>
+				}
+
+				<div class="buttons">
+					<div class="button" onclick=@AddClutter><i>grass</i><label>Clutter</label></div>
+				</div>
+			</div>
+		}
+	}
+</root>

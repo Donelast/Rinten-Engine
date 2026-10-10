@@ -1,0 +1,662 @@
+{
+	"__InternalComment": "Index of third-party legal notices for libraries Rinten uses. Only top-level dependencies are listed; their own dependencies are in their licence files.",
+	"Statement": "Rinten is based on s&box by Facepunch Studios Ltd. The following libraries and components are included or used by Rinten. We appreciate the developers' contributions to open & shared software. Components licensed under the LGPL are dynamically linked and carry a SourceUrl pointing at the complete corresponding source; you may replace those libraries with your own build.",
+	"Components": [
+		{
+			"Name": "Yoga",
+			"Comment": "The interface's flexbox layout (engine/Rinten.Layout) is a C# port of Yoga's layout algorithm; no native Yoga library is linked.",
+			"UsedBy": [
+				"Rinten.Layout"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/facebook/yoga",
+			"Version": "3.2",
+			"Linkage": "static",
+			"Modified": true,
+			"Copyright": [
+				"Meta Platforms, Inc. and affiliates"
+			]
+		},
+		{
+			"Name": "SkiaSharp",
+			"Comment": "2D graphics for text, UI and image work, with the HarfBuzzSharp text shaper.",
+			"UsedBy": [
+				"Rinten.Engine",
+				"RintenWeb"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/mono/SkiaSharp",
+			"Version": "3.116.0",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2015-2016 Xamarin, Inc",
+				"2017-2018 Microsoft Corporation",
+				"Thirdparty contributors"
+			]
+		},
+		{
+			"Name": "HarfBuzz",
+			"Comment": "Text shaping, loaded through HarfBuzzSharp.",
+			"UsedBy": [
+				"Rinten.Engine",
+				"RintenWeb"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/harfbuzz/harfbuzz",
+			"Version": "8.3",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2010-2024 Google, Inc.",
+				"Behdad Esfahbod and HarfBuzz contributors"
+			]
+		},
+		{
+			"Name": "Topten.RichTextKit",
+			"Comment": "Rich text layout over SkiaSharp; vendored source in engine/ThirdParty.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "Apache-2.0",
+			"ProjectUrl": "https://github.com/toptensoftware/RichTextKit",
+			"Linkage": "static",
+			"Modified": true,
+			"Copyright": [
+				"2019-2020 Topten Software"
+			]
+		},
+		{
+			"Name": "Svg.Skia",
+			"Comment": "SVG rendering via SkiaSharp.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/wieslawsoltes/Svg.Skia",
+			"Version": "2.0.0.4",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2020 Wiesław Šoltés"
+			]
+		},
+		{
+			"Name": "Material Design Icons",
+			"Comment": "Iconography font.",
+			"UsedBy": [
+				"Rinten.Tools",
+				"Rinten.Engine"
+			],
+			"License": "Apache-2.0",
+			"ProjectUrl": "https://github.com/google/material-design-icons",
+			"Linkage": "static",
+			"Copyright": [
+				"2018-2019 Google LLC"
+			]
+		},
+		{
+			"Name": "Inter",
+			"Comment": "UI font (game/addons/base/Assets/fonts, OFL.txt beside it).",
+			"UsedBy": [
+				"Rinten.Tools",
+				"Rinten.Engine"
+			],
+			"License": "OFL-1.1",
+			"ProjectUrl": "https://github.com/rsms/inter",
+			"Version": "3.019",
+			"Linkage": "static",
+			"Copyright": [
+				"2020 The Inter Project Authors"
+			]
+		},
+		{
+			"Name": "Poppins",
+			"Comment": "Font (game/addons/base/Assets/fonts, OFL.txt beside it).",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "OFL-1.1",
+			"ProjectUrl": "https://github.com/itfoundry/Poppins",
+			"Version": "3.010",
+			"Linkage": "static",
+			"Copyright": [
+				"2014-2017 Indian Type Foundry"
+			]
+		},
+		{
+			"Name": "Roboto",
+			"Comment": "Roboto, Roboto Condensed and Roboto Mono fonts (game/addons/base/Assets/fonts, LICENSE-Apache-2.0.txt beside them).",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "Apache-2.0",
+			"ProjectUrl": "https://github.com/googlefonts/roboto",
+			"Version": "2.137",
+			"Linkage": "static",
+			"Copyright": [
+				"2011 Google Inc.",
+				"2015 The Roboto Mono Project Authors"
+			]
+		},
+		{
+			"Name": "WebXR Input Profiles",
+			"Comment": "VR controller models, made from @webxr-input-profiles/assets (game/addons/base/Assets/models/vr/controllers). Some portray trademarks of their device makers.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/immersive-web/webxr-input-profiles",
+			"Version": "1.0.20",
+			"Linkage": "static",
+			"Modified": true,
+			"Copyright": [
+				"2019 Amazon"
+			]
+		},
+		{
+			"Name": "MurmurHash",
+			"Comment": "Hash finaliser and word hash used for mesh and lightmap keys.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "Public-Domain",
+			"ProjectUrl": "https://github.com/aappleby/smhasher",
+			"Linkage": "static",
+			"Copyright": [
+				"Austin Appleby"
+			]
+		},
+		{
+			"Name": "xxHash",
+			"Comment": "XXH3 ported to C# (Rinten.System, Rinten.Generator); the C xxhash ships with lz4.",
+			"UsedBy": [
+				"Rinten.System",
+				"Rinten.Generator",
+				"rintencore"
+			],
+			"License": "BSD-2-Clause",
+			"ProjectUrl": "https://github.com/Cyan4973/xxHash",
+			"Linkage": "static",
+			"Modified": true,
+			"Copyright": [
+				"2012-2021 Yann Collet"
+			]
+		},
+		{
+			"Name": "lz4",
+			"Comment": "LZ4 compression, compiled into the native core.",
+			"UsedBy": [
+				"rintencore"
+			],
+			"License": "BSD-2-Clause",
+			"ProjectUrl": "https://github.com/lz4/lz4",
+			"Linkage": "static",
+			"Copyright": [
+				"2011-2020 Yann Collet"
+			]
+		},
+		{
+			"Name": "meshoptimizer",
+			"Comment": "Cluster building, simplification, welding, bounds and the vertex codec are ported to C# from meshoptimizer.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/zeux/meshoptimizer",
+			"Linkage": "static",
+			"Modified": true,
+			"Copyright": [
+				"2016-2025 Arseny Kapoulkine"
+			]
+		},
+		{
+			"Name": "recastnavigation",
+			"Comment": "Navigation mesh generation and pathfinding, ported to C# by way of recast4j and DotRecast (engine/Rinten.Engine/Game/Navigation).",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "Zlib",
+			"ProjectUrl": "https://github.com/recastnavigation/recastnavigation",
+			"Linkage": "static",
+			"Modified": true,
+			"Copyright": [
+				"2009-2010 Mikko Mononen",
+				"2015-2019 Piotr Piastucki",
+				"2023-2024 Choi Ikpil",
+				"2024 Facepunch Studios Ltd"
+			]
+		},
+		{
+			"Name": "Box2D",
+			"Comment": "2D physics, compiled into the native core.",
+			"UsedBy": [
+				"rintencore"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/erincatto/box2d",
+			"Linkage": "static",
+			"Copyright": [
+				"2022 Erin Catto"
+			]
+		},
+		{
+			"Name": "Box3D",
+			"Comment": "3D physics, compiled into the native core.",
+			"UsedBy": [
+				"rintencore"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/erincatto/box3d",
+			"Linkage": "static",
+			"Copyright": [
+				"2026 Erin Catto"
+			]
+		},
+		{
+			"Name": "miniaudio",
+			"Comment": "Audio device output, compiled into the native core.",
+			"UsedBy": [
+				"rintencore"
+			],
+			"License": "Unlicense OR MIT-0",
+			"ProjectUrl": "https://github.com/mackron/miniaudio",
+			"Linkage": "static",
+			"Copyright": [
+				"David Reid"
+			]
+		},
+		{
+			"Name": "ufbx",
+			"Comment": "FBX import, compiled into the native core.",
+			"UsedBy": [
+				"rintencore"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/ufbx/ufbx",
+			"Linkage": "static",
+			"Copyright": [
+				"2020 Samuli Raivio"
+			]
+		},
+		{
+			"Name": "stb",
+			"Comment": "stb_image and stb_vorbis, compiled into the native core.",
+			"UsedBy": [
+				"rintencore"
+			],
+			"License": "Public-Domain",
+			"ProjectUrl": "https://github.com/nothings/stb",
+			"Linkage": "header-only",
+			"Copyright": [
+				"Sean Barrett and stb contributors"
+			]
+		},
+		{
+			"Name": "Basis Universal",
+			"Comment": "KTX2/UASTC encoding for web builds, with its bundled zstd; see engine/Core/extern/basisu/NOTICE.",
+			"UsedBy": [
+				"rintencore"
+			],
+			"License": "Apache-2.0",
+			"ProjectUrl": "https://github.com/BinomialLLC/basis_universal",
+			"Version": "2.50",
+			"Linkage": "static",
+			"Copyright": [
+				"2016-2026 Binomial LLC",
+				"Meta Platforms, Inc. and affiliates (zstd)"
+			]
+		},
+		{
+			"Name": "Slang",
+			"Comment": "Shading language compiler; compiles the engine's shaders to SPIR-V and WGSL.",
+			"UsedBy": [
+				"Rinten.Engine",
+				"Rinten.Tools"
+			],
+			"License": "Apache-2.0-with-LLVM-Exception",
+			"ProjectUrl": "https://github.com/shader-slang/slang",
+			"Version": "2026.14",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"NVIDIA Corporation & Affiliates",
+				"The Khronos Group Inc.",
+				"Slang contributors"
+			]
+		},
+		{
+			"Name": "SDL3",
+			"Comment": "Windowing, input and gamepads.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "Zlib",
+			"ProjectUrl": "https://github.com/libsdl-org/SDL",
+			"Version": "3.4.14",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"1997-2026 Sam Lantinga"
+			]
+		},
+		{
+			"Name": "OpenXR",
+			"Comment": "Khronos OpenXR loader for VR headsets.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "Apache-2.0",
+			"ProjectUrl": "https://github.com/KhronosGroup/OpenXR-SDK-Source",
+			"Version": "1.1.63",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"The Khronos Group Inc."
+			]
+		},
+		{
+			"Name": "Silk.NET",
+			"Comment": "Vulkan, OpenXR and SPIRV-Cross bindings for .NET.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/dotnet/Silk.NET",
+			"Version": "2.23.0",
+			"Linkage": "dynamic",
+			"Copyright": [
+				".NET Foundation and Contributors"
+			]
+		},
+		{
+			"Name": "SPIRV-Cross",
+			"Comment": "SPIR-V reflection and cross-compilation, loaded through Silk.NET.SPIRV.Cross.Native.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "Apache-2.0",
+			"ProjectUrl": "https://github.com/KhronosGroup/SPIRV-Cross",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2015-2024 Arm Limited",
+				"The Khronos Group Inc."
+			]
+		},
+		{
+			"Name": "FFmpeg",
+			"Comment": "Video decoding. BtbN's lgpl-shared build: configured without --enable-gpl and --enable-nonfree, loaded as shared libraries that can be replaced with any compatible build.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "LGPL-3.0-or-later",
+			"ProjectUrl": "https://ffmpeg.org",
+			"Version": "n9.0.2",
+			"SourceUrl": "https://github.com/FFmpeg/FFmpeg/tree/n9.0.2",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"FFmpeg contributors"
+			]
+		},
+		{
+			"Name": "NVIDIA DLSS",
+			"Comment": "DLSS upscaling through NGX. Not in the repository: build-ngx.sh downloads the runtime at a pinned commit, and the SDK licence allows shipping that binary.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "NVIDIA-RTX-SDK",
+			"ProjectUrl": "https://github.com/NVIDIA/DLSS",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"NVIDIA Corporation"
+			]
+		},
+		{
+			"Name": "FidelityFX SDK",
+			"Comment": "FSR1 and FSR3 upscaling shaders (game/addons/base/Assets/shaders/engine/ffx).",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK",
+			"Linkage": "static",
+			"Copyright": [
+				"2024 Advanced Micro Devices, Inc."
+			]
+		},
+		{
+			"Name": "Concentus",
+			"Comment": "A C# port of the Opus codec, used for voice chat; no native Opus library is loaded.",
+			"UsedBy": [
+				"Rinten.Engine"
+			],
+			"License": "BSD-3-Clause",
+			"ProjectUrl": "https://github.com/lostromb/concentus",
+			"Version": "2.2.2",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"Skype Limited, Xiph.Org Foundation, CSIRO, Microsoft Corporation, Jean-Marc Valin, Gregory Maxwell, Mark Borgerding, Timothy B. Terriberry, Logan Stromberg"
+			]
+		},
+		{
+			"Name": "LiteDB",
+			"Comment": "Embedded database used by the editor's cloud asset directory.",
+			"UsedBy": [
+				"Rinten.Tools"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/litedb-org/LiteDB",
+			"Version": "5.0.21",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2014-2022 Mauricio David"
+			]
+		},
+		{
+			"Name": "dotnet",
+			"Comment": ".NET runtime and base class libraries, Roslyn, Microsoft.Extensions.Caching.Memory, System.Numerics.Tensors, System.Speech, System.CodeDom, System.CommandLine, ClrMD (Microsoft.Diagnostics.Runtime) and the NativeAOT-LLVM compiler for web builds.",
+			"UsedBy": [
+				"Rinten.Engine",
+				"Rinten.Tools",
+				"RintenWeb"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/dotnet",
+			"Linkage": "dynamic",
+			"Copyright": [
+				".NET Foundation and Contributors"
+			]
+		},
+		{
+			"Name": "MonoMod",
+			"Comment": "Runtime detouring for code hotload.",
+			"UsedBy": [
+				"Rinten.Code"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/MonoMod/MonoMod",
+			"Version": "25.3.3",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2015-2020 0x0ade"
+			]
+		},
+		{
+			"Name": "Mono.Cecil",
+			"Comment": "Assembly reading and writing for hotload.",
+			"UsedBy": [
+				"Rinten.Hotload"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/jbevain/cecil",
+			"Version": "0.11.6",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2008-2015 Jb Evain",
+				"2008-2011 Novell, Inc."
+			]
+		},
+		{
+			"Name": "NLog",
+			"Comment": "Logging.",
+			"UsedBy": [
+				"Rinten.System"
+			],
+			"License": "BSD-3-Clause",
+			"ProjectUrl": "https://github.com/NLog/NLog",
+			"Version": "5.3.4",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2004-2024 NLog Project"
+			]
+		},
+		{
+			"Name": "Humanizer",
+			"Comment": "Human-readable strings for numbers, dates and names.",
+			"UsedBy": [
+				"Rinten.System"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/Humanizr/Humanizer",
+			"Version": "2.14.1",
+			"Linkage": "dynamic",
+			"Copyright": [
+				".NET Foundation and Contributors"
+			]
+		},
+		{
+			"Name": "Vestris.ResourceLib",
+			"Comment": "Reads and writes Windows executable resources.",
+			"UsedBy": [
+				"Rinten.System"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/resourcelib/resourcelib",
+			"Version": "2.2.0",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2008-2016 Daniel Doubrovkine, Vestris Inc."
+			]
+		},
+		{
+			"Name": "protobuf-net",
+			"Comment": "Protocol Buffers serialisation for services.",
+			"UsedBy": [
+				"Rinten.Services"
+			],
+			"License": "Apache-2.0",
+			"ProjectUrl": "https://github.com/protobuf-net/protobuf-net",
+			"Version": "3.2.45",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2008 Marc Gravell"
+			]
+		},
+		{
+			"Name": "Refit",
+			"Comment": "Typed REST clients for services.",
+			"UsedBy": [
+				"Rinten.Services"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/reactiveui/refit",
+			"Version": "8.0.0",
+			"Linkage": "dynamic",
+			"Copyright": [
+				".NET Foundation and Contributors"
+			]
+		},
+		{
+			"Name": "Zio",
+			"Comment": "Virtual filesystem abstraction.",
+			"UsedBy": [
+				"Rinten.Filesystem"
+			],
+			"License": "BSD-2-Clause",
+			"ProjectUrl": "https://github.com/xoofx/zio",
+			"Version": "0.23.0",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2017-2024 Alexandre Mutel"
+			]
+		},
+		{
+			"Name": "Html Agility Pack",
+			"Comment": "HTML parser, vendored and trimmed in engine/Rinten.System/Html.",
+			"UsedBy": [
+				"Rinten.System"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/zzzprojects/html-agility-pack",
+			"Linkage": "static",
+			"Modified": true,
+			"Copyright": [
+				"2014-2017 ZZZ Projects Inc."
+			]
+		},
+		{
+			"Name": "FastNoise",
+			"Comment": "Noise generation, vendored in engine/Rinten.System/ThirdParty/FastNoise.cs.",
+			"UsedBy": [
+				"Rinten.System"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/Auburn/FastNoise_CSharp",
+			"Linkage": "static",
+			"Copyright": [
+				"2017 Jordan Peck"
+			]
+		},
+		{
+			"Name": "Facepunch.ActionGraphs",
+			"Comment": "Node graph runtime behind ActionGraph. To be replaced by our own implementation before the source is opened: it carries no licence that allows redistribution.",
+			"UsedBy": [
+				"Rinten.System",
+				"Rinten.Engine",
+				"Rinten.Reflection"
+			],
+			"License": "Proprietary",
+			"ProjectUrl": "https://www.nuget.org/packages/Facepunch.ActionGraphs",
+			"Version": "1.9.27",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"Facepunch Studios Ltd."
+			]
+		},
+		{
+			"Name": "AWSSDK.S3",
+			"Comment": "Build artifact uploads; build tool only, not shipped.",
+			"UsedBy": [
+				"RintenBuild"
+			],
+			"License": "Apache-2.0",
+			"ProjectUrl": "https://github.com/aws/aws-sdk-net",
+			"Version": "4.0.25.3",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"Amazon.com, Inc. or its affiliates"
+			]
+		},
+		{
+			"Name": "JetBrains.Refasmer",
+			"Comment": "Reference assembly generation; build tool only, not shipped.",
+			"UsedBy": [
+				"RintenBuild"
+			],
+			"License": "MIT",
+			"ProjectUrl": "https://github.com/JetBrains/Refasmer",
+			"Version": "2.0.3",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"JetBrains s.r.o."
+			]
+		},
+		{
+			"Name": "nvpatch",
+			"Comment": "Marks Windows executables to prefer the discrete GPU; build tool only, downloaded, not shipped.",
+			"UsedBy": [
+				"RintenBuild"
+			],
+			"License": "Apache-2.0",
+			"ProjectUrl": "https://github.com/toptensoftware/nvpatch",
+			"Linkage": "dynamic",
+			"Copyright": [
+				"2014-2021 Topten Software"
+			]
+		}
+	]
+}

@@ -1,0 +1,53 @@
+﻿using System.Collections.Immutable;
+
+namespace Rinten.Internal;
+
+public partial class TypeLibrary
+{
+	//If set, will be used to determine whether a private member should be exposed.
+	internal Func<MemberInfo, bool> ShouldExposePrivateMember;
+
+	/// <summary>Find all methods with given attribute, optionally non static</summary>
+	public IReadOnlyList<(MethodDescription Method, T Attribute)> GetMethodsWithAttribute<T>( bool onlyStatic = true ) where T : Attribute
+	{
+		return Cached( HashCode.Combine( "GetMethodsWithAttribute", typeof( T ), onlyStatic ),
+						() => TypesWithMemberAttribute<T>().SelectMany( x => x.Members )
+								.OfType<MethodDescription>()
+								.Where( x => x.IsStatic || !onlyStatic )
+								.SelectMany( x => x.Attributes.OfType<T>().Select<T, (MethodDescription Method, T Attribute)>( y => new( x, y ) ) )
+								.ToImmutableList() );
+	}
+
+	/// <summary>Find all static methods with given name.</summary>
+	public IEnumerable<MethodDescription> FindStaticMethods( string methodName )
+	{
+		return typedata.Values.SelectMany( x => x.Members ).OfType<MethodDescription>().Where( x => x.IsStatic && x.IsNamed( methodName ) );
+	}
+
+	/// <summary>Find all static methods with given name and given attribute.</summary>
+	public IEnumerable<MethodDescription> FindStaticMethods<T>( string methodName ) where T : Attribute
+	{
+		return TypesWithMemberAttribute<T>().SelectMany( x => x.Members ).OfType<MethodDescription>().Where( x => x.IsStatic && x.IsNamed( methodName ) && x.Attributes.OfType<T>().Any() );
+	}
+
+	/// <summary>Find all member attributes (instances) with given attribute type.</summary>
+	public IEnumerable<T> GetMemberAttributes<T>() where T : Attribute
+	{
+		return TypesWithMemberAttribute<T>().SelectMany( x => x.Members ).SelectMany( x => x.Attributes ).OfType<T>();
+	}
+
+	//Find all static members with given attribute.
+	internal IEnumerable<(MemberDescription Member, T Attribute)> GetMembersWithAttribute<T>() where T : Attribute
+	{
+		return TypesWithMemberAttribute<T>().SelectMany( x => x.Members )
+			.OfType<MemberDescription>()
+			.Where( x => x.IsStatic )
+			.SelectMany( x => x.Attributes.OfType<T>().Select<T, (MemberDescription Member, T Attribute)>( y => new( x, y ) ) );
+	}
+
+	/// <summary>Find all static or non static only member attributes (instances) with given attribute type.</summary>
+	public IEnumerable<T> GetMemberAttributes<T>( bool staticMembers ) where T : Attribute
+	{
+		return TypesWithMemberAttribute<T>().SelectMany( x => x.Members ).Where( x => x.IsStatic == staticMembers ).SelectMany( x => x.Attributes ).OfType<T>();
+	}
+}

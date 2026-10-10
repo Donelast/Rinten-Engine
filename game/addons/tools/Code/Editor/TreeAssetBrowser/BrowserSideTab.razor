@@ -1,0 +1,23 @@
+@namespace Editor.TreeBrowser
+@attribute [StyleSheet( "BrowserSideTab.razor.scss" )]
+@inherits Panel
+
+<root class="browser-side-tab @(Active ? "active" : null)" tooltip="@ToolTip" onclick="@(() => OnSelected?.Invoke())">
+	<i>@Icon</i>
+</root>
+
+@code
+{
+	//Material icon drawn in the middle.
+	public string Icon { get; set; }
+
+	//What the pointer says this tab holds.
+	public string ToolTip { get; set; }
+
+	//Whether this is the tab being looked at.
+	public bool Active { get; set; }
+
+	public Action OnSelected { get; set; }
+
+	protected override int BuildHash() => HashCode.Combine( Icon, ToolTip, Active );
+}

@@ -1,0 +1,22 @@
+//An object editor inline in the row: it has no height of its own, the sheet inside sets it.
+InlineEditorControl.control.no-background.multiple-rows
+{
+	flex-direction: column;
+	min-height: 0;
+	gap: 0;
+	padding: 0;
+	align-self: stretch;
+
+	> .controlsheet
+	{
+		flex-grow: 1;
+		flex-shrink: 0;
+		min-height: 0;
+		align-self: stretch;
+
+		> .body
+		{
+			overflow: visible;
+		}
+	}
+}

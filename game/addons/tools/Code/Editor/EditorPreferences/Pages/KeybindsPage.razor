@@ -1,0 +1,46 @@
+@namespace Editor.Preferences
+@attribute [Title( "Editor Keybinds" ), Icon( "keyboard" ), Order( 4 )]
+@attribute [Description( "Every shortcut the editor listens for, and the keys it listens on." )]
+@inherits PreferencesPage
+
+<root class="preferences-page">
+	<div class="body" @ref="Body">
+		<div @ref="searchHost"></div>
+
+		<KeybindListPanel @ref="list" />
+
+		<div class="button-row" @ref="buttonHost"></div>
+	</div>
+</root>
+
+@code
+{
+	Panel searchHost;
+	Panel buttonHost;
+	KeybindListPanel list;
+
+	protected override void OnBuild()
+	{
+		var search = searchHost.AddChild<TextField>( "search" );
+		search.Icon = "search";
+		search.Placeholder = "Search";
+		search.ValueChanged = value => list.Query = value;
+
+		var reset = buttonHost.AddChild<TextButtonPanel>();
+		reset.AddClass( "careful" );
+		reset.Icon = "history";
+		reset.Text = "Reset to Default";
+		reset.Pressed = AskReset;
+	}
+
+	void AskReset()
+	{
+		EditorModal.Confirm( this, "Reset Editor Keybinds",
+			"Are you sure you wish to reset all editor keybinds?\nThis process cannot be reverted.",
+			() =>
+			{
+				ShortcutBinding.ResetAll();
+				list.Rebuild();
+			} );
+	}
+}

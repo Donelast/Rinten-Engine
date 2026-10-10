@@ -1,0 +1,13 @@
+//An animation graph's parameter list: a button bar with a property sheet below.
+.animation-parameter-list
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-width: 0;
+
+	> .controlsheet
+	{
+		flex-grow: 1;
+		min-width: 0;
+	}
+}

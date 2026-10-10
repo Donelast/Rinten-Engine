@@ -1,0 +1,13 @@
+﻿.network-mode
+{
+	flex-shrink: 0;
+}
+
+.network-mode > .toolbarbutton
+{
+	min-width: $row;
+	min-height: $row;
+}
+
+//Nothing of its own: it is a toolbar button, and a lit one is the accent wherever it stands - see .toolbarbutton.active in design.scss. It
+//was drawn in Theme.Blue before the port, and Theme.Blue was the accent then, so saying it again here only risks the two drifting apart.

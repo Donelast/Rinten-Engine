@@ -1,0 +1,148 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Systems" )]
+@attribute [StyleSheet( "SystemsPage.razor.scss" )]
+@using Editor.ProjectSettingsUI
+@inherits ProjectSettingsCategoryPanel
+
+<root class="project-settings-category">
+	<div class="body" @ref="Body">
+		<div class="systems-mode-row" @ref="modeRow">
+			<ModeButtonPanel @ref="globalMode" />
+			<ModeButtonPanel @ref="sceneMode" />
+		</div>
+		<div @ref="content"></div>
+	</div>
+</root>
+
+@code
+{
+	Panel modeRow;
+	ModeButtonPanel globalMode;
+	ModeButtonPanel sceneMode;
+	Panel content;
+	Editor.Inspectors.ControlSheet sheetHost;
+	TypeDescription currentType;
+	internal bool wantsEditScene;
+	Scene scene;
+	Dictionary<(TypeDescription systemType, string propertyName), object> scenePendingChanges = new();
+
+	internal void SelectSystem( TypeDescription systemType ) => currentType = systemType;
+
+	public override IEnumerable<SettingsTreeChildNode> GetTreeChildren()
+	{
+		var types = TypeLibrary.GetTypes<GameObjectSystem>()
+			.Where( t => t.Properties.Any( p => p.HasAttribute<PropertyAttribute>() && !p.HasAttribute<HideAttribute>() ) )
+			.OrderBy( x => x.Order )
+			.ThenBy( x => x.Title );
+
+		foreach ( var systemType in types )
+		{
+			yield return new SettingsTreeChildNode(
+				systemType.Title ?? systemType.Name,
+				systemType.Icon ?? "device_hub",
+				category => ((SystemsPage)category).SelectSystem( systemType )
+			);
+		}
+	}
+
+	protected override void OnInit( Project project )
+	{
+		globalMode.Setup( this, "Global", "settings", false );
+		sceneMode.Setup( this, "Current Scene", "map", true );
+		sceneMode.SetClass( "hidden", SceneEditorSession.Active.Scene is PrefabScene );
+
+		RebuildContent();
+	}
+
+	internal void SwitchMode( bool useSceneMode )
+	{
+		wantsEditScene = useSceneMode;
+		scene = useSceneMode ? SceneEditorSession.Active?.Scene : null;
+		scenePendingChanges.Clear();
+		globalMode.SetClass( "active", !useSceneMode );
+		sceneMode.SetClass( "active", useSceneMode );
+		RebuildContent();
+	}
+
+	void RebuildContent()
+	{
+		content.DeleteChildren();
+		sheetHost = null;
+
+		var types = TypeLibrary.GetTypes<GameObjectSystem>()
+			.Where( t => t.Properties.Any( p => p.HasAttribute<PropertyAttribute>() && !p.HasAttribute<HideAttribute>() ) )
+			.OrderBy( x => x.Order )
+			.ThenBy( x => x.Title )
+			.ToList();
+
+		if ( !types.Any() )
+		{
+			modeRow.SetClass( "hidden", true );
+			AddCallout( "No configurable systems found. Add [Property] attributes to your GameObjectSystem properties to configure them here." );
+			return;
+		}
+
+		modeRow.SetClass( "hidden", false );
+
+		if ( currentType != null )
+		{
+			sheetHost = content.AddChild<Editor.Inspectors.ControlSheet>();
+			RebuildSheet( currentType, sheetHost );
+			return;
+		}
+
+		foreach ( var systemType in types )
+		{
+			AddSectionHeader( systemType.Title ?? systemType.Name );
+			var host = content.AddChild<Editor.Inspectors.ControlSheet>();
+			RebuildSheet( systemType, host );
+		}
+	}
+
+	void RebuildSheet( TypeDescription systemType, Editor.Inspectors.ControlSheet targetHost )
+	{
+		targetHost.ClearBody();
+
+		var serializedObject = new SystemSerializedObject( systemType, wantsEditScene ? scene : null, wantsEditScene ? scenePendingChanges : null );
+
+		var properties = systemType.Properties
+			.Where( p => p.HasAttribute<PropertyAttribute>() && !p.HasAttribute<HideAttribute>() );
+
+		foreach ( var prop in properties )
+		{
+			var serializedProp = new SystemPropertyWrapper( serializedObject, prop );
+			serializedProp.OnChanged += StateHasChanged;
+			targetHost.AddPropertyRow( serializedProp );
+		}
+
+		targetHost.Rebuild();
+	}
+
+	public override void OnSave()
+	{
+		if ( !wantsEditScene )
+		{
+			EditorUtility.SaveProjectSettings( ProjectSettings.Systems, "Systems.config" );
+		}
+		else
+		{
+			foreach ( var kvp in scenePendingChanges )
+			{
+				var (systemType, propertyName) = kvp.Key;
+				var value = kvp.Value;
+
+				var prop = systemType.Properties.FirstOrDefault( p => p.Name == propertyName );
+				if ( prop == null ) continue;
+
+				var system = EditorUtility.GetGameObjectSystem( scene, systemType );
+				if ( system != null )
+					prop.SetValue( system, value );
+			}
+
+			scenePendingChanges.Clear();
+			SceneEditorSession.Active?.Save( false );
+		}
+
+		base.OnSave();
+	}
+}

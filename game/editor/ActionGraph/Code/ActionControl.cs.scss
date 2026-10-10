@@ -1,0 +1,105 @@
+﻿ActionControl.control.no-background
+{
+	flex-grow: 1;
+	min-width: 0;
+	cursor: pointer;
+
+	> .field
+	{
+		flex-direction: row;
+		pointer-events: all;
+		align-items: center;
+		flex-grow: 1;
+		min-width: 0;
+		min-height: $control-row-height;
+		gap: 8px;
+		padding: $control-text-padding;
+		background-color: $control-background;
+		border: $control-border;
+		border-radius: $control-radius;
+
+		//Green for a graph, red where it has errors, and the border colour for one that has not been made yet.
+		> .icon
+		{
+			flex-shrink: 0;
+			font-size: 17px;
+			color: $green;
+			opacity: 0.7;
+		}
+
+		> .text
+		{
+			flex-direction: row;
+			align-items: baseline;
+			flex-grow: 1;
+			min-width: 0;
+			gap: 4px;
+
+			> .title
+			{
+				flex-shrink: 0;
+				color: $text;
+				font-size: $control-text-size;
+				opacity: 0.7;
+				white-space: nowrap;
+			}
+
+			> .description
+			{
+				min-width: 0;
+				color: $text-light;
+				font-size: $type-micro;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+
+				&.hidden { display: none; }
+			}
+		}
+	}
+
+	&.empty > .field
+	{
+		> .icon { color: $border; }
+		> .text > .title { color: $text-light; }
+	}
+
+	&.error > .field
+	{
+		> .icon { color: $red; }
+		> .text > .title { color: $red; }
+	}
+
+	&:hover > .field
+	{
+		border-color: $primary;
+
+		> .icon,
+		> .text > .title { opacity: 1; }
+	}
+
+	&.drop-target > .field
+	{
+		border-color: $primary;
+		background-color: $control-background-light;
+	}
+
+	&.readonly
+	{
+		cursor: default;
+	}
+}
+
+//A delegate: its bindings listed one under another.
+DelegateControl.control.no-background
+{
+	flex-direction: column;
+}
+
+//A delegate the node library can't describe - there is no graph to open.
+DelegateControl.control.no-background > .note
+{
+	min-height: $control-row-height;
+	color: $text-light;
+	font-size: $control-text-size;
+}

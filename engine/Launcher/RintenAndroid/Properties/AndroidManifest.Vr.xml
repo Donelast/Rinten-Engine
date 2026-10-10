@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+The same package as AndroidManifest.xml, for a game that is played in a headset:
+a Quest, a Pico, a Vive Focus - anything whose system runs OpenXR on Android.
+Chosen by the export for a project that says it is VR (-p:RintenVr=true); see
+Rinten-Android.csproj. Everything below is what a headset's launcher and its
+OpenXR runtime look for, and none of it means anything to a phone.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<uses-sdk android:minSdkVersion="28" android:targetSdkVersion="35" />
+
+	<uses-feature android:name="android.hardware.vulkan.version" android:version="0x00401000" android:required="true" />
+
+	<!-- A headset's, and only a headset's: a store does not offer the game to a phone. -->
+	<uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="true" />
+
+	<!-- Where the Khronos loader finds the runtime, on Android 11 and later. -->
+	<uses-permission android:name="org.khronos.openxr.permission.OPENXR" />
+	<uses-permission android:name="org.khronos.openxr.permission.OPENXR_SYSTEM" />
+
+	<queries>
+		<provider android:authorities="org.khronos.openxr.runtime_broker;org.khronos.openxr.system_runtime_broker" />
+		<intent>
+			<action android:name="org.khronos.openxr.OpenXRRuntimeService" />
+		</intent>
+		<intent>
+			<action android:name="org.khronos.openxr.OpenXRApiLayerService" />
+		</intent>
+	</queries>
+
+	<application android:label="${app_label}" android:hardwareAccelerated="true" android:extractNativeLibs="true">
+		<!-- Which Quests it runs on; the store will not list it for the others. -->
+		<meta-data android:name="com.oculus.supportedDevices" android:value="quest|quest2|questpro|quest3|quest3s" />
+
+		<!-- A Pico's launcher, told the same thing its way. -->
+		<meta-data android:name="pvr.app.type" android:value="vr" />
+
+		<activity android:name="rinten.android.MainActivity" android:exported="true" android:screenOrientation="landscape"
+			android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+
+				<!-- Launched immersive rather than in a window: the headsets' own names, and the standard one. -->
+				<category android:name="com.oculus.intent.category.VR" />
+				<category android:name="org.khronos.openxr.intent.category.IMMERSIVE_HMD" />
+				<category android:name="com.htc.intent.category.VRAPP" />
+			</intent-filter>
+		</activity>
+	</application>
+</manifest>

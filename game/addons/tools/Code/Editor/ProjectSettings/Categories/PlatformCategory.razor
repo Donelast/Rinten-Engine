@@ -1,0 +1,25 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Chat &amp; Subtitles" ), Icon( "chat" )]
+@using Editor.ProjectSettingsUI
+@inherits ProjectSettingsCategoryPanel
+
+<root class="project-settings-category">
+	<div class="body" @ref="Body"></div>
+</root>
+
+@code
+{
+	PlatformSettings settings;
+
+	protected override void OnInit( Project project )
+	{
+		settings = EditorUtility.LoadProjectSettings<PlatformSettings>( "Platform.config" );
+		AddControlSheet( settings.GetSerialized() );
+	}
+
+	public override void OnSave()
+	{
+		EditorUtility.SaveProjectSettings( settings, "Platform.config" );
+		base.OnSave();
+	}
+}

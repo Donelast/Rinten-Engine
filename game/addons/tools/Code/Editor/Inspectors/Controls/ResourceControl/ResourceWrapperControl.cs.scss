@@ -1,0 +1,24 @@
+ResourceWrapperControl.control.no-background
+{
+	flex-direction: row;
+	align-items: flex-start;
+	flex-grow: 1;
+	min-width: 0;
+	gap: 2px;
+	padding: 0;
+
+	> .body
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+	}
+
+	//Stays beside the top of the body, so a generator's sheet grows under it rather than pushing it down the row.
+	> .toolbarbutton
+	{
+		flex-shrink: 0;
+		width: $control-row-height;
+		height: $control-row-height;
+	}
+}

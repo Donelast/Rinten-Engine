@@ -1,0 +1,57 @@
+GameObjectControl.control
+{
+	&.drop-target:not(.no-background)
+	{
+		border-color: $green;
+		background-color: rgba( $green, 0.12 );
+	}
+
+	> .row
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-grow: 1;
+		min-height: $control-row-height;
+		min-width: 0;
+		gap: $vertical-gap;
+
+		&.active
+		{
+			outline: 1px dashed rgba( $accent, 0.6 );
+			border-radius: $control-radius;
+		}
+
+		> .value
+		{
+			flex-grow: 1;
+			min-width: 0;
+			padding: $control-text-padding;
+			cursor: pointer;
+		}
+
+		&.multiple > .value
+		{
+			color: $multiple-values;
+		}
+
+		&.none > .value
+		{
+			color: rgba( $text-control, 0.3 );
+		}
+
+		&.prefab > .value
+		{
+			color: $accent;
+		}
+
+		&.scene > .value
+		{
+			color: $green;
+		}
+	}
+
+	&.readonly > .row > .value
+	{
+		cursor: default;
+	}
+}

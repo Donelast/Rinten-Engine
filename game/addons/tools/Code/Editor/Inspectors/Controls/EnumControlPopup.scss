@@ -1,0 +1,12 @@
+EnumControlPopup.popup-panel {
+  > button {
+    border-radius: 0px;
+    justify-content: flex-start;
+    gap: 2px;
+
+    &.active {
+      background-color: $primary;
+      color: $text;
+    }
+  }
+}

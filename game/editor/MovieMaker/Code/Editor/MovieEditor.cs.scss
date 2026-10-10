@@ -1,0 +1,17 @@
+.movie-editor
+{
+	flex-grow: 1;
+	flex-direction: row;
+	//Inside the dock and no further: a panel does not clip its children the way a widget did.
+	overflow: hidden;
+	background-color: $panel-background;
+	font-family: $font-family;
+
+	> .movie-section
+	{
+		&.hidden
+		{
+			display: none;
+		}
+	}
+}

@@ -1,0 +1,421 @@
+﻿//Console: fixed-width monospace columns; a line's level shows only in its colour
+
+.console
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+
+	font-family: $font-mono;
+
+	background-color: $list-background;
+}
+
+.console > .body
+{
+	position: relative;
+	flex-grow: 1;
+	min-height: 0;
+}
+
+.console-list
+{
+	width: 100%;
+	height: 100%;
+}
+
+//── a line ──────────────────────────────────────────────────────────────────
+
+.console-row
+{
+	flex-direction: row;
+	align-items: center;
+
+	left: 0px;
+	width: 100%;
+	height: 17px;
+
+	font-family: $font-mono;
+	font-size: $type-small;
+	white-space: nowrap;
+
+	//When it happened, dimmer than what was said and standing on the same plate
+	//every small surface in this editor stands on rather than a colour of its own.
+	> .time
+	{
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+
+		width: 62px;
+		height: 100%;
+		flex-shrink: 0;
+
+		background-color: $console-gutter;
+
+		> .text { color: $console-gutter-text; }
+	}
+
+	//Where it came from, in the colour of the line it belongs to: a warning is only as useful as how fast it gets you to the line that caused it,
+	//and reading a stack trace two panels away is not fast. The column is kept whether or not there is a source, or the messages would not line up.
+	> .source
+	{
+		flex-direction: row;
+		align-items: center;
+
+		width: 170px;
+		height: 100%;
+		flex-shrink: 0;
+		padding-left: 6px;
+		overflow: hidden;
+
+		> .text
+		{
+			flex-grow: 1;
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+
+			//Cut it where the room runs out, not at the last space before that. A file name is one word, so word-wise truncation has nowhere to
+			//cut but in front of it - which throws away the name and leaves the number and an ellipsis, the one part nobody needed shortening.
+			word-break: break-all;
+		}
+	}
+
+	//Clickable source: a hover wash signals it is pressable, with no border or underline
+	> .source.link
+	{
+		cursor: pointer;
+
+		&:hover
+		{
+			background-color: $veil-hover;
+
+			> .text { color: $ink; }
+		}
+	}
+
+	//How many times running. A loop that logs every frame stays readable because of this, and the count is where the line would otherwise repeat.
+	> .repeats
+	{
+		flex-shrink: 0;
+		margin-left: 6px;
+		padding: 0px 4px;
+		border-radius: 2px;
+
+		background-color: $console-gutter;
+		color: $console-gutter-text;
+
+		&.hidden { display: none; }
+	}
+
+	//What was said. One line each: the rest of a message with returns in it is a double-click away, in a window with room for it.
+	> .message
+	{
+		flex-grow: 1;
+		min-width: 0;
+		margin: 0px 6px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		word-break: break-all;
+	}
+
+	//The pointer's wash goes under the whole line, not only under the file name:
+	//what is pressed is the line, and the file name is one thing pressing it does.
+	&:hover { background-color: $console-line-hover; }
+
+	//The two things that are a state of the line rather than of the pointer: last looked at, and picked out. Written
+	//after the hover so they win it, and each with a step of its own for the pointer, so a lit line still answers it.
+	&.current { background-color: $console-line-current; }
+	&.current:hover { background-color: $console-line-current-hover; }
+	&.picked { background-color: $console-line-picked; }
+	&.picked:hover { background-color: $console-line-picked-hover; }
+
+	//The time's gutter is part of the line, not a column beside it: a lit line is
+	//lit from its left edge, so the gutter gives way to whatever the line wears.
+	&:hover > .time,
+	&.current > .time,
+	&.picked > .time
+	{
+		background-color: transparent;
+	}
+}
+
+//What a line is worth, as the only thing that says it.
+.console-row.info > .message,
+.console-row.info > .source > .text { color: $console-message; }
+
+.console-row.trace > .message,
+.console-row.trace > .source > .text { color: $console-trace; }
+
+.console-row.warn > .message,
+.console-row.warn > .source > .text { color: $console-warning; }
+
+.console-row.error > .message,
+.console-row.error > .source > .text { color: $console-error; }
+
+.console-row.command > .message,
+.console-row.command > .source > .text { color: $console-command; }
+
+//Source hover plate tinted by level, for levels with their own colour
+.console-row.warn > .source.link:hover { background-color: rgba( $console-warning, 0.14 ); }
+.console-row.error > .source.link:hover { background-color: rgba( $console-error, 0.14 ); }
+.console-row.command > .source.link:hover { background-color: rgba( $console-command, 0.14 ); }
+
+//── the line, whole ─────────────────────────────────────────────────────────
+
+//The half beside the log: the message as it was written, and the stack under it. The same panel as
+//the log and every other dock; the head's band and the hairline are what tell the two halves apart.
+.console-detail
+{
+	flex-direction: column;
+	min-width: 0;
+
+	background-color: $panel-ground;
+
+	> .head
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+
+		height: 24px;
+		padding: 0px 4px 0px 8px;
+		gap: 6px;
+
+		background-color: $surface-background;
+
+		> .icon
+		{
+			font-family: Material Icons;
+			font-size: $type-default;
+			color: $ink-faint;
+		}
+
+		> .logger
+		{
+			font-family: $font;
+			font-size: $type-small;
+			font-weight: 600;
+			color: $ink-dim;
+		}
+
+		> .time
+		{
+			font-family: $font-mono;
+			font-size: $type-small;
+			color: $ink-off;
+		}
+
+		> .stretch { flex-grow: 1; }
+	}
+
+	//The message and the frames scroll together: a long message with a short stack and a short message with a long
+	//stack are both usual, and two boxes that scroll separately make you look in two places for the same answer.
+	> .body
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		overflow: scroll;
+
+		> .message
+		{
+			flex-shrink: 0;
+			padding: 8px;
+
+			font-family: $font-mono;
+			font-size: $type-small;
+
+			//As it was written, newlines and all - this is the half that has room for the rest of what the one line up there could not say.
+			white-space: pre-wrap;
+			word-break: break-all;
+			color: $ink;
+		}
+
+		//A hairline of the panel's own ground between frames, rather than a border of its own:
+		//two frames of the same kind would otherwise run together into one block of wash.
+		> .frames
+		{
+			flex-direction: column;
+			flex-shrink: 0;
+			gap: 1px;
+		}
+	}
+
+	&.hidden { display: none; }
+}
+
+//The icon takes the colour of what sort of line it is - the same one the row in the log is written in.
+.console-detail.warn > .head > .icon { color: $console-warning; }
+.console-detail.error > .head > .icon { color: $console-error; }
+.console-detail.command > .head > .icon { color: $console-command; }
+
+.console-detail-button
+{
+	@include quiet;
+
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+
+	width: 20px;
+	height: 20px;
+	border-radius: 4px;
+
+	color: $ink;
+	cursor: pointer;
+
+	> .icon
+	{
+		font-family: Material Icons;
+		font-size: $type-default;
+		color: inherit;
+	}
+}
+
+//Stack frame coloured by whose code it is (yours, engine, graph); same size as log lines
+.console-frame
+{
+	flex-direction: column;
+
+	padding: 5px 8px;
+
+	background-color: $stack-own-wash;
+
+	> .function
+	{
+		font-family: $font-mono;
+		font-size: $type-small;
+		white-space: pre-wrap;
+		word-break: break-all;
+		color: $stack-own;
+	}
+
+	> .file
+	{
+		margin-top: 2px;
+		font-family: $font-mono;
+		font-size: $type-small;
+		white-space: pre-wrap;
+		word-break: break-all;
+		color: $stack-own-place;
+	}
+
+	//Inside the engine rather than in what is being written: still worth reading, and turned down because it is rarely the answer.
+	&.engine
+	{
+		background-color: $stack-engine-wash;
+
+		> .function { color: $stack-engine; }
+		> .file { color: $stack-engine-place; }
+	}
+
+	//Inside an action graph, which is a different place to go and look.
+	&.action
+	{
+		background-color: $stack-action-wash;
+
+		> .function { color: $stack-action; }
+		> .file { color: $stack-action-place; }
+	}
+
+	//A frame that names no place - nothing to open, so nothing to press, and nothing much to look at either.
+	&.placeless
+	{
+		background-color: $stack-nowhere-wash;
+
+		> .function { color: $stack-nowhere; }
+		> .file { color: $stack-nowhere; }
+	}
+
+	&.pressable
+	{
+		cursor: pointer;
+
+		&:hover { background-color: $veil-hover; }
+	}
+}
+
+//── the line you type into ──────────────────────────────────────────────────
+
+//Taller than a toolbar: this is the one thing in the dock somebody comes to
+//type into, and a 20px slot reads as a filter box on the way to somewhere else.
+.console > .console-bar
+{
+	height: 32px;
+
+	border-top: 1px solid $border;
+}
+
+.console-input
+{
+	flex-grow: 1;
+	height: 26px;
+	padding: 0px 8px;
+
+	font-family: $font-mono;
+	font-size: 12px;
+}
+
+//── what could be meant ─────────────────────────────────────────────────────
+
+.console-suggestions
+{
+	position: absolute;
+	left: 0px;
+	right: 0px;
+	bottom: 0px;
+	z-index: 1;
+
+	flex-direction: column;
+
+	border-top: 1px solid $border;
+	background-color: $popup-background;
+	box-shadow: $shadow-card;
+
+	&.hidden { display: none; }
+}
+
+.console-suggestion
+{
+	flex-direction: row;
+	align-items: center;
+
+	height: 20px;
+	padding: 0px 8px;
+
+	font-size: $type-small;
+	cursor: pointer;
+
+	> .command
+	{
+		flex-shrink: 0;
+		font-family: $font-mono;
+		color: $ink;
+	}
+
+	> .help
+	{
+		flex-grow: 1;
+		min-width: 0;
+		margin-left: 12px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+
+		font-family: $font;
+		color: $ink-off;
+	}
+
+	&:hover { background-color: $veil-hover; }
+
+	//The one tab would take next.
+	&.current
+	{
+		background-color: $picked;
+
+		> .command { color: $ink; }
+	}
+
+	&.hidden { display: none; }
+}

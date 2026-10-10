@@ -1,0 +1,84 @@
+GenericControl.control.no-background
+{
+	flex-grow: 1;
+
+	//An inline object editor takes the whole row.
+	> .controlsheet
+	{
+		flex-grow: 1;
+	}
+
+	> .body
+	{
+		flex-direction: row;
+		flex-wrap: wrap;
+		column-gap: 4px;
+		flex-grow: 1;
+		min-width: 0;
+
+		//Key properties share the row evenly.
+		> .control
+		{
+			flex-grow: 1;
+		}
+
+		> .dropdown
+		{
+			//Zero beside key properties, one when the expander stands alone.
+			flex-grow: 0;
+			min-width: 0;
+			min-height: $control-row-height;
+			padding: $control-text-padding;
+			padding-right: 28px;
+			background-color: $control-background;
+			border: 1px solid $border;
+			border-radius: $control-radius;
+			color: $text-control;
+			gap: 4px;
+			justify-content: flex-start;
+			align-items: center;
+			transition: none;
+
+			&.alone
+			{
+				flex-grow: 1;
+			}
+
+			//Beside key properties: the icon and the arrow, the text in the tooltip.
+			&.beside
+			{
+				flex-shrink: 0;
+			}
+
+			&:active
+			{
+				background-color: $control-background;
+				transform: none;
+			}
+
+			&.open
+			{
+				transition: none;
+			}
+
+			> .icon
+			{
+				flex-shrink: 0;
+				font-size: $type-default;
+			}
+
+			> .button-right-column
+			{
+				flex-grow: 1;
+				min-width: 0;
+				justify-content: flex-start;
+
+				> .button-label
+				{
+					@include one-line;
+				}
+			}
+
+		}
+	}
+}

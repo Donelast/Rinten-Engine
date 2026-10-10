@@ -1,0 +1,238 @@
+﻿.track-list
+{
+	position: relative;
+	flex-grow: 1;
+	overflow: hidden;
+	pointer-events: all;
+	background-color: $control-background;
+
+	> .content
+	{
+		position: absolute;
+		left: 0px;
+		top: 0px;
+		width: 100%;
+		flex-direction: column;
+		overflow: visible;
+	}
+
+	> .content > .placeholder
+	{
+		margin: 32px;
+		text-align: center;
+		white-space: pre-wrap;
+		font-family: $font-family;
+		font-size: 12px;
+		color: $text-control;
+
+		&.hidden { display: none; }
+	}
+}
+
+.project-navigation
+{
+	position: relative;
+	height: 32px;
+	flex-shrink: 0;
+	pointer-events: all;
+	cursor: pointer;
+	overflow: hidden;
+
+	&.active
+	{
+		cursor: default;
+	}
+
+	> .film-strip
+	{
+		position: absolute;
+		left: 0px;
+		top: 1px;
+		width: 100%;
+		height: 30px;
+		border-radius: 2px;
+	}
+
+	> .title
+	{
+		position: absolute;
+		left: 12px;
+		top: 0px;
+		height: 100%;
+		align-items: center;
+		font-family: $font-family;
+		font-size: 12px;
+		white-space: nowrap;
+	}
+
+	> .time
+	{
+		position: absolute;
+		top: 0px;
+		height: 100%;
+		align-items: center;
+		font-family: $font-family;
+		font-size: $type-micro;
+		color: rgba( $text-control, 0.8 );
+
+		&.start { left: 4px; }
+		&.end { right: 4px; }
+	}
+}
+
+.track-row
+{
+	flex-direction: column;
+	overflow: visible;
+
+	//A root row sits at the height the timeline draws its track at, and code writes its top. Nested rows sit in the flow inside it.
+	&.placed
+	{
+		position: absolute;
+		left: 0px;
+		right: 0px;
+	}
+
+	> .header
+	{
+		position: relative;
+		height: 30px;
+		margin: 1px 5px;
+		flex-direction: row;
+		align-items: center;
+		gap: 4px;
+		padding: 0px 4px;
+		border-radius: 4px;
+		pointer-events: all;
+		cursor: pointer;
+
+		> .name
+		{
+			flex-grow: 1;
+			font-family: $font-family;
+			font-size: 12px;
+			white-space: nowrap;
+			overflow: hidden;
+		}
+
+		> .reference
+		{
+			flex-grow: 1;
+			max-width: 300px;
+		}
+
+		> .auto-created
+		{
+			flex-shrink: 0;
+			font-family: Material Icons;
+			font-size: $type-large;
+			color: $text;
+
+			&.hidden { display: none; }
+		}
+	}
+
+	> .children
+	{
+		flex-direction: column;
+		margin-left: 8px;
+	}
+
+	> .flash
+	{
+		position: absolute;
+		right: 0px;
+		top: 0px;
+		width: 32px;
+		height: 32px;
+		background-color: $yellow;
+		pointer-events: none;
+
+		&.hidden { display: none; }
+	}
+
+	&.locked > .header
+	{
+		cursor: default;
+	}
+}
+
+.track-button
+{
+	width: 24px;
+	height: 24px;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	background-color: $control-background;
+	color: $text-control;
+	pointer-events: all;
+	cursor: pointer;
+
+	> i
+	{
+		font-family: Material Icons;
+		font-size: 12px;
+		color: inherit;
+	}
+
+	&:hover
+	{
+		background-color: darken( $control-background, 0.5 );
+	}
+
+	&.active
+	{
+		background-color: $primary;
+	}
+
+	&.hidden
+	{
+		opacity: 0;
+		pointer-events: none;
+	}
+}
+
+.track-drop-target
+{
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	height: 64px;
+	padding: 8px;
+	pointer-events: all;
+
+	&.hidden { display: none; }
+
+	> .inner
+	{
+		flex-grow: 1;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		border: 2px dashed $green;
+		border-radius: 4px;
+
+		> .icon
+		{
+			font-family: Material Icons;
+			font-size: 32px;
+			color: $green;
+		}
+
+		> .text
+		{
+			font-family: $font-family;
+			font-size: 12px;
+			color: $green;
+		}
+	}
+
+	&.hovered > .inner
+	{
+		background-color: $control-background;
+	}
+}

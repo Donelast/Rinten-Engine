@@ -1,0 +1,54 @@
+﻿//No ground: the bar is the only part of the dock the panel's grey reaches. Two classes, so it is read over design.scss's .inspector.
+.inspector-shell.inspector
+{
+	background-color: transparent;
+}
+
+InspectorShellPanel
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+	min-width: 0;
+	pointer-events: all;
+}
+
+//The seam to the dock on the left is said again on the right, so the bar and the cards stand the same
+//distance in from both sides. On the children: the root is sized to the dock and its own margin is not read.
+InspectorShellPanel > .bar,
+InspectorShellPanel > .body
+{
+	margin-right: $separator-width;
+}
+
+//The bar the dock's tab opens into is design.scss's .dock-bar - every dock that opens onto a bar of buttons wears the same one.
+
+//Room between the bar and the cards rather than a line.
+InspectorShellPanel > .separator
+{
+	flex-shrink: 0;
+	height: $gap-section;
+}
+
+InspectorShellPanel > .body
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+	min-width: 0;
+}
+
+InspectorShellPanel > .body > .empty
+{
+	padding: 12px;
+	color: $ink-dim;
+	font-size: $type-body;
+}
+
+InspectorShellPanel > .body > .content
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+	min-width: 0;
+}

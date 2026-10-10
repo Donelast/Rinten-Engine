@@ -1,0 +1,76 @@
+﻿ClothingIconControl.control.clothing-icon
+{
+	flex-direction: row;
+	flex-grow: 1;
+	min-width: 0;
+	gap: 8px;
+
+	//As tall as the two rows beside it: a row is the control's height plus its own padding, and the sheet puts a pixel between them.
+	> .preview
+	{
+		flex-shrink: 0;
+		align-self: flex-start;
+		width: 65px;
+		height: 65px;
+		background-color: $control-background;
+		border-radius: $control-radius;
+		overflow: hidden;
+
+		> .view
+		{
+			width: 100%;
+			height: 100%;
+		}
+	}
+
+	> .side
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+
+		> .controlsheet
+		{
+			flex-grow: 1;
+			min-width: 0;
+		}
+
+		> .footer
+		{
+			flex-direction: row;
+			justify-content: flex-end;
+			padding-top: 4px;
+
+			> .save
+			{
+				flex-direction: row;
+				align-items: center;
+				gap: 4px;
+				padding: 4px 10px;
+				min-height: $control-row-height;
+				background-color: $control-background;
+				border: $control-border;
+				border-radius: $control-radius;
+				color: $text-control;
+				font-size: $control-text-size;
+				cursor: pointer;
+				transition: none;
+
+				&:hover { background-color: $control-background-light; }
+
+				&.disabled
+				{
+					pointer-events: none;
+					color: $text-disabled;
+				}
+
+				> .icon { font-size: $type-default; }
+			}
+		}
+	}
+}
+
+ClothingIconControl.control.clothing-icon > .controlsheet
+{
+	flex-grow: 1;
+}

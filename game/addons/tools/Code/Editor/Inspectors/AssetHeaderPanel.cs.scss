@@ -1,0 +1,88 @@
+//The first card of an asset's page (.inspector-head, design.scss's): picture on the left, name over path over kind beside it, the page's buttons at the
+//far end - and under them the page's own settings as plain rows. The rows bring their own side room, so the card gives its sides only to the top row.
+AssetHeaderPanel
+{
+	padding-left: 0px;
+	padding-right: 0px;
+
+	> .top-row
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: $gap-label;
+		padding: 0px $pad-card;
+	}
+
+	> .top-row > .thumb
+	{
+		position: relative;
+		flex-shrink: 0;
+		width: 48px;
+		height: 48px;
+		border-radius: $control-radius;
+		background-color: rgba( $control-background-light, 0.4 );
+		overflow: hidden;
+
+		> .thumb-image
+		{
+			position: absolute;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+		}
+	}
+
+	> .top-row > .text
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+		gap: 2px;
+
+		> .title, > .path, > .kind
+		{
+			white-space: nowrap;
+			text-overflow: ellipsis;
+			overflow: hidden;
+		}
+
+		> .title
+		{
+			color: $ink;
+			font-size: $type-large;
+			font-weight: 600;
+		}
+
+		> .path
+		{
+			color: $ink-dim;
+			font-size: $type-small;
+		}
+
+		> .kind
+		{
+			font-size: $type-micro;
+		}
+	}
+
+	> .top-row > .tools
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: $gap-items;
+	}
+
+	> .fields
+	{
+		flex-direction: column;
+		gap: $gap-row;
+	}
+
+	> .fields:empty,
+	> .top-row > .tools:empty
+	{
+		display: none;
+	}
+}

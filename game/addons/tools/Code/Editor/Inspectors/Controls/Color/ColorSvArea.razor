@@ -1,0 +1,139 @@
+@using System
+@using System.Globalization
+@using Rinten.UI
+@namespace Editor.Inspectors
+@inherits BaseControl
+
+@* The picker's saturation/value square: the handle, and the drag that moves it.
+
+   The square itself is not the stylesheet's to draw. The renderer fills a panel
+   wearing color-sv from the hue in its UserData and works the colour out for
+   every pixel - see CoreUiRenderer's ColorSv fill. Two gradients stacked in a
+   sheet would blend in linear light and put the handle over a colour it is not. *@
+
+<root class="color-sv @(_dragging ? "dragging" : null)" onmousedown="@OnDown" onmousemove="@OnMove" onmouseup="@OnUp">
+	<div class="handle" style="@HandleStyle"></div>
+</root>
+
+@code
+{
+	//Told once a drag across the square is over: the press and every colour it passed through on the way is one edit, not a hundred.
+	public Action OnDragFinished { get; set; }
+
+	//Told when a drag starts, before the first colour it sets.
+	public Action OnDragStarted { get; set; }
+
+	bool _dragging;
+	float _hue = -1f;
+
+	public override bool SupportsMultiEdit => true;
+
+	public ColorSvArea()
+	{
+		MultipleRows = true;
+		ShowBackground = false;
+	}
+
+	string HandleStyle
+	{
+		get
+		{
+			if ( Property is null ) return null;
+
+			var saturation = ColorPropertyHelper.GetSaturation( Property );
+			var value = ColorPropertyHelper.GetValue( Property );
+			var shown = ColorPropertyHelper.GetDisplayColor( ColorPropertyHelper.GetColor( Property ) ).WithAlpha( 1 );
+
+			//Invariant: this is read as a stylesheet, and a decimal comma is not a number to one.
+			return string.Create( CultureInfo.InvariantCulture,
+				$"left: {saturation * 100:0.###}%; top: {( 1f - value ) * 100:0.###}%; background-color: {shown.Hex};" );
+		}
+	}
+
+	protected override int BuildHash() => Property is null ? 0 : HashCode.Combine( Property,
+		ColorPropertyHelper.GetHue( Property ), ColorPropertyHelper.GetSaturation( Property ),
+		ColorPropertyHelper.GetValue( Property ), _dragging );
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		//The fill reads the hue from here, and draws again only when it is told to.
+		var hue = Property is null ? 0f : ColorPropertyHelper.GetHue( Property );
+		if ( hue == _hue ) return;
+
+		_hue = hue;
+		UserData = hue;
+		MarkRenderDirty();
+	}
+
+	void OnDown( PanelEvent e )
+	{
+		if ( e is not MousePanelEvent mouse || mouse.MouseButton != MouseButtons.Left ) return;
+		if ( IsReadOnly || Property is null ) return;
+
+		_dragging = true;
+
+		//One edit from the press to the release: whatever writes the property down - a material to its file -
+		//waits for the release rather than writing every colour the drag passes through. See ResourceDocument.
+		Property.Parent?.NoteStartEdit( Property );
+		OnDragStarted?.Invoke();
+
+		MoveTo( mouse );
+
+		//Kept here: a scroll the picker sits in would take the same press for a drag of its own and cancel this one out from under it.
+		e.StopPropagation();
+	}
+
+	void OnMove( PanelEvent e )
+	{
+		//Ignore moves without a held press, or hovering would repaint the colour
+		if ( !_dragging ) return;
+
+		if ( !HasActive )
+		{
+			//Let go somewhere this did not hear about.
+			Finish();
+			return;
+		}
+
+		if ( e is MousePanelEvent mouse ) MoveTo( mouse );
+
+		e.StopPropagation();
+	}
+
+	void OnUp( PanelEvent e )
+	{
+		if ( _dragging ) Finish();
+	}
+
+	void Finish()
+	{
+		_dragging = false;
+		Property?.Parent?.NoteFinishEdit( Property );
+		OnDragFinished?.Invoke();
+	}
+
+	//Gone in the middle of a drag: the edit it started is still finished.
+	public override void OnDeleted()
+	{
+		if ( _dragging ) Finish();
+
+		base.OnDeleted();
+	}
+
+	void MoveTo( MousePanelEvent mouse )
+	{
+		var at = ScreenPositionToPanelPosition( mouse.PointerPosition );
+		var width = Box.Rect.Width;
+		var height = Box.Rect.Height;
+
+		if ( width <= 0 || height <= 0 ) return;
+
+		ColorPropertyHelper.SetSaturationValue( Property,
+			( at.x / width ).Clamp( 0, 1 ),
+			( 1f - ( at.y / height ) ).Clamp( 0, 1 ) );
+
+		StateHasChanged();
+	}
+}

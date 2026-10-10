@@ -1,0 +1,192 @@
+//The effect's parameters: a fold per kind, and a row per parameter with its value beside it. The toolbar
+//is design.scss's, and so is the fold header - what is here is the well, the pill and the value column.
+
+.parameter-list
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+
+	> .well
+	{
+		position: relative;
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		overflow-y: scroll;
+		overflow-x: hidden;
+		border-radius: $control-radius;
+		background-color: darken( $widget-background, 0.1 );
+
+		//The content of a scroll carries its own height and is never squeezed: shrink it and the rows are laid out inside nothing and clipped away.
+		> .rows
+		{
+			flex-direction: column;
+			flex-shrink: 0;
+			width: 100%;
+
+			&.hidden { display: none; }
+		}
+
+		//What the well says when there is nothing in it. Clicking anywhere on the well then opens the add menu, so it is not a dead panel.
+		> .empty
+		{
+			position: absolute;
+			left: 0;
+			top: 0;
+			right: 0;
+			bottom: 0;
+			align-items: center;
+			justify-content: center;
+			text-align: center;
+			white-space: pre-wrap;
+			color: rgba( $text-control, 0.4 );
+			pointer-events: none;
+
+			&.hidden { display: none; }
+		}
+	}
+
+	.group-body
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		gap: 2px;
+		padding: 4px 8px 4px 4px;
+		background-color: darken( $widget-background, 0.1 );
+	}
+}
+
+.parameter-group
+{
+	background-color: $widget-background;
+
+	> .count
+	{
+		order: 3;
+		margin-left: auto;
+		margin-right: 12px;
+		padding: 0 6px;
+		min-width: 18px;
+		align-items: center;
+		justify-content: center;
+		border-radius: $control-radius;
+		background-color: rgba( $text-control, 0.08 );
+		color: rgba( $text-control, 0.5 );
+		font-size: $type-micro;
+		font-weight: 500;
+	}
+
+	//While a filter is on, the kinds are open and the bar does not fold.
+	&.fixed { cursor: default; }
+}
+
+.parameter-row
+{
+	flex-direction: row;
+	align-items: flex-start;
+	flex-shrink: 0;
+	gap: 4px;
+	padding: 3px 0;
+	pointer-events: all;
+
+	> .pill
+	{
+		position: relative;
+		flex-direction: row;
+		align-items: center;
+		flex-grow: 2;
+		flex-basis: 0;
+		min-width: 0;
+		gap: 4px;
+		height: $row-height;
+		padding: 0 8px;
+		border-radius: $control-radius;
+		border: 1px solid transparent;
+		cursor: pointer;
+
+		> .type-icon { font-size: $type-large; }
+
+		> .name
+		{
+			flex-grow: 1;
+			min-width: 0;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+			color: rgba( $text-control, 0.8 );
+		}
+
+		> .usage
+		{
+			color: rgba( $text-control, 0.35 );
+
+			&.hidden { display: none; }
+		}
+
+		> .type
+		{
+			font-size: $type-micro;
+			font-weight: 500;
+			white-space: nowrap;
+		}
+
+		//Sits over the whole pill while it is up, so the name can be typed without the row moving under it.
+		> .rename
+		{
+			position: absolute;
+			left: 4px;
+			top: 2px;
+			right: 4px;
+			bottom: 2px;
+			background-color: $control-background;
+
+			&.hidden { display: none; }
+		}
+	}
+
+	&:hover > .pill > .name { color: rgba( $text-control, 0.9 ); }
+
+	&.selected > .pill
+	{
+		border-color: currentcolor;
+
+		> .name { color: rgba( $text-control, 0.9 ); }
+	}
+
+	//The value: a float is a line, a vector three, and a colour is a gradient bar that wants the room.
+	> .values
+	{
+		flex-direction: column;
+		flex-grow: 3;
+		flex-basis: 0;
+		min-width: 0;
+		gap: 4px;
+
+		//Whatever editor stands here fills the column and keeps a row's height, whether or not its own sheet gave it one.
+		> .control
+		{
+			width: 100%;
+			min-height: $control-row-height;
+		}
+	}
+
+	> .actions
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+		height: $row-height;
+
+		> .action
+		{
+			font-size: $type-large;
+			color: $text-control;
+			cursor: pointer;
+
+			&:hover { color: $text; }
+			&.danger:hover { color: $red; }
+		}
+	}
+}

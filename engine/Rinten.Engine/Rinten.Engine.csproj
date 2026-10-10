@@ -1,0 +1,136 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<Import Project="../CodeGen.Targets" />
+	
+	<PropertyGroup>
+		<VersionPrefix>1.0.1</VersionPrefix>
+		<TargetFramework>net10.0</TargetFramework>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<AssemblyName>Rinten.Engine</AssemblyName>
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+		<NoWarn>1701;1702;1591;CA1416</NoWarn>
+		<OutputPath>../../game/bin/managed</OutputPath>
+		<LangVersion>14</LangVersion>
+		<AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+	  <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+	  <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+	</PropertyGroup>
+
+	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' and '$(OS)' == 'Windows_NT' ">
+		<DefineConstants>WIN;$(DefineConstants)</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' and '$(OS)' == 'Windows_NT' ">
+		<DefineConstants>WIN;$(DefineConstants)</DefineConstants>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- The editor's own stylesheet: it dresses the first window, which is
+		     open before any content filesystem is. -->
+		<EmbeddedResource Include="Core/Backend/Ui/editor.scss" />
+
+		<!-- The design tokens every editor sheet is written against, put in
+		     front of each of them as it is parsed (EditorTokens). -->
+		<EmbeddedResource Include="Core/Backend/Ui/_tokens.scss" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Facepunch.ActionGraphs" Version="1.9.27" />
+		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.12.0-beta1.25218.8" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
+		<PackageReference Include="Svg.Skia" Version="2.0.0.4" />
+		<PackageReference Include="System.Numerics.Tensors" Version="10.0.0" />
+		<!-- Opus, for voice chat (Utility/VoiceManager). A C# port of the reference codec, BSD licensed like it, so the same code runs on every
+		     platform including the web and Android and there is no native library to ship. Only the managed codec is used - see VoiceCodec. -->
+		<PackageReference Include="Concentus" Version="2.2.2" />
+		<!-- Vulkan, for the renderer in Core/Backend/Render/Vulkan. The binding only: the driver is found by our
+		     own loader context, beside the engine or through the platform's loader, exactly as volk found it. -->
+		<PackageReference Include="Silk.NET.Vulkan" Version="2.23.0" />
+		<!-- SPIRV-Cross, which writes GLSL for WebGL2 out of the portable SPIR-V. The editor's alone: see NotForGames. -->
+		<PackageReference Include="Silk.NET.SPIRV.Cross.Native" Version="2.23.0" />
+		<PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="2.23.0" />
+		<PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="2.23.0" />
+		<!-- OpenXR, for a headset - see Core/Backend/Xr. The binding only, as with Vulkan: the loader is opened by
+		     our own context, from beside the engine or from the system, and finds whichever runtime the machine has. -->
+		<PackageReference Include="Silk.NET.OpenXR" Version="2.23.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="../Mounting/Rinten.Mounting/Rinten.Mounting.csproj" />
+		<ProjectReference Include="../Rinten.Event/Rinten.Event.csproj" />
+		<ProjectReference Include="../Rinten.Filesystem/Rinten.Filesystem.csproj" />
+		<ProjectReference Include="../Rinten.Hotload/Rinten.Hotload.csproj" />
+		<ProjectReference Include="../Rinten.Reflection/Rinten.Reflection.csproj" />
+		<ProjectReference Include="../Rinten.Services/Rinten.Services.csproj" />
+		<ProjectReference Include="../Rinten.System/Rinten.System.csproj" />
+		<ProjectReference Include="../Rinten.Layout/Rinten.Layout.csproj" />
+		<ProjectReference Include="../ThirdParty/Topten.RichTextKit/Topten.RichTextKit.csproj" />
+		<ProjectReference Include="..\Microsoft.AspNetCore.Components\Microsoft.AspNetCore.Components.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="SkiaSharp" Version="3.116.0" />
+		<PackageReference Include="SkiaSharp.HarfBuzz" Version="3.116.0" />
+		<!-- SkiaSharp itself carries only the Windows and macOS natives, so a Linux build got runtimes/win-* and runtimes/osx and no libSkiaSharp.so
+		     at all. These are the Linux halves; HarfBuzz versions its native package separately from SkiaSharp, which is why the numbers differ. -->
+		<PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.116.0" />
+		<PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="8.3.1.1" />
+		<!-- The package rather than ThirdParty/System.Speech.dll, which was never committed - so this reference resolved only on a machine that already had the file, and a fresh clone
+		     could not build on any platform. The package restores everywhere; the API stays Windows-only at runtime, which is what the [SupportedOSPlatform] on Rinten.Speech says. -->
+		<PackageReference Include="System.Speech" Version="10.0.0" />
+	</ItemGroup>
+
+	<Target Name="_ResolveCopyLocalNuGetPkgXmls" AfterTargets="ResolveReferences">
+		<ItemGroup>
+			<!-- Copy XML / PDB files of the ActionGraphs packages to output dir -->
+			<ReferenceCopyLocalPaths Include="@(ReferenceCopyLocalPaths->'%(RootDir)%(Directory)%(Filename).xml')" Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)'!='' And $([System.Text.RegularExpressions.Regex]::IsMatch(%(ReferenceCopyLocalPaths.Filename), '^Facepunch\.')) And Exists('%(RootDir)%(Directory)%(Filename).xml')" />
+			<ReferenceCopyLocalPaths Include="@(ReferenceCopyLocalPaths->'%(RootDir)%(Directory)%(Filename).pdb')" Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)'!='' And $([System.Text.RegularExpressions.Regex]::IsMatch(%(ReferenceCopyLocalPaths.Filename), '^Facepunch\.')) And Exists('%(RootDir)%(Directory)%(Filename).pdb')" />
+		</ItemGroup>
+	</Target>
+
+	<ItemGroup>
+		<Compile Update="Systems\UI\Styles\BaseStyles.Generated.cs">
+			<DependentUpon>BaseStyles.Generated.tt</DependentUpon>
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+		</Compile>
+        <Compile Update="Platform\VR\VRSystem.Generated.cs">
+            <DesignTime>True</DesignTime>
+            <AutoGen>True</AutoGen>
+            <DependentUpon>VRSystem.Generated.tt</DependentUpon>
+        </Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="Systems\UI\Styles\BaseStyles.Generated.tt">
+			<LastGenOutput>BaseStyles.Generated.cs</LastGenOutput>
+			<Generator>TextTemplatingFileGenerator</Generator>
+		</None>
+        <None Update="Platform\VR\VRSystem.Generated.tt">
+            <Generator>TextTemplatingFileGenerator</Generator>
+            <LastGenOutput>VRSystem.Generated.cs</LastGenOutput>
+        </None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<SupportedPlatform Include="browser" />
+	</ItemGroup>
+
+	<PropertyGroup Condition="'$(RETAIL)' != ''">
+		<DefineConstants>$(DefineConstants);RETAIL</DefineConstants>
+	</PropertyGroup>
+
+</Project>

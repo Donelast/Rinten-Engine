@@ -1,0 +1,15 @@
+﻿@typeparam T1
+@typeparam T2
+@namespace Rinten.Test.Generated
+@using Rinten.UI
+@attribute [StyleSheet( "mystylesheet.scss" )]
+
+<div></div>
+
+<ListComponent T="string, int" Data="@Data"></ListComponent>
+
+@code
+{
+    T1 Data { get; set; }
+    List<T2> Items { get; set; }
+}

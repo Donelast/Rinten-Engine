@@ -1,0 +1,40 @@
+﻿using Rinten.Network;
+
+namespace Rinten;
+
+/// <summary>These are arguments that were set when launching the current game. This is used to pre-configure the game from the menu</summary>
+public static class LaunchArguments
+{
+	/// <summary>The map to start with. It's really up to the game to use this</summary>
+	public static string Map { get; set; }
+
+	/// <summary>Preferred max players for multiplayer games. Used by games, but not enforced.</summary>
+	public static int MaxPlayers { get; set; }
+
+	/// <summary>Privacy override for lobbies created on game start. If not explicitly set, lobbies use their own config.</summary>
+	public static LobbyPrivacy Privacy
+	{
+		get => PrivacyOverride ?? LobbyPrivacy.Public;
+		set => PrivacyOverride = value;
+	}
+
+	internal static LobbyPrivacy? PrivacyOverride { get; private set; }
+
+	/// <summary>The game settings to apply on join. These are a list of convars.</summary>
+	public static Dictionary<string, string> GameSettings { get; set; }
+
+	/// <summary>The hostname for the server.</summary>
+	public static string ServerName { get; set; }
+
+	//Should be called when leaving a game to set the properties back to default. We need to be aware and prevent these leaking between games.
+	internal static void Reset()
+	{
+		GameSettings = default;
+		Map = default;
+		PrivacyOverride = null;
+		ServerName = default;
+		MaxPlayers = 0;
+	}
+
+	//TODO - save launch arguments and restore them, per game.
+}

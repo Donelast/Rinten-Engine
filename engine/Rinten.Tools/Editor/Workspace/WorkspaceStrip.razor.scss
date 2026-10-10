@@ -1,0 +1,78 @@
+//Tool strip: a row of squares in the menu bar, styled like .inspector-card
+
+WorkspaceStrip,
+.workspace-strip
+{
+	flex-direction: row;
+	align-items: center;
+	gap: 2px;
+	height: 100%;
+	padding: 0 2px;
+	pointer-events: all;
+
+	> .tool
+	{
+		position: relative;
+		flex-shrink: 0;
+		width: 28px;
+		height: 28px;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+
+		background-color: $base-alt;
+		border: 1px solid $border;
+		border-top-color: $border-light;
+		border-radius: $radius-1;
+
+		//Always white; hover and pick change only the plate under it
+		> i
+		{
+			font-family: Material Icons;
+			font-size: 24px;
+			color: $ink;
+		}
+
+		&:hover
+		{
+			background-color: lighten( $base-alt, 0.35 );
+		}
+
+		&.current
+		{
+			background-color: $picked;
+			border-color: $accent;
+		}
+
+		//Open document count, bottom right
+		> .count
+		{
+			position: absolute;
+			right: -2px;
+			bottom: -2px;
+			min-width: 14px;
+			height: 14px;
+			padding: 0 3px;
+			align-items: center;
+			justify-content: center;
+			border-radius: 7px;
+			border: 1px solid $base;
+			background-color: $accent;
+			color: $text-dark;
+			font-size: 9px;
+			font-weight: 800;
+		}
+	}
+
+	//The + that pins another tool, no plate
+	> .tool.add
+	{
+		background-color: transparent;
+		border-width: 0;
+
+		&:hover
+		{
+			background-color: $veil-hover;
+		}
+	}
+}

@@ -1,0 +1,116 @@
+//The vertex paint tool's own pieces: the blend layer buttons, a layer's switch and amount, and the noise preview.
+//Everything else it shows - groups, rows, buttons - is the tool settings' own, in design.scss under .tool-settings.
+
+//The layers side by side, each the material as that layer paints it.
+.blend-row
+{
+	flex-direction: row;
+	flex-shrink: 0;
+	gap: 4px;
+	padding: 4px;
+
+	//"Does not support vertex painting" is a sentence, not a label to cut.
+	> .unsupported
+	{
+		white-space: normal;
+	}
+}
+
+.blend-button
+{
+	flex-direction: column;
+	align-items: center;
+	flex-shrink: 0;
+	cursor: pointer;
+	pointer-events: all;
+
+	> .preview
+	{
+		flex-shrink: 0;
+		object-fit: fill;
+		border: 2px solid transparent;
+		border-radius: 4px;
+		pointer-events: none;
+	}
+
+	> .label
+	{
+		height: 20px;
+		font-size: 11px;
+		color: $ink-faint;
+		pointer-events: none;
+	}
+
+	&:hover > .preview
+	{
+		border-color: $edge-lit;
+	}
+
+	//The layer being painted: the accent round the picture, the number in white.
+	&.selected
+	{
+		> .preview { border-color: $primary; }
+
+		> .label
+		{
+			color: $ink;
+			font-weight: 600;
+		}
+	}
+}
+
+//One row per layer: its number, whether the brush writes it, and how much.
+.channels
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 4px;
+	padding: 4px;
+
+	> .channel
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+		min-height: $row;
+
+		> .channel-label
+		{
+			flex-shrink: 0;
+			width: 12px;
+			font-size: 11px;
+			color: $ink-faint;
+		}
+
+		> .channel-enabled
+		{
+			flex-shrink: 0;
+		}
+
+		> .channel-value
+		{
+			flex-grow: 1;
+			min-width: 0;
+		}
+	}
+}
+
+//The rows a fill mode brings with it, shown only under that mode.
+.fill-settings
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 2px;
+}
+
+//What the noise fill lays down, in grey.
+.noise-preview
+{
+	flex-shrink: 0;
+	height: 96px;
+	margin-top: 8px;
+	object-fit: fill;
+	border: 1px solid $edge;
+	border-radius: 4px;
+}

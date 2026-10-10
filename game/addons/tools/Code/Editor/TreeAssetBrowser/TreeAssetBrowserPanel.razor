@@ -1,0 +1,189 @@
+﻿@namespace Editor.TreeBrowser
+@using System.IO
+@using System.Linq
+@attribute [StyleSheet( "TreeAssetBrowserPanel.razor.scss" )]
+@inherits Panel
+
+<root class="tree-asset-browser">
+	@if ( ShowScopeTabs )
+	{
+		<div class="scopes">
+			@foreach ( var entry in Sections )
+			{
+				<BrowserSideTab Icon="@entry.Icon" ToolTip="@entry.Title" Active="@(Section == entry.Section)" OnSelected="@(() => SetSection( entry.Section ))" />
+			}
+		</div>
+	}
+	<div class="main">
+		<div class="toolbar">
+			<TextField @ref="searchField" class="search" />
+			@if ( ShowClearSearch )
+			{
+				<ToolbarButton Icon="clear" ToolTip="Clear Search" OnPressed="@ClearSearch" />
+			}
+			<div class="pins">
+				@foreach ( var pin in PinnedFolders )
+				{
+					<div class="pin" tooltip="@pin" onclick="@(() => NavigateToFolder( pin ))">@FolderName( pin )</div>
+				}
+			</div>
+			<div class="tabs" @ref="tabsHost"></div>
+			@if ( TypeFilter.IsActive )
+			{
+				<span class="filters">@FilterSummary</span>
+			}
+			<ToolbarButton @ref="filterButton" Icon="filter_list" ToolTip="@FilterTooltip" Active="@TypeFilter.IsActive" OnPressed="@ShowFilterPopup" />
+			<ToolbarButton Icon="refresh" ToolTip="Refresh" OnPressed="@RefreshAll" />
+			@if ( ShowLayoutToggle )
+			{
+				<ToolbarButton Icon="@LayoutModeIcon" ToolTip="@LayoutModeTooltip" OnPressed="@ToggleLayoutMode" />
+			}
+			@if ( ShowPanelControls )
+			{
+				<ToolbarButton Icon="add" ToolTip="Add Browser Panel" OnPressed="@ShowAddPanelMenu" />
+			}
+			<ToolbarButton @ref="settingsButton" Icon="settings" ToolTip="Browser Settings" OnPressed="@ShowSettingsPopup" />
+		</div>
+		<div class="panels" @ref="panelsHost"></div>
+	</div>
+</root>
+
+@code
+{
+	public TreeBrowserWidget Host { get; set; }
+
+	public string InstanceId { get; set; }
+
+	//Mode this browser runs in; handed to every panel it hosts.
+	public TreeBrowserOptions Options { get; set; } = TreeBrowserOptions.Dock;
+
+	public Action<Asset> OnAssetSelected;
+	public Action<Asset> OnAssetHighlighted;
+	public Action<Asset> OnAssetActivated;
+	public Action<IReadOnlyList<Asset>> OnSelectionChanged;
+	public Action<string> OnFileSelected;
+	public Action<string> OnFolderSelected;
+
+	Panel panelsHost;
+	Panel tabsHost;
+	TextField searchField;
+	ToolbarButton settingsButton;
+	ToolbarButton filterButton;
+	AssetFilterPopup filterPopup;
+
+	bool ShowClearSearch;
+	bool ShowLayoutToggle;
+	bool ShowScopeTabs;
+	string LayoutModeIcon = "tab";
+	string LayoutModeTooltip = "Switch to Tab Mode";
+	string searchText = string.Empty;
+
+	string FilterTooltip => TypeFilter.Describe();
+
+	string FilterSummary => string.Join( ", ", TypeFilter.Names );
+
+	//Adding, closing and reordering panels is only offered in the dock.
+	bool ShowPanelControls => !Options.LockLayout;
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+		WireSearch();
+		EnsurePanelsMounted();
+
+		if ( firstTime )
+			SyncScopeTabs();
+	}
+
+	void WireSearch()
+	{
+		if ( !searchField.IsValid() ) return;
+
+		searchField.Icon = "search";
+		searchField.Placeholder = "Search assets...";
+		searchField.ValueChanged = OnSearchChanged;
+
+		if ( searchField.Value != searchText )
+			searchField.Value = searchText;
+	}
+
+	void OnSearchChanged( string text )
+	{
+		searchText = text ?? string.Empty;
+		ShowClearSearch = !string.IsNullOrEmpty( searchText );
+
+		foreach ( var panel in _panels )
+			panel.ApplySearch( searchText );
+
+		StateHasChanged();
+	}
+
+	//Types into the search box on the user's behalf.
+	public void SetSearch( string text )
+	{
+		OnSearchChanged( text );
+
+		if ( searchField.IsValid() )
+			searchField.Value = searchText;
+	}
+
+	public void ClearSearch() => SetSearch( string.Empty );
+
+	//Offers the asset types this browser can narrow itself down to.
+	public void ShowFilterPopup()
+	{
+		if ( filterPopup.IsValid() )
+		{
+			filterPopup.Delete();
+			filterPopup = null;
+			return;
+		}
+
+		filterPopup = AssetFilterPopup.Open( filterButton, TypeFilter );
+	}
+
+	//Updates the layout button each frame, redrawing only when it changed
+	public void SyncLayoutToggle()
+	{
+		var show = ShowPanelControls && _panels.Count > 1;
+		var icon = _isTabMode ? "view_column" : "tab";
+		var tooltip = _isTabMode ? "Switch to Side-by-Side Mode" : "Switch to Tab Mode";
+
+		if ( show == ShowLayoutToggle && icon == LayoutModeIcon && tooltip == LayoutModeTooltip ) return;
+
+		ShowLayoutToggle = show;
+		LayoutModeIcon = icon;
+		LayoutModeTooltip = tooltip;
+		StateHasChanged();
+	}
+
+	//Whether the section strip is shown; every browser, pickers included, has sections
+	public void SyncScopeTabs()
+	{
+		var show = true;
+		if ( show == ShowScopeTabs ) return;
+
+		ShowScopeTabs = show;
+
+		if ( Scope != AssetTreeScope.Project )
+			SetScope( AssetTreeScope.Project );
+
+		StateHasChanged();
+	}
+
+	//The pinned folders, which is what the bar offers as somewhere to go. Folders and not files: a pin on the bar is a place to be
+	//taken to, and NavigateToFolder is what it presses. A pinned file is still pinned - the list it belongs in is somewhere else.
+	IEnumerable<string> PinnedFolders => AssetPins.All.Where( Directory.Exists );
+
+	//What a pinned folder is called on the bar: its own name, not its path.
+	static string FolderName( string path )
+	{
+		var name = Path.GetFileName( path?.TrimEnd( '/', '\\' ) );
+
+		return string.IsNullOrEmpty( name ) ? path : name;
+	}
+
+	protected override int BuildHash() => HashCode.Combine(
+		HashCode.Combine( ShowClearSearch, ShowLayoutToggle, ShowPanelControls, ShowScopeTabs, Section, AssetPins.All.Count ),
+		LayoutModeIcon, _isTabMode, _panels.Count, TypeFilter.Count );
+}

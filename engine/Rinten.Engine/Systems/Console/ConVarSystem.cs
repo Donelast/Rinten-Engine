@@ -1,0 +1,438 @@
+﻿using Rinten.Network;
+using System.Reflection;
+
+namespace Rinten;
+
+internal static partial class ConVarSystem
+{
+	public delegate void ConVarChangedDelegate( Command command, string oldValue );
+
+	//The ConVar that decides whether cheat ConVars are allowed to be changed.
+	internal const string CheatsVariableName = "sv_cheats";
+
+	/// <summary>Called when the ConVar is changed.</summary>
+	public static ConVarChangedDelegate ConVarChanged { get; set; }
+
+	internal static readonly Dictionary<string, Command> Members = new( StringComparer.OrdinalIgnoreCase );
+	internal static readonly Dictionary<string, CookieContainer> CookieContainers = new( StringComparer.OrdinalIgnoreCase );
+
+	static CookieContainer GetCookies( string name )
+	{
+		if ( CookieContainers.TryGetValue( name, out var cookies ) ) return cookies;
+
+		cookies = new( $"convar/{name}" );
+		CookieContainers[name] = cookies;
+		return cookies;
+	}
+
+	//Add this assembly to the console library, which will scan it for console commands and make them available.
+	internal static void AddAssembly( Assembly assembly, string cookies, string context = null )
+	{
+		if ( assembly == null )
+			return;
+
+		//Types declaring ConVar members, from metadata; null means scan every type
+		var declaring = Rinten.Internal.MemberAttributeScan.Declaring( assembly, typeof( ConVarAttribute ) );
+
+		foreach ( var t in assembly.GetTypes() )
+		{
+			if ( declaring is not null && !declaring.Contains( t ) ) continue;
+
+			var methods = t.GetMembers( BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public );
+			foreach ( var member in methods )
+			{
+				//inherit: false, since these are static; inherit: true loads every property's type
+				var attribute = member.GetCustomAttribute<ConVarAttribute>( inherit: false );
+				if ( attribute == null ) continue;
+				if ( attribute.Context != context ) continue;
+
+				try
+				{
+					if ( member is PropertyInfo prop )
+					{
+						var get = prop.GetGetMethod( true );
+						var set = prop.GetSetMethod( true );
+
+						if ( get == null || set == null )
+							continue;
+
+						if ( !get.IsStatic )
+							continue;
+
+						AddConVar( new ManagedCommand( assembly, member, attribute, GetCookies( cookies ) ) );
+					}
+
+					if ( member is MethodInfo method )
+					{
+						if ( !method.IsStatic )
+							continue;
+
+						AddCommand( new ManagedCommand( assembly, member, attribute, GetCookies( cookies ) ) );
+					}
+				}
+				catch ( Exception e )
+				{
+					Log.Error( e );
+				}
+			}
+		}
+	}
+
+	//Remove this assembly and its console commands.
+	internal static void RemoveAssembly( Assembly assembly )
+	{
+		if ( assembly == null )
+			return;
+
+		foreach ( var (name, member) in Members.Where( x => x.Value.IsFromAssembly( assembly ) ).ToArray() )
+		{
+			RememberValue( member );
+			Members.Remove( name );
+		}
+	}
+
+	//Add this command to the library. Any existing commands named the same will be over-written.
+	internal static void AddCommand( Command command )
+	{
+		if ( Members.TryAdd( command.Name, command ) )
+			return;
+
+		Log.Warning( $"Command {command.Name} already exists - not overwriting ({Members[command.Name].Help})" );
+	}
+
+	//Add this ConVar to the library. Any existing commands named the same will be over-written.
+	internal static void AddConVar( Command command )
+	{
+		if ( !Members.TryAdd( command.Name, command ) )
+		{
+			Log.Warning( $"Convar {command.Name} already exists - not overwriting" );
+			return;
+		}
+
+		if ( command.MinValue.HasValue && command.MaxValue.HasValue && command.MinValue > command.MaxValue )
+			(command.MinValue, command.MaxValue) = (command.MaxValue, command.MinValue);
+
+		//What a quality profile asked for before this convar existed. First, so the cookie, the command line and
+		//a hotload below all still beat it - a profile is where a value comes from when nobody has said otherwise.
+		if ( Deferred.Remove( command.Name, out var wanted ) )
+		{
+			command.Value = wanted;
+		}
+
+		//Load it from cookies
+		if ( command.TryLoad( out var loadedValue ) )
+		{
+			command.Value = loadedValue;
+		}
+
+		//Set it from command line
+		command.SetVariableFromCommandLine();
+
+		//This is a convar that was added before, maybe a hotload, set it
+		if ( TryGetRememberedValue( command.Name, out var rememberedValue ) )
+		{
+			command.Value = rememberedValue;
+		}
+
+		//Cookies, the command line and hotloads can all bring back a value we're not allowed to set
+		if ( command.IsCheat && command.DefaultValue is not null && !Game.CheatsEnabled )
+		{
+			command.Value = command.DefaultValue;
+		}
+	}
+
+	internal static Command Find( string name )
+	{
+		return Members.GetValueOrDefault( name );
+	}
+
+	//Values set by name before the convar registered; applied as its default once it does
+	internal static readonly Dictionary<string, string> Deferred = new( StringComparer.OrdinalIgnoreCase );
+
+	//Whether engine convars are scanned; after that an unknown name will never be registered
+	internal static bool Scanned { get; private set; }
+
+	//Says which deferred names were never claimed, and forgets them.
+	internal static void ReportUnclaimed()
+	{
+		Scanned = true;
+
+		if ( Deferred.Count == 0 ) return;
+
+		foreach ( var (name, value) in Deferred )
+			Log.Warning( $"a quality profile sets {name}={value}, which nothing registers" );
+
+		Deferred.Clear();
+	}
+
+	//We want to remember ConVar values between hotloads
+	static readonly Dictionary<string, string> RememberedConVarValues = new();
+
+	private static void RememberValue( Command var )
+	{
+		if ( !var.IsVariable ) return;
+
+		var value = GetValue( var.Name, null, false );
+		if ( value == null ) return;
+
+		RememberedConVarValues[var.Name] = value;
+	}
+
+	private static bool TryGetRememberedValue( string member, out string val )
+	{
+		return RememberedConVarValues.TryGetValue( member, out val );
+	}
+
+	internal static void ClearRememberedValues()
+	{
+		RememberedConVarValues.Clear();
+	}
+
+	/// <summary>Get a ConVar value as a string.</summary>
+	public static string GetValue( string name, string defaultValue, bool allowEngineVariable )
+	{
+		var cmd = Find( name );
+
+		if ( cmd is null ) return defaultValue;
+		if ( !cmd.IsVariable ) return defaultValue;
+		if ( !allowEngineVariable && cmd.IsProtected ) return defaultValue;
+
+		return cmd.Value;
+	}
+
+	/// <summary>Get a ConVar value as an integer. If the ConVar value is a boolean, this will return the value in its integer form.</summary>
+	public static int GetInt( string name, int defaultValue, bool allowEngineVariable )
+	{
+		var value = GetValue( name, defaultValue.ToString(), allowEngineVariable );
+
+		if ( bool.TryParse( value, out var boolean ) )
+			return boolean ? 1 : 0;
+
+		return int.TryParse( value, out var integer ) ? integer : defaultValue;
+	}
+
+	/// <summary>Get a ConVar value as a float.</summary>
+	public static float GetFloat( string name, float defaultValue, bool allowEngineVariable )
+	{
+		return float.TryParse( GetValue( name, defaultValue.ToString(), allowEngineVariable ), out var value ) ? value : defaultValue;
+	}
+
+	/// <summary>Try to set a ConVar. You will only be able to set variables that you have permission to set.</summary>
+	public static void SetValue( string name, string value, bool allowProtected )
+	{
+		var cmd = Find( name );
+
+		if ( cmd is null ) return;
+		if ( !cmd.IsVariable ) return;
+		if ( cmd.IsProtected && !allowProtected ) return;
+
+		cmd.Value = value;
+
+		//Let the ConVar save itself, if it wants to
+		cmd.Save();
+	}
+
+	/// <summary>Whether somebody has set this variable by hand since the process started - see <see cref="Command.Overridden"/>. False for a name nobody registered.</summary>
+	public static bool Overridden( string name ) => Find( name )?.Overridden ?? false;
+
+	/// <summary>Try to set a ConVar. You will only be able to set variables that you have permission to set.</summary>
+	public static void SetInt( string name, int value, bool allowProtected )
+	{
+		SetValue( name, value.ToString(), allowProtected );
+	}
+
+	/// <summary>Try to set a ConVar. You will only be able to set variables that you have permission to set.</summary>
+	public static void SetFloat( string name, float value, bool allowProtected )
+	{
+		SetValue( name, value.ToString(), allowProtected );
+	}
+
+	//Give up cheat authority and undo anything it allowed - cheats go back off (unless this session was launched with them on) and
+	//every cheat ConVar goes back to its default. Cheat ConVars are reset either way, a new game should always start from a clean slate.
+	internal static void ResetCheats()
+	{
+		if ( Find( CheatsVariableName ) is { } cheats )
+		{
+			cheats.Value = cheats.DefaultValue;
+
+			//A dedicated server or test session launched with +sv_cheats 1 meant it
+			cheats.SetVariableFromCommandLine();
+		}
+
+		//Changing sv_cheats above only queues a notification for next frame, which might
+		//never come if we're shutting down - so do it now. Running twice is harmless.
+		ResetCheatConVars();
+	}
+
+	//Reset every cheat ConVar to its default. A cheat can only be changed while cheats are on,
+	//but nothing stops the value outliving that authority - so call this whenever it's lost.
+	internal static void ResetCheatConVars()
+	{
+		//sv_cheats is not itself a cheat ConVar, so this can never recurse
+		foreach ( var convar in Members.Values.Where( x => x.IsVariable && x.IsCheat ).ToArray() )
+		{
+			//No known default, leave it alone rather than guessing
+			if ( convar.DefaultValue is null ) continue;
+
+			try
+			{
+				convar.Value = convar.DefaultValue;
+			}
+			catch ( Exception e )
+			{
+				//One addon's setter throwing can't leave every other cheat switched on
+				Log.Warning( e, $"Couldn't reset cheat ConVar {convar.Name}" );
+			}
+		}
+	}
+
+	/// <summary>Save all the convars.</summary>
+	[ConCmd( "convars_save", ConVarFlags.Protected )]
+	public static void SaveAll()
+	{
+		foreach ( var convar in Members.Values )
+		{
+			if ( convar.IsConCommand ) continue;
+			if ( !convar.IsSaved ) continue;
+
+			convar.Save();
+		}
+
+		foreach ( var container in CookieContainers.Values )
+		{
+			container.Save();
+		}
+	}
+
+	//Run a single command. [command] [args]
+	internal static void RunSingle( string v, bool allowProtected = true )
+	{
+		var parts = v.Split( ' ', 2, StringSplitOptions.RemoveEmptyEntries );
+
+		if ( !Members.TryGetValue( parts[0], out var command ) )
+		{
+			Log.Warning( $"Unknown Command '{parts[0]}'" );
+			return;
+		}
+
+		if ( !allowProtected && command.IsProtected )
+		{
+			Log.Warning( $"Can't run protected command '{command.Name}'" );
+			return;
+		}
+
+		var hasArguments = parts.Length > 1;
+
+		if ( !hasArguments && command.IsVariable )
+		{
+			Log.Info( $"{command.Name} - {command.BuildDescription()}" );
+			return;
+		}
+
+		if ( command.IsCheat && !Game.CheatsEnabled )
+		{
+			Log.Info( "Cheats are not enabled on the server." );
+			return;
+		}
+
+		var args = string.Join( " ", parts.Skip( 1 ) );
+
+		if ( command.IsVariable )
+		{
+			command.Value = args.SplitQuotesStrings()[0];
+			return;
+		}
+
+		if ( Networking.IsActive && !Networking.IsHost && (command.IsServer || command.IsAdmin) )
+		{
+			var msg = new ServerCommand { Command = command.Name, Args = args };
+			Connection.Host?.SendMessage( msg, NetFlags.Reliable );
+			return;
+		}
+
+		command.Run( args );
+	}
+
+	//Run a potential string of commands, separated by newlines or ;
+	internal static void Run( string v, bool allowProtected = true )
+	{
+		ThreadSafe.AssertIsMainThread();
+
+		if ( string.IsNullOrWhiteSpace( v ) ) return;
+
+		foreach ( var part in SplitCommands( v ) )
+		{
+			if ( string.IsNullOrWhiteSpace( part ) ) continue;
+
+			RunSingle( part, allowProtected );
+		}
+	}
+
+	//Split a command string on ';' and '\n', but respect quoted sections.
+	internal static IEnumerable<string> SplitCommands( string input )
+	{
+		var inQuotes = false;
+		int start = 0;
+
+		for ( var i = 0; i < input.Length; i++ )
+		{
+			var c = input[i];
+
+			if ( c == '\\' && i + 1 < input.Length )
+			{
+				i++;
+				continue;
+			}
+
+			if ( c == '"' )
+			{
+				inQuotes = !inQuotes;
+				continue;
+			}
+
+			if ( inQuotes || (c != ';' && c != '\n') )
+				continue;
+
+			yield return input.Substring( start, i - start );
+			start = i + 1;
+		}
+
+		if ( start < input.Length )
+		{
+			yield return input[start..];
+		}
+	}
+
+	//Call on any ConVar change, from managed setters and native callbacks; codegen ConVars only
+	internal static void OnConVarChanged<T>( string name, T value, T previous )
+	{
+		if ( Members.TryGetValue( name, out var command ) )
+		{
+			MainThread.Queue( () => InvokeConVarChanged( command, previous?.ToString() ) );
+		}
+	}
+
+	internal static void InvokeConVarChanged( Command command, string oldValue )
+	{
+		if ( command.IsUserInfo && Networking.IsActive )
+		{
+			if ( !Networking.IsHost )
+			{
+				var msg = new UserInfoUpdate { Command = command.Name, Value = command.Value };
+				Connection.Host?.SendMessage( msg, NetFlags.Reliable );
+			}
+			else
+			{
+				Connection.Local?.SetUserData( command.Name, command.Value );
+			}
+		}
+
+		//Losing cheat authority has to undo everything cheats let you change
+		if ( command.Name.Equals( CheatsVariableName, StringComparison.OrdinalIgnoreCase ) && !Game.CheatsEnabled )
+		{
+			ResetCheatConVars();
+		}
+
+		ConVarChanged?.Invoke( command, oldValue );
+	}
+}

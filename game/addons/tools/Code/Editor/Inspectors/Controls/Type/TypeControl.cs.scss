@@ -1,0 +1,97 @@
+﻿TypeControl.control.no-background.multiple-rows
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-width: 0;
+	min-height: $control-row-height;
+	gap: 2px;
+	padding: 0;
+	align-self: stretch;
+}
+
+.type-field
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-width: 0;
+	gap: 2px;
+	align-self: stretch;
+
+	> .row
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-grow: 1;
+		min-width: 0;
+		gap: 6px;
+		cursor: pointer;
+
+		//The parameter this row fills in - TKey, TValue - so a half filled generic still says which half is which.
+		> .name
+		{
+			flex-shrink: 0;
+			max-width: 90px;
+			color: $text-light;
+			font-size: $control-text-size;
+			@include one-line;
+			pointer-events: none;
+		}
+
+		> .field
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-grow: 1;
+			min-width: 0;
+			min-height: $control-row-height;
+			padding: $control-text-padding;
+			padding-right: 28px;
+			background-color: $control-background;
+			border: $control-border;
+			border-radius: $control-radius;
+			pointer-events: none;
+
+			> .value
+			{
+				flex-grow: 1;
+				min-width: 0;
+				color: $text-control;
+				font-size: $control-text-size;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+
+				&.multiple { color: $multiple-values; }
+				&.none { color: $text-light; }
+			}
+
+		}
+
+		&:hover > .field > .value
+		{
+			color: $text;
+		}
+	}
+
+	//Generic arguments, stepped in under the type that asked for them.
+	> .arguments
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+		margin-left: 12px;
+		gap: 2px;
+
+		&.hidden { display: none; }
+	}
+
+	&.open > .row > .field
+	{
+		border-color: $primary;
+	}
+
+	&.readonly > .row
+	{
+		cursor: default;
+	}
+}

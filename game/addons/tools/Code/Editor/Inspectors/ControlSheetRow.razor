@@ -1,0 +1,173 @@
+@namespace Editor.Inspectors
+@inherits Panel
+
+<root class="controlsheetrow">
+	@if ( ShowLabel )
+	{
+		<div class="left">
+			<div class="title">@Title</div>
+		</div>
+	}
+	<div class="right" @ref="Right"></div>
+</root>
+
+@code
+{
+	public SerializedProperty Property { get; set; }
+
+	internal Panel Right { get; private set; }
+
+	string Title => Property?.DisplayName;
+
+	InspectorVisibilityAttribute[] _visibilityAttributes;
+
+	//Whether the property is marked read-only, which cannot change once it is set.
+	bool _readOnlyByAttribute;
+	bool _needsControl;
+	BaseControl _control;
+	bool _isWide;
+	bool _showLabel;
+
+	bool ShowLabel => _showLabel;
+
+	//Whether the sheet this row is in wants raw property names in the tooltip. Read off the sheet rather than passed in, because rows are
+	//built from three places - the sheet itself, a group, and the transform panels - and only the first of them knows the sheet it is filling.
+	bool ShowPropertyNameInTooltip => Ancestors.OfType<ControlSheet>().FirstOrDefault()?.ShowPropertyNameInTooltip ?? false;
+
+	internal void Initialize( SerializedProperty prop )
+	{
+		Property = prop;
+		_visibilityAttributes = Property.GetAttributes<InspectorVisibilityAttribute>()?.ToArray();
+		_readOnlyByAttribute = Property.HasAttribute<ReadOnlyAttribute>();
+
+		//The name, the type, the summary and the default value - the same text the widget sheet showed. It
+		//comes back as markup; EditorOverlay strips it, same as it does for every widget tooltip in here.
+		Tooltip = ControlSheetFormatter.GetPropertyToolTip( prop, ShowPropertyNameInTooltip );
+
+		BuildControl();
+		StateHasChanged();
+	}
+
+	void BuildControl()
+	{
+		if ( Property is null || Right is null )
+		{
+			_needsControl = true;
+			return;
+		}
+
+		_needsControl = false;
+		Right.DeleteChildren();
+		_control = null;
+
+		var c = PanelControlFactory.CreateFor( Property );
+		if ( c is null ) return;
+
+		_control = c;
+		Right.AddChild( c );
+		c.ReadOnly = Property.HasAttribute<ReadOnlyAttribute>() || !Property.ShouldEnable();
+		UpdateLayoutMode();
+	}
+
+	void UpdateLayoutMode()
+	{
+		if ( Property is null ) return;
+
+		var showLabel = _control?.IncludeLabel ?? true;
+		var isWide = _control?.IsWideMode ?? false;
+
+		if ( Property.TryGetAttribute<WideModeAttribute>( out var wideMode ) )
+		{
+			isWide = true;
+			showLabel = showLabel && wideMode.HasLabel;
+		}
+
+		var layoutChanged = _isWide != isWide || _showLabel != showLabel;
+		_isWide = isWide;
+		_showLabel = showLabel;
+		SetClass( "wide", isWide );
+
+		if ( layoutChanged )
+			StateHasChanged();
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+		if ( firstTime || _needsControl )
+			BuildControl();
+	}
+
+	int widthTiers;
+
+	//Says how wide the row came out, so a row too narrow for a name beside a field can put the name over it instead - see WidthTiers and the sheet.
+	public override void FinalLayout( Vector2 offset )
+	{
+		base.FinalLayout( offset );
+
+		WidthTiers.Apply( this, ref widthTiers );
+	}
+
+	protected override void OnParametersSet()
+	{
+		if ( Right is not null )
+			BuildControl();
+	}
+
+	//The property menu for the label, and for a control the pointer cannot reach - a read-only one hears nothing.
+	protected override void OnRightClick( MousePanelEvent e )
+	{
+		base.OnRightClick( e );
+
+		if ( Property is null ) return;
+
+		if ( PropertyContextMenu.Open( this, Property, _control ) )
+			e.StopPropagation();
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( _needsControl )
+			BuildControl();
+
+		if ( Property is null ) return;
+
+		//Both checks below read properties back through reflection; every few frames is soon enough for a row to notice.
+		if ( ++pollPhase % PollInterval != 0 ) return;
+
+		//A loop rather than All: this runs for every row on every frame, and the condition reads the property, so
+		//the lambda built a closure and a delegate each time round. The parent is read once instead of once per rule.
+		if ( _visibilityAttributes is { Length: > 0 } && Property.Parent is not null )
+		{
+			SetClass( "hidden", HiddenByEveryRule( _visibilityAttributes ) );
+		}
+
+		if ( _control is not null )
+		{
+			//The attribute was resolved when the row was built; only the condition can move.
+			var readOnly = _readOnlyByAttribute || !Property.ShouldEnable();
+			if ( _control.ReadOnly != readOnly )
+				_control.ReadOnly = readOnly;
+		}
+	}
+
+	//Rows poll on different frames rather than all on the same one.
+	static int pollSeed;
+	int pollPhase = pollSeed++;
+
+	const int PollInterval = 4;
+
+	bool HiddenByEveryRule( InspectorVisibilityAttribute[] rules )
+	{
+		var target = Property.Parent;
+
+		foreach ( var rule in rules )
+		{
+			if ( !rule.TestCondition( target ) ) return false;
+		}
+
+		return true;
+	}
+}

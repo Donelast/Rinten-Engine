@@ -1,0 +1,352 @@
+﻿//Style for engine windows open before content; has the tokens but not the editor theme
+
+.editor-window
+{
+	flex-direction: column;
+
+	//The only opaque layer; everything on it is a white veil so panels read as layers of one surface
+	@include ground;
+	color: $ink-dim;
+	font-family: $font;
+	font-size: 13px;
+
+	//A panel is deaf to the pointer unless it is told to listen, and every part of an editor window is something to click on or hover over.
+	pointer-events: all;
+
+	* { pointer-events: all; }
+
+	i
+	{
+		font-family: Material Icons;
+		font-size: 16px;
+	}
+
+	.title-bar
+	{
+		height: 30px;
+		flex-shrink: 0;
+		align-items: center;
+		padding-left: 12px;
+
+		background-color: $veil;
+		border-bottom: 1px solid $edge-soft;
+
+		label
+		{
+			font-size: 13px;
+			letter-spacing: $tracking;
+			color: $ink;
+		}
+	}
+
+	.body
+	{
+		flex-grow: 1;
+		flex-direction: row;
+	}
+
+	//A panel beside the content rather than a column walled off from it: its right edge lies on what is next to it, and that is the whole separation.
+	.sidebar
+	{
+		width: 180px;
+		flex-shrink: 0;
+		flex-direction: column;
+		padding: 8px 6px 0px 6px;
+		gap: 2px;
+
+		//A little lighter than the ground, not darker. What separates it from what is beside it is that and the shadow down its edge.
+		background-color: $veil;
+
+		@include edge-right;
+
+		.sidebar-item
+		{
+			@include pressable;
+
+			height: 28px;
+			align-items: center;
+			padding-left: 10px;
+			border-radius: $radius-2;
+			color: $ink-dim;
+
+			&:hover
+			{
+				background-color: $veil-hover;
+				color: $ink;
+			}
+
+			&:active
+			{
+				background-color: $veil-down;
+				transform: scale( 0.99 );
+			}
+
+			&.active
+			{
+				@include picked;
+			}
+		}
+	}
+
+	.content
+	{
+		flex-grow: 1;
+		flex-direction: column;
+		padding: 12px;
+	}
+}
+
+//A button. Pressed rather than hovered is the state that matters: a button
+//that does not visibly go down has not been clicked as far as anyone can tell.
+.button
+{
+	@include pressable;
+
+	height: 26px;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	padding: 0px 12px;
+	border-radius: $radius-2;
+	background-color: $tile;
+	color: $ink-dim;
+
+	&:hover
+	{
+		background-color: $tile-hover;
+		color: $ink;
+	}
+
+	&:active
+	{
+		background-color: $tile-down;
+		transform: scale( 0.97 );
+	}
+
+	//Primary button; hex written out since $green is undefined here. Keep equal to $accent-fill
+	&.primary
+	{
+		background-color: #8DB53E;
+		border-color: rgba( 255, 255, 255, 0.15 );
+		color: #000000;
+
+		&:hover { background-color: #9DC64B; }
+	}
+
+	&.disabled
+	{
+		color: $ink-off;
+		background-color: transparent;
+		cursor: default;
+		pointer-events: none;
+	}
+}
+
+//A line of text somebody types into.
+.text-entry
+{
+	height: 26px;
+	flex-shrink: 0;
+	align-items: center;
+	padding: 0px 8px;
+
+	@include well;
+
+	color: $ink;
+
+	transition: background-color $fast $ease, border-color $fast $ease;
+
+	&:hover { border-color: $edge-lit; }
+
+	&:focus
+	{
+		background-color: $tile;
+
+		@include focus-ring;
+	}
+
+	//One line: the text scrolls inside the field rather than pushing it wider.
+	overflow: hidden;
+
+	label
+	{
+		flex-grow: 1;
+		min-width: 0;
+		white-space: pre;
+		color: $ink;
+	}
+
+	.placeholder
+	{
+		color: $ink-off;
+	}
+}
+
+//The console: what the engine has said, and a line to say something back.
+.console
+{
+	flex-grow: 1;
+	flex-direction: column;
+
+	.log
+	{
+		flex-grow: 1;
+		flex-direction: column;
+		overflow-y: scroll;
+		padding: 6px 8px;
+
+		@include well;
+
+		.line
+		{
+			flex-shrink: 0;
+			flex-direction: row;
+			gap: 8px;
+			padding: 1px 0px;
+			border-radius: $radius-1;
+			font-family: $font-mono;
+			font-size: 12px;
+			color: $ink-dim;
+
+			transition: background-color $fast $ease;
+
+			//A line is worth pointing at: it is the one being read.
+			&:hover { background-color: $veil; }
+
+			.from
+			{
+				width: 110px;
+				flex-shrink: 0;
+				color: $ink-off;
+				text-overflow: ellipsis;
+			}
+
+			.what
+			{
+				flex-grow: 1;
+				white-space: pre-wrap;
+			}
+
+			//Arrives rather than appears: a line that scrolls in is a line you can see is new.
+			&:intro
+			{
+				animation-name: editor-fade;
+				animation-duration: $fast;
+				animation-timing-function: $ease;
+			}
+
+			&.warn .what { color: rgba( 240, 200, 40, 0.85 ); }
+			&.error .what { color: rgba( 220, 60, 60, 0.85 ); }
+			&.trace .what { color: $ink-off; }
+		}
+	}
+
+	.entry
+	{
+		flex-direction: row;
+		gap: 6px;
+		padding-top: 8px;
+		flex-shrink: 0;
+
+		.text-entry
+		{
+			//Grows into the row and gives way to the button beside it, which it cannot do while it keeps the width its own contents ask for.
+			flex-grow: 1;
+			flex-shrink: 1;
+			width: 0px;
+		}
+	}
+}
+
+//The window's own caption. One bar, on every window that draws its own - the launcher, the editor, a dock in a window of its own. See WindowCaption.
+.window-caption
+{
+	flex-direction: row;
+	align-items: center;
+
+	width: 100%;
+	height: 30px;
+	flex-shrink: 0;
+
+	background-color: rgba( 0, 0, 0, 0.25 );
+	border-bottom: 1px solid $veil;
+
+	pointer-events: all;
+
+	i
+	{
+		font-family: Material Icons;
+		font-size: 16px;
+	}
+}
+
+.window-caption .drag
+{
+	flex-grow: 1;
+	height: 100%;
+
+	flex-direction: row;
+	align-items: center;
+
+	padding-left: 12px;
+}
+
+.window-caption .what
+{
+	font-family: $font;
+	font-size: 12px;
+	color: $ink;
+	opacity: 0.55;
+}
+
+.window-caption .controls
+{
+	flex-direction: row;
+	align-items: center;
+	height: 100%;
+}
+
+.window-caption .control
+{
+	width: 44px;
+	height: 100%;
+
+	align-items: center;
+	justify-content: center;
+
+	color: $ink;
+	opacity: 0.6;
+
+	transition: background-color 0.08s ease-out, opacity 0.08s ease-out;
+
+	i { font-size: 16px; }
+
+	&:hover
+	{
+		opacity: 1;
+		background-color: rgba( 255, 255, 255, 0.08 );
+	}
+}
+
+.window-caption .control.shut:hover
+{
+	background-color: #c42b1c;
+	opacity: 1;
+}
+
+.captioned
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	background-color: $window-ground;
+}
+
+.window-body
+{
+	flex-grow: 1;
+	flex-shrink: 1;
+	width: 100%;
+	min-height: 0;
+	position: relative;
+}

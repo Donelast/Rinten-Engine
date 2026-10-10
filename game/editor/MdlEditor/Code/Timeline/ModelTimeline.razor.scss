@@ -1,0 +1,63 @@
+//The Timeline dock: the transport over the clip's timeline.
+
+ModelTimeline,
+.model-timeline
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+
+	//The slot the transport stands in: across the top, as wide as the dock.
+	> .transport
+	{
+		flex-direction: column;
+		align-items: stretch;
+		flex-shrink: 0;
+		width: 100%;
+	}
+
+	> .track
+	{
+		flex-grow: 1;
+		min-height: 0;
+	}
+}
+
+//The transport, which used to lie along the foot of the picture.
+.transport-bar
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 4px;
+	height: $row-height + 10px;
+	padding: 5px 6px;
+	background-color: $sidebar-background;
+
+	//The buttons are a toolbar's, but the strip they are in is this bar.
+	> .panel-toolbar
+	{
+		flex-shrink: 0;
+		height: $row-height;
+		padding: 0;
+		background-color: transparent;
+	}
+
+	> .clips
+	{
+		width: 180px;
+		flex-grow: 0;
+		flex-shrink: 0;
+	}
+
+	> .time,
+	> .frame
+	{
+		flex-shrink: 0;
+		margin-left: 8px;
+		font-size: $type-small;
+		color: rgba( $text-control, 0.65 );
+		white-space: nowrap;
+	}
+}

@@ -1,0 +1,87 @@
+GallerySelfTestPanel,
+.gallery-selftest
+{
+	flex-direction: column;
+	flex-grow: 1;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	pointer-events: all;
+	color: $ink;
+
+	> .bar
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 12px;
+		padding: 8px 12px;
+		border-bottom: 1px solid $edge;
+
+		> .summary
+		{
+			font-size: 12px;
+			color: $ink-dim;
+
+			&.bad { color: $red; }
+		}
+	}
+
+	> .rows
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: scroll;
+
+		> .list-row
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 8px;
+			height: $list-row-height;
+			padding: 0px 12px;
+			font-size: 12px;
+			color: $ink-dim;
+
+			> .icon
+			{
+				flex-shrink: 0;
+				font-size: $type-default;
+				color: $green;
+			}
+
+			> .id
+			{
+				flex-shrink: 0;
+				width: 320px;
+				color: $ink;
+				@include one-line;
+			}
+
+			> .message
+			{
+				flex-grow: 1;
+				@include one-line;
+			}
+
+			> .time
+			{
+				flex-shrink: 0;
+				color: $ink-faint;
+			}
+
+			&.failed
+			{
+				> .icon { color: $red; }
+				> .message { color: $red; }
+			}
+
+			&.skipped > .icon { color: $ink-faint; }
+		}
+	}
+}

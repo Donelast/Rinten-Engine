@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<uses-sdk android:minSdkVersion="28" android:targetSdkVersion="35" />
+
+	<!-- Vulkan 1.1, which is what the renderer asks the loader for. -->
+	<uses-feature android:name="android.hardware.vulkan.version" android:version="0x00401000" android:required="true" />
+
+	<!-- Input.Vibrate and haptics with no controller: the phone's own motor. Granted at install, nothing is asked. -->
+	<uses-permission android:name="android.permission.VIBRATE" />
+
+	<application android:label="${app_label}" android:hardwareAccelerated="true" android:extractNativeLibs="true">
+		<!--
+		The game's activity, all of it: an element here takes the place of what
+		MainActivity's attribute would generate rather than adding to it.
+
+		Which way up it is held - sensorLandscape, sensorPortrait or fullUser - is
+		the build page's: the export passes it as screen_orientation, and the csproj
+		names landscape where nothing does. Turning, a keyboard coming and going and
+		the rest are answered by the game rather than by the system making the
+		activity again.
+		-->
+		<activity android:name="rinten.android.MainActivity"
+			android:label="${app_label}"
+			android:exported="true"
+			android:screenOrientation="${screen_orientation}"
+			android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+			</intent-filter>
+		</activity>
+	</application>
+</manifest>

@@ -1,0 +1,88 @@
+//The list under the "+ Add" button: each group the handlers name as a heading, its adds under it. The chrome
+//is design.scss's .editor-popup, and the width is the button's, kept by the popup itself - see ModelAddPopup.
+
+.model-add-popup
+{
+	padding: 4px;
+	gap: 4px;
+
+	//The field that narrows the list. Its own height is every field's.
+	> .search { flex-shrink: 0; }
+
+	> .rows
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		gap: 1px;
+
+		//Taller than this and it scrolls rather than reaching the floor.
+		max-height: 420px;
+		overflow-y: scroll;
+		overflow-x: hidden;
+
+		> .heading
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 6px;
+			height: $row-height - 4px;
+			margin-top: 4px;
+			padding: 0 6px;
+			font-size: $type-small;
+			font-weight: 600;
+			color: rgba( $text-control, 0.55 );
+
+			&.first { margin-top: 0; }
+
+			> .material-icon
+			{
+				width: 16px;
+				flex-shrink: 0;
+				font-size: $type-body;
+				text-align: center;
+			}
+
+			> .text
+			{
+				min-width: 0;
+				white-space: nowrap;
+				text-overflow: ellipsis;
+			}
+		}
+
+		> .option
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 6px;
+			height: $row-height - 2px;
+			padding: 0 6px 0 12px;
+			border-radius: $control-radius;
+			cursor: pointer;
+			color: $text-control;
+
+			> .material-icon
+			{
+				width: 16px;
+				flex-shrink: 0;
+				font-size: $type-default;
+				text-align: center;
+				color: $text-light;
+			}
+
+			> .text
+			{
+				flex-grow: 1;
+				min-width: 0;
+				font-size: $type-body;
+				white-space: nowrap;
+				text-overflow: ellipsis;
+			}
+
+			&:hover { background-color: rgba( $primary, 0.14 ); }
+			&:active { background-color: rgba( $primary, 0.28 ); }
+		}
+	}
+}

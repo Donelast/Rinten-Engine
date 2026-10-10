@@ -1,0 +1,113 @@
+//Two dropdowns over the viewport: one layout, only the width differs.
+.network-settings-popup {
+    width: 500px;
+    min-width: 500px;
+}
+
+.view-settings-popup
+{
+	width: 380px;
+	min-width: 380px;
+}
+
+.network-settings-popup,
+.view-settings-popup
+{
+	max-height: 500px;
+
+	> .body
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		max-height: 500px;
+		overflow-y: scroll;
+		overflow-x: hidden;
+		padding: 8px;
+		pointer-events: all;
+
+		> .separator
+		{
+			height: 1px;
+			flex-shrink: 0;
+			margin: 6px 0px;
+			background-color: $edge;
+		}
+
+		> .heading
+		{
+			flex-shrink: 0;
+			padding: 8px 8px 2px;
+			color: $text-light;
+			font-size: 12px;
+			pointer-events: none;
+		}
+
+		> .menu-row
+		{
+			flex-direction: row;
+			align-items: center;
+			column-gap: 8px;
+			flex-shrink: 0;
+			min-height: $control-row-height;
+			padding: 0 8px;
+			border-radius: $radius-2;
+			pointer-events: all;
+			cursor: pointer;
+
+			> .icon
+			{
+				flex-shrink: 0;
+				width: 16px;
+				height: 16px;
+				font-size: $type-large;
+				color: $text-light;
+				align-items: center;
+				justify-content: center;
+				pointer-events: none;
+			}
+
+			//Not .label: an IconPanel is a Label and carries that class too, so the icon and the tick took
+			//the words' flex-grow and shared the row with them - the words ended up in the middle of it.
+			> .caption
+			{
+				flex-grow: 1;
+				color: $text-control;
+				font-size: $type-body;
+				@include one-line;
+				pointer-events: none;
+			}
+
+			> .check
+			{
+				flex: 0 0 16px;
+				width: 16px;
+				height: 16px;
+				min-width: 16px;
+				max-width: 16px;
+				aspect-ratio: 1;
+				font-size: $type-default;
+				color: $primary;
+				align-items: center;
+				justify-content: center;
+				pointer-events: none;
+			}
+
+			&:hover:not(.disabled)
+			{
+				background-color: $veil-hover;
+			}
+
+			&.disabled
+			{
+				opacity: 0.4;
+				cursor: default;
+			}
+		}
+	}
+
+	> .sheet
+	{
+		flex-shrink: 0;
+		padding: 4px 8px;
+	}
+}

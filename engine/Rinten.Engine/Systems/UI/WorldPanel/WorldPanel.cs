@@ -1,0 +1,143 @@
+﻿namespace Rinten.UI
+{
+	/// <summary>An interactive 2D panel rendered in the 3D world.</summary>
+	public class WorldPanel : RootPanel
+	{
+		public static float ScreenToWorldScale => ScenePanelObject.ScreenToWorldScale;
+
+		//Scene object that renders the panel.
+		internal ScenePanelObject SceneObject { get; set; }
+
+		/// <summary>Transform of the world panel in 3D space.</summary>
+		public Transform Transform
+		{
+			get => SceneObject.Transform;
+			set => SceneObject.Transform = value;
+		}
+
+		/// <summary>Tags that are applied to the underlying SceneObject</summary>
+		public ITagSet Tags => SceneObject.Tags;
+
+		/// <summary>Position of the world panel in 3D space.</summary>
+		public Vector3 Position
+		{
+			get => Transform.Position;
+			set => Transform = Transform.WithPosition( value );
+		}
+
+		/// <summary>Rotation of the world panel in 3D space.</summary>
+		public Rotation Rotation
+		{
+			get => Transform.Rotation;
+			set => Transform = Transform.WithRotation( value );
+		}
+
+		/// <summary>Scale of the world panel in 3D space.</summary>
+		public float WorldScale
+		{
+			get => Transform.UniformScale;
+			set => Transform = Transform.WithScale( value );
+		}
+
+		/// <summary>Maximum distance at which a player can interact with this world panel.</summary>
+		public float MaxInteractionDistance { get; set; }
+
+		public WorldPanel( SceneWorld world )
+		{
+			ArgumentNullException.ThrowIfNull( world, "world" );
+
+			SceneObject = new ScenePanelObject( world );
+			SceneObject.Flags.IsOpaque = false;
+			SceneObject.Flags.IsTranslucent = true;
+
+			//Don't render this panel using the panel system
+			RenderedManually = true;
+
+			//Default size is 1000x1000, centered on scene object transform
+			PanelBounds = new Rect( -500, -500, 1000, 1000 );
+
+			//A style pixel is a panel pixel: the root is laid out at exactly PanelBounds, so a tree written for a screen of that size
+			//fills the panel edge to edge. RenderScale, not this, is how a panel gets more or fewer pixels for the same size in the world.
+			Scale = 1.0f;
+
+			MaxInteractionDistance = 1000.0f;
+
+			//This is a world panel - we need to set this so that layers get the attribute restored properly
+			IsWorldPanel = true;
+		}
+
+		//Update the bounds for this panel. We purposely do nothing here because on world panels you can change the bounds by setting RootPanel.PanelBounds.
+		protected override void UpdateBounds( Rect rect )
+		{
+			if ( !SceneObject.IsValid() )
+				return;
+
+			var right = Rotation.Right;
+			var down = Rotation.Down;
+
+			var panelBounds = PanelBounds * WorldScale * ScenePanelObject.ScreenToWorldScale;
+
+			//Work out the bounds by adding each corner to a bbox
+			var bounds = BBox.FromPositionAndSize( right * panelBounds.Left + down * panelBounds.Top );
+			bounds = bounds.AddPoint( right * panelBounds.Left + down * panelBounds.Bottom );
+			bounds = bounds.AddPoint( right * panelBounds.Right + down * panelBounds.Top );
+			bounds = bounds.AddPoint( right * panelBounds.Right + down * panelBounds.Bottom );
+
+			SceneObject.Bounds = bounds + Position;
+		}
+
+		//We override this to prevent the scale automatically being set based on screen size changing.. because that's obviously not needed here.
+		protected override void UpdateScale( Rect screenSize )
+		{
+
+		}
+
+		public override void Delete( bool immediate = false )
+		{
+			base.Delete( immediate );
+		}
+
+		public override void OnDeleted()
+		{
+			base.OnDeleted();
+
+			SceneObject?.Delete();
+			SceneObject = null;
+		}
+
+		public override bool RayToLocalPosition( Ray ray, out Vector2 position, out float distance )
+		{
+			position = default;
+			distance = 0;
+
+			//The face is on the panel's -Z, so its normal - the side a ray may come in
+			//from - is backward. Forward, the trace only ever found the panel from behind.
+			var plane = new Plane( Position, Rotation.Backward );
+			var pos = plane.Trace( ray, false, MaxInteractionDistance );
+
+			if ( !pos.HasValue )
+				return false;
+
+			//A centimetre, not a unit: a unit was an inch where this came from and is a metre here,
+			//which refused any panel within arm's reach - which is where a hand in a headset holds one.
+			distance = Vector3.DistanceBetween( pos.Value, ray.Position );
+			if ( distance < 0.01f )
+				return false;
+
+			//to local coords
+			var localPos3 = Transform.PointToLocal( pos.Value );
+			//The inverse of the panel matrix: x as it is, and screen y grows the opposite way to world up.
+			var localPos = new Vector2( localPos3.x, -localPos3.y );
+
+			//convert to screen coords
+			localPos *= 1f / ScenePanelObject.ScreenToWorldScale;
+
+			if ( !IsInside( localPos ) )
+				return false;
+
+			position = localPos;
+
+			return true;
+		}
+	}
+}

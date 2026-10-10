@@ -1,0 +1,83 @@
+ColorControl.control
+{
+	flex-direction: row;
+	align-items: stretch;
+	gap: 2px;
+	flex-grow: 1;
+	flex-shrink: 1;
+	min-width: 0;
+	width: 100%;
+
+	> .colorswatch
+	{
+		width: $control-row-height;
+		min-width: $control-row-height;
+		height: $control-row-height;
+		flex-shrink: 0;
+		padding: 3px;
+		cursor: pointer;
+		border-radius: $control-radius;
+		border: 1px solid $border;
+		background-color: $control-background;
+		align-self: center;
+		position: relative;
+
+		> .checker
+		{
+			position: absolute;
+			left: 3px;
+			top: 3px;
+			right: 3px;
+			bottom: 3px;
+			border-radius: 2px;
+			pointer-events: none;
+			background-image: url( tools/checker.png );
+			background-repeat: repeat;
+			image-rendering: point;
+			background-size: 16px 16px;
+		}
+
+		> .fill
+		{
+			position: absolute;
+			left: 3px;
+			top: 3px;
+			right: 3px;
+			bottom: 3px;
+			border-radius: 2px;
+			pointer-events: none;
+		}
+	}
+
+	> .channels
+	{
+		flex-direction: row;
+		align-items: stretch;
+		flex-grow: 1;
+		min-width: 0;
+		gap: 2px;
+
+		> SliderControl
+		{
+			flex-grow: 1;
+			min-width: 80px;
+		}
+	}
+
+	//Four numbers want forty pixels each to be read, and short of that they were four coloured letters with nothing beside them. The swatch says the colour,
+	//and pressing it opens the picker with every channel in it - so narrow, the channels go and the swatch has the row. See WidthTiers for the classes.
+	&.under-180
+	{
+		> .channels
+		{
+			display: none;
+		}
+
+		> .colorswatch
+		{
+			flex-grow: 1;
+			flex-shrink: 1;
+			width: auto;
+		}
+	}
+}

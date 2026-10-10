@@ -1,0 +1,102 @@
+//The first-run guide over the whole window; only the card takes the pointer, so the editor stays usable under it
+
+WelcomeGuide,
+.welcome-guide
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+
+	//Under a modal: a question asked while the guide is up is the thing to answer
+	z-index: 50;
+
+	> .dim
+	{
+		position: absolute;
+		background-color: $scrim;
+	}
+
+	//Around the part of the editor a step is about
+	> .ring
+	{
+		position: absolute;
+		border: 3px solid $primary;
+		border-radius: $radius-2;
+		animation-name: editor-breathe;
+		animation-duration: 1.6s;
+		animation-iteration-count: infinite;
+	}
+
+	> .card
+	{
+		position: absolute;
+		flex-direction: column;
+		gap: 16px;
+		width: 500px;
+		padding: 24px;
+		pointer-events: all;
+		background-color: $panel-ground;
+
+		@include frame;
+		@include arrive;
+
+		> .head
+		{
+			flex-direction: row;
+			align-items: center;
+			gap: 12px;
+
+			> .material-icon
+			{
+				font-size: 32px;
+				color: $primary;
+			}
+
+			> .title
+			{
+				font-size: $type-default;
+				font-weight: 600;
+				color: $ink;
+			}
+		}
+
+		> .message
+		{
+			min-height: 80px;
+			font-size: $type-body;
+			line-height: 1.4;
+			color: $ink-dim;
+		}
+
+		> .checkbox > .checkmark
+		{
+			font-family: Material Icons;
+		}
+
+		> .actions
+		{
+			flex-direction: row;
+			align-items: center;
+			gap: 8px;
+
+			> .btn { min-width: 80px; }
+
+			> .step
+			{
+				font-size: $type-body;
+				color: $ink-faint;
+				margin-right: 8px;
+			}
+		}
+	}
+}
+
+//Rich text tags are matched alone, without the panels around them, so this cannot be nested under .message
+strong
+{
+	font-weight: 700;
+	color: $ink;
+}

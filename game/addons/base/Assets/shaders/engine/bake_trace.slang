@@ -1,0 +1,839 @@
+//Kept as a file rather than as text inside the engine's C#, so it is compiled the way every other shader is - includes
+//and all - and a project may put its own file of this name in its assets to replace it. See CoreShaderCache.Pass.
+
+//GPU lightmap bake rays, matching BakeSheet.Trace; per-texel sample sums are resolved on the CPU
+
+[[vk::binding(0,0)]] ByteAddressBuffer g_world;
+[[vk::binding(1,0)]] StructuredBuffer<float4> g_texels;
+[[vk::binding(2,0)]] RWStructuredBuffer<float4> g_sums;
+
+[[vk::push_constant]]
+cbuffer Push
+{
+	uint g_first;       //the first texel of this dispatch
+	uint g_count;       //how many
+	uint g_samples;     //samples each takes this dispatch
+	uint g_sampleBase;  //how many samples came before, for the random numbers
+	uint g_seed;
+	uint g_across;      //the volume's: strata along each side of the sphere - see ProbeCs
+	uint g_pad1, g_pad2;
+};
+
+static const float Pi = 3.14159265;
+static const float Lift = 0.002;
+
+//---- the world's layout - see BakeGpu.Pack ------------------------------------
+
+uint Word( uint at ) { return g_world.Load( at * 4 ); }
+float Float( uint at ) { return asfloat( g_world.Load( at * 4 ) ); }
+float3 Float3( uint at ) { return asfloat( g_world.Load3( at * 4 ) ); }
+float4 Float4( uint at ) { return asfloat( g_world.Load4( at * 4 ) ); }
+
+uint NodesAt() { return Word( 0 ); }
+uint TreeAt() { return Word( 1 ); }        //per tree triangle: corner, edge, edge (9) and the world's triangle | tested (1)
+uint CornersAt() { return Word( 2 ); }     //per world triangle: three vertex indices
+uint FacingAt() { return Word( 3 ); }      //per world triangle: its face's normal (3)
+uint TriangleAt() { return Word( 4 ); }    //per world triangle: material | through mode << 28, then tint (3)
+uint NormalsAt() { return Word( 5 ); }     //per vertex (3)
+uint UvsAt() { return Word( 6 ); }         //per vertex (2)
+uint ColoursAt() { return Word( 7 ); }     //per vertex (3)
+uint MaterialsAt() { return Word( 8 ); }   //MaterialWords each
+uint PicturesAt() { return Word( 9 ); }    //four floats a texel
+uint LightsAt() { return Word( 10 ); }     //LightWords each
+uint LightCount() { return Word( 11 ); }
+uint SkyAt() { return Word( 12 ); }        //an octahedral map of the sky, three floats a texel
+uint SkySide() { return Word( 13 ); }
+float SunCosine() { return Float( 14 ); }
+uint Bounces() { return Word( 15 ); }
+float AlbedoBoost() { return Float( 16 ); }
+uint NodeCount() { return Word( 17 ); }
+
+static const uint MaterialWords = 24;
+static const uint LightWords = 20;
+
+//---- random numbers ------------------------------------------------------------
+
+uint Hash( uint v )
+{
+	uint state = v * 747796405u + 2891336453u;
+	uint word = ( ( state >> ( ( state >> 28u ) + 4u ) ) ^ state ) * 277803737u;
+	return ( word >> 22u ) ^ word;
+}
+
+struct Random
+{
+	uint state;
+
+	[mutating] float Next()
+	{
+		state = Hash( state );
+		return float( state >> 8 ) * ( 1.0 / 16777216.0 );
+	}
+};
+
+//---- BakeMath ------------------------------------------------------------------
+
+float Luma( float3 c ) { return dot( c, float3( 0.2126, 0.7152, 0.0722 ) ); }
+
+void Basis( float3 n, out float3 right, out float3 up )
+{
+	float s = n.z >= 0.0 ? 1.0 : -1.0;
+	float a = -1.0 / ( s + n.z );
+	float b = n.x * n.y * a;
+
+	right = float3( 1.0 + ( s * n.x * n.x * a ), s * b, -s * n.x );
+	up = float3( b, s + ( n.y * n.y * a ), -n.y );
+}
+
+float3 AnyDirection( float u, float v )
+{
+	float z = 1.0 - ( 2.0 * u );
+	float radius = sqrt( max( 0.0, 1.0 - ( z * z ) ) );
+	float angle = 2.0 * Pi * v;
+	return float3( radius * cos( angle ), z, radius * sin( angle ) );
+}
+
+float3 CosineAround( float3 n, float u, float v )
+{
+	float radius = sqrt( u );
+	float angle = 2.0 * Pi * v;
+	float3 right, up;
+	Basis( n, right, up );
+	return normalize( right * ( radius * cos( angle ) ) + up * ( radius * sin( angle ) ) + n * sqrt( max( 0.0, 1.0 - u ) ) );
+}
+
+float3 InCone( float3 axis, float cosine, float u, float v )
+{
+	float z = 1.0 - ( u * ( 1.0 - cosine ) );
+	float radius = sqrt( max( 0.0, 1.0 - ( z * z ) ) );
+	float angle = 2.0 * Pi * v;
+	float3 right, up;
+	Basis( axis, right, up );
+	return normalize( right * ( radius * cos( angle ) ) + up * ( radius * sin( angle ) ) + axis * z );
+}
+
+float3 Offset( float3 position, float3 geometric, float3 direction )
+{
+	float side = dot( direction, geometric ) >= 0.0 ? 1.0 : -1.0;
+	float scale = max( max( abs( position.x ), abs( position.y ) ), abs( position.z ) );
+	return position + geometric * ( side * ( Lift + ( scale * 2e-6 ) ) );
+}
+
+//---- pictures ------------------------------------------------------------------
+
+//A picture of a material, bilinear and repeating - BakePicture.Sample. Nought where the material has none, which the caller reads as white.
+float4 Picture( uint at, uint width, uint height, float2 uv )
+{
+	float x = ( uv.x * width ) - 0.5;
+	float y = ( uv.y * height ) - 0.5;
+
+	float fx = floor( x );
+	float fy = floor( y );
+
+	float tx = x - fx;
+	float ty = y - fy;
+
+	int w = int( width );
+	int h = int( height );
+
+	int x0 = ( ( int( fx ) % w ) + w ) % w;
+	int y0 = ( ( int( fy ) % h ) + h ) % h;
+	int x1 = ( x0 + 1 ) % w;
+	int y1 = ( y0 + 1 ) % h;
+
+	uint base = PicturesAt() + at;
+
+	float4 a = Float4( base + uint( ( y0 * w ) + x0 ) * 4 );
+	float4 b = Float4( base + uint( ( y0 * w ) + x1 ) * 4 );
+	float4 c = Float4( base + uint( ( y1 * w ) + x0 ) * 4 );
+	float4 d = Float4( base + uint( ( y1 * w ) + x1 ) * 4 );
+
+	return lerp( lerp( a, b, tx ), lerp( c, d, tx ), ty );
+}
+
+//A material, as BakeGpu.Pack writes it: 0  tint xyz, alpha 4  diffuse, emission xyz 8  cutoff,
+//flags, colour picture's place, width 12  height, emission picture's place, width, height
+static const uint FlagMasked = 1u;
+static const uint FlagTranslucent = 2u;
+static const uint FlagTwoSided = 4u;
+static const uint FlagGlowsFromAlbedo = 8u;
+static const uint FlagHasColour = 16u;
+static const uint FlagHasEmissionMap = 32u;
+
+float4 MaterialColour( uint m, float2 uv )
+{
+	uint at = MaterialsAt() + ( m * MaterialWords );
+	uint flags = Word( at + 9 );
+	if ( ( flags & FlagHasColour ) == 0u ) return float4( 1.0, 1.0, 1.0, 1.0 );
+	return Picture( Word( at + 10 ), Word( at + 11 ), Word( at + 12 ), uv );
+}
+
+float2 Uv( uint t, float u, float v )
+{
+	uint c = CornersAt() + ( t * 3 );
+	uint a = Word( c ), b = Word( c + 1 ), d = Word( c + 2 );
+	uint at = UvsAt();
+
+	float2 ua = asfloat( g_world.Load2( ( at + a * 2 ) * 4 ) );
+	float2 ub = asfloat( g_world.Load2( ( at + b * 2 ) * 4 ) );
+	float2 ud = asfloat( g_world.Load2( ( at + d * 2 ) * 4 ) );
+
+	return ua * ( 1.0 - u - v ) + ub * u + ud * v;
+}
+
+float3 Interpolate3( uint table, uint t, float u, float v )
+{
+	uint c = CornersAt() + ( t * 3 );
+	uint a = Word( c ), b = Word( c + 1 ), d = Word( c + 2 );
+
+	return Float3( table + a * 3 ) * ( 1.0 - u - v ) + Float3( table + b * 3 ) * u + Float3( table + d * 3 ) * v;
+}
+
+//Whether a ray passes a triangle that is not solid all over - BakeScene.Through.
+bool Through( uint t, float u, float v )
+{
+	uint word = Word( TriangleAt() + ( t * 4 ) );
+	uint mode = word >> 28;
+
+	if ( mode == 1u ) return true;
+	if ( mode == 0u ) return false;
+
+	uint m = word & 0x0FFFFFFFu;
+	uint at = MaterialsAt() + ( m * MaterialWords );
+
+	float alpha = Float( at + 3 ) * MaterialColour( m, Uv( t, u, v ) ).w;
+	return alpha < Float( at + 8 );
+}
+
+//---- the tree - BakeBvh --------------------------------------------------------
+
+struct Hit
+{
+	float distance;
+	uint triangle;
+	float u, v;
+};
+
+float Enter( uint node, float3 origin, float3 inverse, float furthest )
+{
+	uint at = NodesAt() + ( node * 8 );
+	float3 low = Float3( at );
+	float3 high = Float3( at + 4 );
+
+	float3 one = ( low - origin ) * inverse;
+	float3 two = ( high - origin ) * inverse;
+	float3 near = min( one, two );
+	float3 far = max( one, two );
+
+	float enter = max( max( near.x, near.y ), max( near.z, 0.0 ) );
+	float leave = min( min( far.x, far.y ), min( far.z, furthest ) );
+
+	return enter <= leave ? enter : 3.0e38;
+}
+
+float3 Inverse( float3 d )
+{
+	const float least = 1e-20;
+	return float3(
+		1.0 / ( abs( d.x ) < least ? ( d.x < 0.0 ? -least : least ) : d.x ),
+		1.0 / ( abs( d.y ) < least ? ( d.y < 0.0 ? -least : least ) : d.y ),
+		1.0 / ( abs( d.z ) < least ? ( d.z < 0.0 ? -least : least ) : d.z ) );
+}
+
+bool Meets( uint t, float3 origin, float3 direction, float furthest, out float distance, out float u, out float v )
+{
+	distance = 0.0;
+	u = 0.0;
+	v = 0.0;
+
+	uint at = TreeAt() + ( t * 10 );
+
+	float3 corner = Float3( at );
+	float3 e1 = Float3( at + 3 );
+	float3 e2 = Float3( at + 6 );
+
+	float3 p = cross( direction, e2 );
+	float det = dot( e1, p );
+	if ( det > -1e-12 && det < 1e-12 ) return false;
+
+	float inv = 1.0 / det;
+	float3 s = origin - corner;
+	u = dot( s, p ) * inv;
+	if ( u < 0.0 || u > 1.0 ) return false;
+
+	float3 q = cross( s, e1 );
+	v = dot( direction, q ) * inv;
+	if ( v < 0.0 || u + v > 1.0 ) return false;
+
+	distance = dot( e2, q ) * inv;
+	if ( distance <= 0.0 || distance >= furthest ) return false;
+
+	uint word = Word( at + 9 );
+	uint source = word & 0x7FFFFFFFu;
+
+	if ( ( word & 0x80000000u ) != 0u && Through( source, u, v ) ) return false;
+
+	return true;
+}
+
+bool Nearest( float3 origin, float3 direction, float furthest, out Hit hit )
+{
+	hit.distance = 0.0;
+	hit.triangle = 0xFFFFFFFFu;
+	hit.u = 0.0;
+	hit.v = 0.0;
+
+	if ( NodeCount() == 0u ) return false;
+
+	float3 inverse = Inverse( direction );
+	uint stack[48];
+	uint depth = 0;
+	uint at = 0;
+	bool found = false;
+
+	if ( Enter( 0, origin, inverse, furthest ) >= 3.0e38 ) return false;
+
+	for ( ;; )
+	{
+		uint node = NodesAt() + ( at * 8 );
+		uint first = Word( node + 3 );
+		uint count = Word( node + 7 );
+
+		bool descend = false;
+
+		if ( count > 0u )
+		{
+			for ( uint t = first; t < first + count; ++t )
+			{
+				float distance, u, v;
+				if ( !Meets( t, origin, direction, furthest, distance, u, v ) ) continue;
+
+				furthest = distance;
+				found = true;
+				hit.distance = distance;
+				hit.triangle = Word( TreeAt() + ( t * 10 ) + 9 ) & 0x7FFFFFFFu;
+				hit.u = u;
+				hit.v = v;
+			}
+		}
+		else
+		{
+			uint left = first;
+			uint right = first + 1;
+			float leftAt = Enter( left, origin, inverse, furthest );
+			float rightAt = Enter( right, origin, inverse, furthest );
+
+			if ( leftAt > rightAt )
+			{
+				uint swapNode = left; left = right; right = swapNode;
+				float swapAt = leftAt; leftAt = rightAt; rightAt = swapAt;
+			}
+
+			if ( leftAt < 3.0e38 )
+			{
+				if ( rightAt < 3.0e38 && depth < 48 ) stack[depth++] = right;
+				at = left;
+				descend = true;
+			}
+		}
+
+		if ( descend ) continue;
+		if ( depth == 0 ) break;
+		at = stack[--depth];
+	}
+
+	return found;
+}
+
+bool Blocked( float3 origin, float3 direction, float furthest )
+{
+	if ( NodeCount() == 0u ) return false;
+
+	float3 inverse = Inverse( direction );
+	uint stack[48];
+	uint depth = 0;
+	uint at = 0;
+
+	if ( Enter( 0, origin, inverse, furthest ) >= 3.0e38 ) return false;
+
+	for ( ;; )
+	{
+		uint node = NodesAt() + ( at * 8 );
+		uint first = Word( node + 3 );
+		uint count = Word( node + 7 );
+
+		if ( count > 0u )
+		{
+			for ( uint t = first; t < first + count; ++t )
+			{
+				float distance, u, v;
+				if ( Meets( t, origin, direction, furthest, distance, u, v ) ) return true;
+			}
+		}
+		else
+		{
+			uint left = first;
+			uint right = first + 1;
+			bool leftIn = Enter( left, origin, inverse, furthest ) < 3.0e38;
+			bool rightIn = Enter( right, origin, inverse, furthest ) < 3.0e38;
+
+			if ( leftIn )
+			{
+				if ( rightIn && depth < 48 ) stack[depth++] = right;
+				at = left;
+				continue;
+			}
+
+			if ( rightIn )
+			{
+				at = right;
+				continue;
+			}
+		}
+
+		if ( depth == 0 ) break;
+		at = stack[--depth];
+	}
+
+	return false;
+}
+
+//---- the world as the rays see it - BakeScene ----------------------------------
+
+struct Surface
+{
+	float3 position;
+	float3 normal;
+	float3 geometric;
+	float3 albedo;
+	float3 emission;
+	bool back;
+};
+
+Surface SurfaceOf( Hit hit, float3 origin, float3 direction )
+{
+	uint t = hit.triangle;
+	uint word = Word( TriangleAt() + ( t * 4 ) );
+	uint m = word & 0x0FFFFFFFu;
+	uint at = MaterialsAt() + ( m * MaterialWords );
+	uint flags = Word( at + 9 );
+
+	Surface s;
+	s.position = origin + direction * hit.distance;
+	s.geometric = Float3( FacingAt() + ( t * 3 ) );
+
+	float3 normal = Interpolate3( NormalsAt(), t, hit.u, hit.v );
+	float length = sqrt( dot( normal, normal ) );
+	s.normal = length > 1e-8 ? normal / length : s.geometric;
+
+	s.back = dot( direction, s.geometric ) > 0.0;
+
+	if ( s.back && ( flags & FlagTwoSided ) != 0u )
+	{
+		s.geometric = -s.geometric;
+		s.normal = -s.normal;
+		s.back = false;
+	}
+
+	float2 uv = Uv( t, hit.u, hit.v );
+	float4 texel = MaterialColour( m, uv );
+	float3 vertex = Interpolate3( ColoursAt(), t, hit.u, hit.v );
+	float3 tint = Float3( TriangleAt() + ( t * 4 ) + 1 );
+
+	float3 albedo = texel.xyz * Float3( at ) * tint * vertex;
+	s.albedo = min( albedo * Float( at + 4 ) * AlbedoBoost(), float3( 0.95, 0.95, 0.95 ) );
+
+	s.emission = float3( 0.0, 0.0, 0.0 );
+
+	float3 glow = Float3( at + 5 );
+
+	if ( glow.x > 0.0 || glow.y > 0.0 || glow.z > 0.0 )
+	{
+		float3 from = ( flags & FlagGlowsFromAlbedo ) != 0u ? texel.xyz : float3( 1.0, 1.0, 1.0 );
+		float3 map = ( flags & FlagHasEmissionMap ) != 0u
+			? Picture( Word( at + 13 ), Word( at + 14 ), Word( at + 15 ), uv ).xyz
+			: float3( 1.0, 1.0, 1.0 );
+
+		s.emission = map * from * glow;
+	}
+
+	return s;
+}
+
+//The sky and the flat ambient from one direction - BakeScene.Environment, out of the octahedral map BakeGpu.Pack filled from it.
+float3 Environment( float3 d )
+{
+	float3 a = abs( d );
+	float2 o = d.xz / max( a.x + a.y + a.z, 1e-8 );
+
+	if ( d.y < 0.0 )
+		o = ( 1.0 - abs( o.yx ) ) * float2( o.x >= 0.0 ? 1.0 : -1.0, o.y >= 0.0 ? 1.0 : -1.0 );
+
+	uint side = SkySide();
+	float2 place = ( ( o * 0.5 ) + 0.5 ) * float( side ) - 0.5;
+	float2 corner = floor( place );
+	float2 f = place - corner;
+
+	int last = int( side ) - 1;
+	int x0 = clamp( int( corner.x ), 0, last );
+	int y0 = clamp( int( corner.y ), 0, last );
+	int x1 = min( x0 + 1, last );
+	int y1 = min( y0 + 1, last );
+
+	uint at = SkyAt();
+
+	float3 c00 = Float3( at + uint( y0 * int( side ) + x0 ) * 3 );
+	float3 c10 = Float3( at + uint( y0 * int( side ) + x1 ) * 3 );
+	float3 c01 = Float3( at + uint( y1 * int( side ) + x0 ) * 3 );
+	float3 c11 = Float3( at + uint( y1 * int( side ) + x1 ) * 3 );
+
+	return lerp( lerp( c00, c10, f.x ), lerp( c01, c11, f.x ), f.y );
+}
+
+//A lamp, as BakeGpu.Pack writes it: 0  kind, position xyz 4  range, colour xyz 8  forward xyz, inner cosine 12  outer cosine,
+//falloff, radius, flags (1 shadows, 2 baked whole) 16  the channel of the mask its shadow goes into, all ones for none
+static const uint LightShadows = 1u;
+static const uint LightBaked = 2u;
+static const uint NoMask = 0xFFFFFFFFu;
+
+float3 DirectOne( uint index, float3 position, float3 normal, float3 geometric, inout Random random, out float3 l )
+{
+	l = float3( 0.0, 0.0, 0.0 );
+
+	uint at = LightsAt() + ( index * LightWords );
+	uint kind = Word( at );
+
+	float attenuation = 1.0;
+	float distance;
+	float3 aim;
+
+	float3 forward = Float3( at + 8 );
+
+	if ( kind == 0u )
+	{
+		l = -forward;
+		distance = 1e5;
+		float u = random.Next();
+		float v = random.Next();
+		aim = InCone( l, SunCosine(), u, v );
+	}
+	else
+	{
+		float3 lamp = Float3( at + 1 );
+		float range = Float( at + 4 );
+
+		float3 toLight = lamp - position;
+		distance = length( toLight );
+
+		if ( distance > range || distance < 1e-5 ) return float3( 0.0, 0.0, 0.0 );
+
+		l = toLight / distance;
+
+		float reach = distance / max( range, 1e-4 );
+		float window = saturate( 1.0 - ( reach * reach * reach * reach ) );
+
+		float square = max( distance * distance, 1e-4 );
+		float falloff = Float( at + 13 );
+		float spread = falloff == 1.0 ? square : pow( square, falloff );
+
+		attenuation = window * window / max( spread, 1e-4 );
+
+		if ( kind == 2u )
+		{
+			float aligned = dot( -l, forward );
+			float inner = Float( at + 11 );
+			float outer = Float( at + 12 );
+			attenuation *= saturate( ( aligned - outer ) / max( inner - outer, 1e-4 ) );
+		}
+
+		float3 target = lamp;
+		float radius = Float( at + 14 );
+
+		float u = random.Next();
+		float v = random.Next();
+
+		if ( radius > 0.0 )
+		{
+			float3 right, up;
+			Basis( l, right, up );
+
+			float r = radius * sqrt( u );
+			float angle = 2.0 * Pi * v;
+
+			target += ( right * ( r * cos( angle ) ) ) + ( up * ( r * sin( angle ) ) );
+		}
+
+		float3 toPoint = target - position;
+		distance = length( toPoint );
+		aim = toPoint / max( distance, 1e-6 );
+	}
+
+	float nDotL = dot( normal, l );
+	if ( nDotL <= 0.0 || attenuation <= 0.0 ) return float3( 0.0, 0.0, 0.0 );
+
+	if ( dot( geometric, aim ) <= 0.0 ) return float3( 0.0, 0.0, 0.0 );
+
+	if ( ( Word( at + 15 ) & LightShadows ) != 0u )
+	{
+		float3 from = Offset( position, geometric, aim );
+		if ( Blocked( from, aim, distance - ( Lift * 2.0 ) ) ) return float3( 0.0, 0.0, 0.0 );
+	}
+
+	return Float3( at + 5 ) * ( nDotL * attenuation / Pi );
+}
+
+float3 Direct( float3 position, float3 normal, float3 geometric, inout Random random, bool bakedOnly, inout float3 towards )
+{
+	float3 sum = float3( 0.0, 0.0, 0.0 );
+	uint count = LightCount();
+
+	for ( uint i = 0; i < count; ++i )
+	{
+		if ( bakedOnly && ( Word( LightsAt() + ( i * LightWords ) + 15 ) & LightBaked ) == 0u ) continue;
+
+		float3 l;
+		float3 arriving = DirectOne( i, position, normal, geometric, random, l );
+
+		sum += arriving;
+		towards += l * Luma( arriving );
+	}
+
+	return sum;
+}
+
+//The light a channel of the mask holds at a point - the one of that channel whose reach takes it
+//in, lights of one channel never overlapping - or all ones where none does. See BakeScene.MaskedAt.
+uint MaskedAt( uint channel, float3 position )
+{
+	uint count = LightCount();
+
+	for ( uint i = 0; i < count; ++i )
+	{
+		uint at = LightsAt() + ( i * LightWords );
+		if ( Word( at + 16 ) != channel ) continue;
+
+		if ( Word( at ) == 0u ) return i;
+
+		float range = Float( at + 4 );
+		float3 apart = Float3( at + 1 ) - position;
+
+		if ( dot( apart, apart ) <= range * range ) return i;
+	}
+
+	return NoMask;
+}
+
+//Whether one shadow ray from a point reaches a light, at a point across its width - see BakeScene.Visible.
+float Visible( uint index, float3 position, float3 geometric, inout Random random )
+{
+	uint at = LightsAt() + ( index * LightWords );
+
+	float3 aim;
+	float distance;
+
+	if ( Word( at ) == 0u )
+	{
+		float u = random.Next();
+		float v = random.Next();
+		aim = InCone( -Float3( at + 8 ), SunCosine(), u, v );
+		distance = 1e5;
+	}
+	else
+	{
+		float3 target = Float3( at + 1 );
+		float3 toLight = target - position;
+		float length0 = length( toLight );
+
+		if ( length0 < 1e-5 ) return 1.0;
+
+		float radius = Float( at + 14 );
+		float u = random.Next();
+		float v = random.Next();
+
+		if ( radius > 0.0 )
+		{
+			float3 right, up;
+			Basis( toLight / length0, right, up );
+
+			float r = radius * sqrt( u );
+			float angle = 2.0 * Pi * v;
+
+			target += ( right * ( r * cos( angle ) ) ) + ( up * ( r * sin( angle ) ) );
+		}
+
+		float3 toPoint = target - position;
+		distance = length( toPoint );
+		aim = toPoint / max( distance, 1e-6 );
+	}
+
+	if ( dot( geometric, aim ) <= 0.0 ) return 0.0;
+
+	return Blocked( Offset( position, geometric, aim ), aim, distance - ( Lift * 2.0 ) ) ? 0.0 : 1.0;
+}
+
+float3 Arriving( float3 origin, float3 direction, inout Random random, out bool inside )
+{
+	inside = false;
+
+	float3 carried = float3( 1.0, 1.0, 1.0 );
+	float3 gathered = float3( 0.0, 0.0, 0.0 );
+
+	uint bounces = Bounces();
+
+	for ( uint bounce = 0; ; ++bounce )
+	{
+		Hit hit;
+
+		if ( !Nearest( origin, direction, 1e6, hit ) )
+			return gathered + ( carried * Environment( direction ) );
+
+		Surface s = SurfaceOf( hit, origin, direction );
+
+		if ( s.back )
+		{
+			if ( bounce == 0 ) inside = true;
+			return gathered;
+		}
+
+		gathered += carried * s.emission;
+
+		if ( bounce >= bounces ) return gathered;
+
+		float3 ignored = float3( 0.0, 0.0, 0.0 );
+		gathered += carried * s.albedo * Direct( s.position, s.normal, s.geometric, random, false, ignored );
+
+		carried *= s.albedo;
+
+		if ( bounce >= 1 )
+		{
+			float keep = min( max( carried.x, max( carried.y, carried.z ) ), 0.95 );
+			if ( random.Next() >= keep ) return gathered;
+			carried /= keep;
+		}
+
+		float u = random.Next();
+		float v = random.Next();
+		direction = CosineAround( s.normal, u, v );
+
+		if ( dot( direction, s.geometric ) <= 0.0 )
+		{
+			u = random.Next();
+			v = random.Next();
+			direction = CosineAround( s.geometric, u, v );
+		}
+
+		origin = Offset( s.position, s.geometric, direction );
+	}
+
+	return gathered;
+}
+
+//---- a texel - BakeSheet.Trace -------------------------------------------------
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main( uint3 id : SV_DispatchThreadID )
+{
+	if ( id.x >= g_count ) return;
+
+	uint texel = g_first + id.x;
+
+	float3 p = g_texels[( texel * 3 ) + 0].xyz;
+	float3 n = g_texels[( texel * 3 ) + 1].xyz;
+	float3 g = g_texels[( texel * 3 ) + 2].xyz;
+
+	float4 sumSquares = g_sums[( texel * 4 ) + 0];
+	float4 wayWeight = g_sums[( texel * 4 ) + 1];
+	float4 insideSpare = g_sums[( texel * 4 ) + 2];
+	float4 through = g_sums[( texel * 4 ) + 3];
+
+	//Which light each channel of the mask is here.
+	uint masked[4];
+	for ( uint c = 0; c < 4u; ++c ) masked[c] = MaskedAt( c, p );
+
+	for ( uint s = 0; s < g_samples; ++s )
+	{
+		Random random;
+		random.state = Hash( texel ^ Hash( g_sampleBase + s + g_seed ) );
+
+		[unroll]
+		for ( uint c = 0; c < 4u; ++c )
+			through[c] += masked[c] != NoMask ? Visible( masked[c], p, g, random ) : 1.0;
+
+		float3 lean = float3( 0.0, 0.0, 0.0 );
+		float3 direct = Direct( p, n, g, random, true, lean );
+
+		float u = random.Next();
+		float v = random.Next();
+		float3 direction = CosineAround( n, u, v );
+
+		if ( dot( direction, g ) <= 0.0 )
+		{
+			u = random.Next();
+			v = random.Next();
+			direction = CosineAround( g, u, v );
+		}
+
+		bool behind;
+		float3 arriving = Arriving( Offset( p, g, direction ), direction, random, behind );
+
+		float3 one = direct + arriving;
+		float luma = Luma( one );
+
+		sumSquares += float4( one, luma * luma );
+		wayWeight += float4( lean + ( direction * Luma( arriving ) ), Luma( direct ) + Luma( arriving ) );
+		insideSpare.x += behind ? 1.0 : 0.0;
+	}
+
+	g_sums[( texel * 4 ) + 0] = sumSquares;
+	g_sums[( texel * 4 ) + 1] = wayWeight;
+	g_sums[( texel * 4 ) + 2] = insideSpare;
+	g_sums[( texel * 4 ) + 3] = through;
+}
+
+//---- a point of the volume - BakeVolume.Trace ----------------------------------
+
+//One light-volume lattice point: stratified directions, summed with their per-axis colour lean
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void ProbeCs( uint3 id : SV_DispatchThreadID )
+{
+	if ( id.x >= g_count ) return;
+
+	uint point = g_first + id.x;
+	float3 at = g_texels[point].xyz;
+
+	float4 sum = g_sums[( point * 4 ) + 0];
+	float4 red = g_sums[( point * 4 ) + 1];
+	float4 green = g_sums[( point * 4 ) + 2];
+	float4 blue = g_sums[( point * 4 ) + 3];
+
+	uint across = max( g_across, 2u );
+
+	for ( uint k = 0; k < g_samples; ++k )
+	{
+		uint s = g_sampleBase + k;
+
+		Random random;
+		random.state = Hash( ( point * 7919u ) ^ Hash( s + g_seed ) );
+
+		float u = ( float( s % across ) + random.Next() ) / float( across );
+		float v = ( float( s / across ) + random.Next() ) / float( across );
+
+		float3 direction = AnyDirection( u, v );
+
+		bool behind;
+		float3 arriving = Arriving( at, direction, random, behind );
+
+		sum.xyz += arriving;
+		red.xyz += direction * arriving.x;
+		green.xyz += direction * arriving.y;
+		blue.xyz += direction * arriving.z;
+		red.w += behind ? 1.0 : 0.0;
+	}
+
+	g_sums[( point * 4 ) + 0] = sum;
+	g_sums[( point * 4 ) + 1] = red;
+	g_sums[( point * 4 ) + 2] = green;
+	g_sums[( point * 4 ) + 3] = blue;
+}

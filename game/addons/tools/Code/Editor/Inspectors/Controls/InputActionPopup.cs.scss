@@ -1,0 +1,136 @@
+﻿InputActionPopup.popup-panel,
+InputActionGroupPopup.popup-panel
+{
+	padding: 4px;
+	background-color: $popup-background;
+	border: $popup-border;
+	border-radius: $control-radius;
+	max-height: 420px;
+	overflow: hidden;
+
+	button
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+		padding: 4px 8px;
+		border-radius: $control-radius;
+		color: $text-control;
+		font-size: $control-text-size;
+		cursor: pointer;
+		transition: none;
+
+		> .icon
+		{
+			flex-shrink: 0;
+			font-size: $type-default;
+			color: $text-light;
+		}
+
+		> .button-right-column
+		{
+			flex-grow: 1;
+			min-width: 0;
+			justify-content: flex-start;
+
+			> .button-label
+			{
+				@include one-line;
+			}
+		}
+
+		&:hover
+		{
+			background-color: $primary;
+			color: $text;
+
+			> .icon { color: $text; }
+		}
+	}
+}
+
+InputActionPopup.popup-panel
+{
+	> .filter
+	{
+		flex-shrink: 0;
+		min-height: $control-row-height;
+		margin-bottom: 4px;
+		padding: $control-text-padding;
+		background-color: $control-background;
+		border: $control-border;
+		border-radius: $control-radius;
+		color: $text-control;
+	}
+
+	> .list
+	{
+		flex-direction: column;
+		overflow: scroll;
+
+		> .group
+		{
+			position: relative;
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			padding: 4px 8px;
+			border-radius: $control-radius;
+			pointer-events: all;
+			cursor: pointer;
+
+			//Out past the list's own 4px padding and the popup's 1px border, so the group's popup sits against the outer edge rather than inside it.
+			> .anchor
+			{
+				position: absolute;
+				top: 0px;
+				width: 0px;
+				height: 0px;
+				pointer-events: none;
+
+				&.left { left: -5px; }
+				&.right { right: -5px; }
+			}
+
+			> .name
+			{
+				flex-grow: 1;
+				color: $text-control;
+				font-size: $control-text-size;
+				@include one-line;
+				pointer-events: none;
+			}
+
+			> .chevron
+			{
+				flex-shrink: 0;
+				font-size: $type-large;
+				color: $text-light;
+				pointer-events: none;
+			}
+
+			&:hover,
+			&.open
+			{
+				background-color: $primary;
+
+				> .name,
+				> .chevron { color: $text; }
+			}
+		}
+	}
+}
+
+InputActionGroupPopup.popup-panel
+{
+	width: 220px;
+	min-width: 220px;
+	overflow: scroll;
+}
+
+//The base sheet centres a side-opened popup on its anchor; ours sits level with it.
+InputActionGroupPopup.popup-panel.left,
+InputActionGroupPopup.popup-panel.right
+{
+	transform: none;
+}

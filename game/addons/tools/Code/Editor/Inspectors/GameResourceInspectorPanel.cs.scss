@@ -1,0 +1,18 @@
+//Laid out like a GameObject: ungrouped properties in the header, a card per group, scrolling
+GameResourceInspectorPanel
+{
+	flex-direction: column;
+	min-height: 0;
+
+	> .scroll
+	{
+		flex-direction: column;
+		flex-shrink: 1;
+		min-height: 0;
+		overflow: scroll;
+		gap: $gap-section;
+		align-items: stretch;
+
+		> * { flex-shrink: 0; }
+	}
+}

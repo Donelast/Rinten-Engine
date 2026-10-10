@@ -1,0 +1,85 @@
+@namespace Editor
+@inherits Panel
+
+<root class="hierarchy tree-dock">
+	<div class="dock-bar">
+		<TextField @ref="searchField" class="search" />
+		@if ( ShowClear )
+		{
+			<ToolbarButton Icon="clear" ToolTip="Clear search" OnPressed="@ClearSearch" />
+		}
+		<ToolbarButton Icon="add" ToolTip="Create" OnPressed="@(() => Host?.CreateGameObjectMenu())" />
+		<ToolbarButton Icon="unfold_more" ToolTip="Expand all" OnPressed="@(() => Tree?.OpenAll())" />
+		<ToolbarButton Icon="unfold_less" ToolTip="Collapse all" OnPressed="@(() => Tree?.CloseAll())" />
+	</div>
+	<div class="tree-host tree-frame" @ref="treeHost"></div>
+</root>
+
+@code
+{
+	public SceneTreeWidget Host { get; set; }
+
+	public HierarchyTreePanel Tree { get; private set; }
+
+	Panel treeHost;
+	TextField searchField;
+	bool ShowClear;
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( firstTime && Tree is not null && treeHost.IsValid() )
+			treeHost.AddChild( Tree );
+
+		WireSearch();
+	}
+
+	public void SetTree( HierarchyTreePanel tree )
+	{
+		Tree = tree;
+
+		if ( treeHost.IsValid() )
+		{
+			treeHost.DeleteChildren();
+			treeHost.AddChild( tree );
+		}
+	}
+
+	TextField wiredField;
+
+	void WireSearch()
+	{
+		if ( !searchField.IsValid() || ReferenceEquals( searchField, wiredField ) ) return;
+
+		wiredField = searchField;
+
+		searchField.Icon = "search";
+		searchField.Placeholder = "Search";
+		searchField.ValueChanged = OnSearchChanged;
+		searchField.Value = Host?.SearchQuery ?? string.Empty;
+		ShowClear = !string.IsNullOrEmpty( searchField.Value );
+	}
+
+	void OnSearchChanged( string value )
+	{
+		if ( Host is null ) return;
+
+		Host.SetSearchQuery( value ?? string.Empty );
+		ShowClear = !string.IsNullOrEmpty( Host.SearchQuery );
+		StateHasChanged();
+	}
+
+	void ClearSearch() => Host?.ClearSearch();
+
+	public void SyncSearch()
+	{
+		if ( !searchField.IsValid() ) return;
+
+		searchField.Value = Host?.SearchQuery ?? string.Empty;
+		ShowClear = !string.IsNullOrEmpty( searchField.Value );
+		StateHasChanged();
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Host?.SearchQuery, ShowClear );
+}

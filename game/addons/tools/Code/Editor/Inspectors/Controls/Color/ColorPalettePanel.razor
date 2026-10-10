@@ -1,0 +1,101 @@
+@using System
+@using System.Collections.Generic
+@using Rinten.UI
+@namespace Editor.Inspectors
+@inherits Panel
+
+@* The colours kept for later, under the picker. A press takes one, a right
+   press forgets it, and the last square keeps the colour the picker has now. *@
+
+<root>
+	<div class="row">
+		@for ( var i = 0; i < Kept.Count; i++ )
+		{
+			var index = i;
+			var colour = Kept[i];
+
+			<div class="swatch" tooltip="@colour.Hex"
+				onmousedown="@( ( PanelEvent e ) => OnSwatch( e, index ) )"
+				onrightclick="@( ( PanelEvent e ) => e.StopPropagation() )">
+				@if ( colour.a < 0.999f )
+				{
+					<div class="checker"></div>
+				}
+				<div class="fill" style="@FillStyle( colour )"></div>
+			</div>
+		}
+
+		<div class="add" tooltip="Keep this colour" onmousedown="@OnAdd">
+			@if ( HasAlpha )
+			{
+				<div class="checker"></div>
+			}
+			<div class="fill" style="@FillStyle( Current )"></div>
+			<label class="icon" style="@IconStyle">+</label>
+		</div>
+	</div>
+</root>
+
+@code
+{
+	[Parameter] public SerializedProperty Property { get; set; }
+
+	//Told when a kept colour has been taken.
+	public Action OnPicked { get; set; }
+
+	const string Cookie = "tools.colorpalette";
+
+	List<Color> _kept;
+	int _version;
+
+	List<Color> Kept => _kept ??= EditorCookie.Get( Cookie, new List<Color>() );
+
+	bool HasAlpha => Property is not null && ColorPropertyHelper.HasAlpha( Property );
+
+	Color Current => Property is null ? Color.White : ColorPropertyHelper.GetColor( Property );
+
+	//An HDR colour shown as the colour it is at one; its alpha kept.
+	static string FillStyle( Color colour ) => $"background-color: {ColorPropertyHelper.GetDisplayColor( colour ).Hex};";
+
+	//The plus in black or white, whichever reads on the colour under it.
+	string IconStyle => ColorPropertyHelper.GetDisplayColor( Current ).Luminance > 0.5f ? "color: black;" : "color: white;";
+
+	protected override int BuildHash() => HashCode.Combine( Current, HasAlpha, _version );
+
+	void OnSwatch( PanelEvent e, int index )
+	{
+		//The press is the swatch's: a right press on it is not the property's menu.
+		e.StopPropagation();
+
+		if ( index < 0 || index >= Kept.Count ) return;
+
+		if ( e is MousePanelEvent mouse && mouse.MouseButton == MouseButtons.Right )
+		{
+			Kept.RemoveAt( index );
+			Save();
+			return;
+		}
+
+		if ( Property is null ) return;
+
+		ColorPropertyHelper.ImportPickerColor( Property, Kept[index] );
+		OnPicked?.Invoke();
+	}
+
+	void OnAdd( PanelEvent e )
+	{
+		e.StopPropagation();
+
+		if ( Property is null ) return;
+
+		Kept.Add( ColorPropertyHelper.GetColor( Property ) );
+		Save();
+	}
+
+	void Save()
+	{
+		EditorCookie.Set( Cookie, Kept );
+		_version++;
+		StateHasChanged();
+	}
+}

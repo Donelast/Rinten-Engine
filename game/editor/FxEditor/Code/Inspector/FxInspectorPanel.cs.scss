@@ -1,0 +1,35 @@
+//.fx inspector layout: head card with tree, a card for the picked item, one for parameters
+
+.fx-inspector
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+
+	> .scroll
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		overflow: scroll;
+		gap: $gap-section;
+		padding-bottom: $gap-section;
+		align-items: stretch;
+
+		> * { flex-shrink: 0; }
+	}
+
+	//A parameter-less effect says so, standing in from the card's side as a sheet's rows do.
+	.rows > .note
+	{
+		padding: 2px $pad-card;
+		font-size: $type-body;
+		color: rgba( $text, 0.35 );
+	}
+
+	> .scroll > .note
+	{
+		padding: 8px;
+		color: rgba( $text, 0.35 );
+	}
+}

@@ -1,0 +1,6066 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+
+namespace Rinten;
+
+//Draws a scene through our core into the open frame (window or own view); shared resources are static
+internal sealed partial class CoreSceneDrawer
+{
+
+	//A line vertex, matching SBC_VERTEX_LINE: 16 bytes.
+	[System.Runtime.InteropServices.StructLayout( System.Runtime.InteropServices.LayoutKind.Sequential )]
+	private struct LineVertex
+	{
+		public Vector3 Position;
+		public Color32 Colour;
+
+		public LineVertex( Vector3 position, Color32 colour )
+		{
+			Position = position;
+			Colour = colour;
+		}
+	}
+
+	/// <summary>Whether this view is showing the game: game UI on, editor grid off.</summary>
+	public Func<bool> GameViewSource { get; set; }
+
+	/// <summary>Whether to draw the editor grid, light/camera icons, and selection.</summary>
+	public Func<bool> EditorOverlaysSource { get; set; }
+
+	/// <summary>Whether the grid on the ground is one of those overlays.</summary>
+	public Func<bool> GroundGridSource { get; set; }
+
+	/// <summary>Whether the grid is cut into the faces of the editable meshes.</summary>
+	public Func<bool> SurfaceGridSource { get; set; }
+
+	/// <summary>What is selected, for the outlines. Same shape as the camera: asked every frame, owned by the scene view.</summary>
+	public System.Func<System.Collections.Generic.IEnumerable<GameObject>> SelectionSource { get; set; }
+
+	/// <summary>Whose gizmos to catch and draw. The scene view's own instance - the capture follows this so tool previews keep their gizmos.</summary>
+	public System.Func<Gizmo.Instance> GizmoSource { get; set; }
+
+	/// <summary>Whether a watched per-frame viewport (not a one-off thumbnail), so the profiler reads the right one</summary>
+	public bool Watched { get; set; }
+
+
+	//Pipelines, meshes, textures and materials live on the device rather than here - see CoreResources. Held
+	//per surface, as they were, every viewport loaded and uploaded its own copy of everything in the scene.
+
+	//Sorts see-through draws furthest first via packed 8-byte distance+index keys, not by moving structs
+	private void FurthestFirst( List<Queued> queue, List<int> into )
+	{
+		into.Clear();
+
+		var count = queue.Count;
+
+		if ( count == 0 ) return;
+
+		if ( sortKeys.Length < count ) sortKeys = new ulong[Math.Max( count, 64 )];
+
+		var items = System.Runtime.InteropServices.CollectionsMarshal.AsSpan( queue );
+
+		for ( var i = 0; i < count; i++ )
+			sortKeys[i] = ( (ulong)~Sortable( items[i].Distance ) << 32 ) | (uint)i;
+
+		sortKeys.AsSpan( 0, count ).Sort();
+
+		for ( var i = 0; i < count; i++ ) into.Add( (int)( sortKeys[i] & 0xFFFFFFFFu ) );
+	}
+
+	//A float as an unsigned number that sorts the same way it does - the sign bit flipped where it is positive, every bit flipped where it is not.
+	private static uint Sortable( float value )
+	{
+		var bits = (uint)System.BitConverter.SingleToInt32Bits( value );
+
+		return ( bits & 0x80000000u ) != 0 ? ~bits : bits | 0x80000000u;
+	}
+
+	//The numbers FurthestFirst sorts, kept between frames.
+	private ulong[] sortKeys = System.Array.Empty<ulong>();
+
+	//And the orders it hands out - one per queue, so no two can be in hand at once.
+	private readonly List<int> layerOrder = new();
+	private readonly List<int> namedOrder = new();
+	private readonly List<int> translucentOrder = new();
+
+	private struct Queued
+	{
+		public CoreSceneRenderer.SceneMesh Mesh;
+		public CoreSceneRenderer.MeshDraw Part;
+		public int PushAt;
+		public System.Numerics.Matrix4x4 World;
+		public Vector3 Center;
+		public float Radius;
+		public System.Numerics.Matrix4x4[] Pose;
+		public bool Skinned;
+		public float[] Morphs;
+		public CoreSceneRenderer.PipelineKind Kind;
+		public Color Tint;
+		public bool Moves;
+
+		/// <summary>Whether the thing itself moves - posed, or put somewhere else since it last held still - rather than a shader bending its vertices, which is <see cref="Moves"/>. Which of the shadow maps it is drawn into: the still world's, or the ones drawn again every frame.</summary>
+		public bool InMotion;
+		public bool NoShadow;
+		public bool ShadowOnly;
+
+		/// <summary>Whether this part belongs to an editable mesh - see DrawSurfaceGrid.</summary>
+		public bool EditableMesh;
+		public float Distance;
+
+		/// <summary>How many copies one draw makes - a model drawn many times over where the shader tells the copies apart by SV_InstanceID. Nought and one are one.</summary>
+		public int Instances;
+
+		/// <summary>A project's buffer of draw arguments the number of copies is read out of, by the card, and where in it - see CoreInstanceArgs. Nought for a count said here. <see cref="ArgsAt"/> is where this draw's own arguments were put with that number copied in; minus one until they have been.</summary>
+		public ulong CountFrom;
+		public long CountAt;
+		public ulong ArgsBuffer;
+		public long ArgsAt;
+	}
+
+	private readonly List<Queued> opaque = new();
+	private readonly List<Queued> translucent = new();
+
+	//What is drawn over the world with depth of its own, and what over the interface - see
+	//CoreSceneTables.DrawLayer. Every part of each, drawn the classic way after everything it is laid over.
+	private readonly List<Queued> overlayLayer = new();
+	private readonly List<Queued> afterUiLayer = new();
+
+	//How near the layers laid over the world are squeezed: their depth runs from nought to this, and the world's from nought to one - see
+	//CoreRenderDevice.SetDepthCeiling. Small enough to be in front of anything the world wrote, large enough that a model's parts still sort among themselves.
+	private const float LayerDepth = 0.001f;
+
+	//The frame's push blocks, one after another - see Queued.PushAt.
+	private byte[] pushArena = new byte[CoreSceneRenderer.PushSize * 512];
+	private int pushUsed;
+
+	private int TakePush()
+	{
+		var at = pushUsed;
+
+		if ( at + CoreSceneRenderer.PushSize > pushArena.Length )
+			System.Array.Resize( ref pushArena, pushArena.Length * 2 );
+
+		pushUsed = at + CoreSceneRenderer.PushSize;
+
+		return at;
+	}
+
+	private ReadOnlySpan<byte> PushOf( int at )
+		=> pushArena.AsSpan( at, CoreSceneRenderer.PushSize );
+
+	//The viewport this frame is being drawn into.
+	private ulong drawingView;
+
+	//Pixels on the screen a metre of error is, a metre from the eye - what the cull scales a cluster's error by - for the draws of a model whole,
+	//which pick between it and its impostor by the same rule. Nought for a view that is not a perspective one, which draws every model as itself.
+	private float looseErrorScale;
+
+	private static bool warnedMaterials;
+
+	//The tables of the scene being drawn, and the passes over them.
+	private CoreSceneTables tables;
+	private readonly CoreMeshRender meshRender = new();
+
+	//What a part drawn the classic way wants of its material's pictures - see CoreTextureStreaming.Wear: this camera's pixels a
+	//metre at its distance, times its scale and the metres a unit of its coordinates covers. Only on the turn the streaming asks.
+	private void Wears( in CoreSceneRenderer.MeshDraw drawn, in System.Numerics.Matrix4x4 world, Vector3 centre, float radius, Vector3 eye )
+	{
+		if ( !CoreTextureStreaming.Collecting || drawn.Texture == 0 || !( looseErrorScale > 0.0f ) ) return;
+
+		if ( !( drawn.MetresPerUv > 0.0f ) )
+		{
+			CoreTextureStreaming.Wear( drawn.Texture, float.MaxValue );
+			return;
+		}
+
+		var scale = MathF.Sqrt( MathF.Max( MathF.Max(
+			( world.M11 * world.M11 ) + ( world.M12 * world.M12 ) + ( world.M13 * world.M13 ),
+			( world.M21 * world.M21 ) + ( world.M22 * world.M22 ) + ( world.M23 * world.M23 ) ),
+			( world.M31 * world.M31 ) + ( world.M32 * world.M32 ) + ( world.M33 * world.M33 ) ) );
+
+		var away = MathF.Max( eye.Distance( centre ) - radius, 0.25f );
+		CoreTextureStreaming.Wear( drawn.Texture, looseErrorScale / away * scale * drawn.MetresPerUv );
+	}
+
+	//How far the eye is from a queued draw, for the ordering of glass.
+	private static float Reach( in Queued queued )
+		=> queued.Radius * ( 1.0f + MathF.Max( 0.0f, queued.Part.Cull.x ) );
+
+	//Queues an instance's parts the classic way (all, or those clusters can't draw), into `into` if given
+	private void QueueInstance( CoreSceneTables.Entry entry, ref CoreSceneTables.InstanceRecord record, Vector3 eye, bool all,
+		List<Queued> into = null, string shader = null, ulong texture = 0, ReadOnlySpan<float> said = default, bool hidden = false )
+	{
+		var mesh = entry.Mesh;
+		if ( mesh is null ) return;
+
+		var world = record.World;
+		var centre = new Vector3( record.Sphere.X, record.Sphere.Y, record.Sphere.Z );
+		var radius = record.Sphere.W;
+		var tint = entry.Tint;
+		var noShadow = ( record.Flags & CoreMeshShaders.InstanceNoShadow ) != 0;
+		var shadowOnly = ( record.Flags & CoreMeshShaders.InstanceShadowOnly ) != 0;
+
+		System.Numerics.Matrix4x4[] pose = null;
+		var skinned = false;
+
+		if ( entry.Skinned && mesh.IsSkinned && entry.Renderer is SkinnedModelRenderer skin && skin.IsValid() )
+		{
+			pose = CoreSceneRenderer.PoseBones( mesh, skin.SceneModel, skin.WorldTransform );
+			skinned = pose is not null && !CoreSceneRenderer.AtBindPose( pose );
+			if ( !skinned ) pose = null;
+
+			//The renderer's own sphere for a posed thing: the mesh's is the bind pose.
+			if ( skinned )
+			{
+				entry.Renderer.CullSphere( out var posedCentre, out var posedRadius );
+				if ( posedRadius > 0.0f ) { centre = posedCentre; radius = posedRadius; }
+			}
+		}
+
+		//Off the renderer's object, or off the object itself where there is no renderer - a particle drawn as a model is a loose SceneModel and drives
+		//its shapes the same way. None on a device that cannot blend them - see CoreRender.DrawsMorphs - which draws the mesh at its rest shape instead.
+		var morphs = CoreRender.DrawsMorphs && mesh.MorphCount > 0 &&( ( entry.Renderer?.SceneObject ?? entry.Object ) as SceneModel )?.Morphs is SceneObjectMorphCollection held
+			? held.Weights()
+			: null;
+
+		var chosen = mesh.Chosen( entry.Groups );
+
+		//A whole-drawn model with an impostor draws it where the cull would; otherwise its own meshes
+		var standIn = false;
+
+		if ( mesh.ImpostorError > 0.0f && looseErrorScale > 0.0f && !skinned )
+		{
+			var scale = new Vector3( world.M11, world.M12, world.M13 ).Length;
+			var distance = MathF.Max( ( centre - eye ).Length - radius, 0.01f );
+
+			standIn = mesh.ImpostorError * scale * looseErrorScale / distance <= Rinten.Rendering.DrawSettings.MeshLodPixels;
+		}
+
+		//One level of a chain, picked as the card picks it - see SceneMesh.PartsAt.
+		var parts = standIn ? mesh.Meshes
+			: mesh.PartsAt( world, eye, looseErrorScale, Rinten.Rendering.DrawSettings.MeshLodPixels );
+
+		for ( var partAt = 0; partAt < parts.Count; partAt++ )
+		{
+			var part = parts[partAt];
+			if ( entry.MeshIndex >= 0 ? partAt != entry.MeshIndex : !CoreSceneRenderer.SceneMesh.Shows( part, chosen ) ) continue;
+
+			if ( part.StandsIn != standIn ) continue;
+			if ( part.IndexCount <= 0 && !mesh.Pulled ) continue;
+
+			var drawn = part;
+			var material = entry.MaterialCount > partAt ? CoreMaterialTable.At( (int)tables.MaterialWordAt( entry.MaterialFirst + partAt ) ) : null;
+
+			if ( material is not null )
+			{
+				drawn = drawn with
+				{
+					Texture = material.Texture,
+					Shader = material.Shader,
+					Combo = material.Combo,
+					TwoSided = material.TwoSided,
+					Translucent = material.Translucent,
+
+					//The table's tint rather than the part's: an override replaced the material, and the tint
+					//is part of what it replaced - see CoreSceneTables, which resolves the two together.
+					Tint = material.Tint,
+				};
+			}
+
+			var partTint = drawn.Tint * tint;
+			if ( partTint.a < 1.0f && !drawn.Translucent ) drawn = drawn with { Translucent = true };
+
+			//Drawn out of its clusters already, unless everything is drawn here.
+			if ( !all && !entry.Loose && material is not null && !material.Loose && !material.Translucent ) continue;
+
+			Wears( in drawn, in world, centre, radius, eye );
+
+			//A pass drawing this one thing draws it with its own shader and its own numbers: an outline is the
+			//same mesh in a colour somebody picked, and nothing about the material it usually wears applies.
+			if ( shader is not null )
+			{
+				drawn = drawn with
+				{
+					Shader = shader,
+					Combo = null,
+					Translucent = false,
+					Texture = texture != 0 ? texture : drawn.Texture,
+				};
+			}
+
+			var pushAt = TakePush();
+			CoreSceneRenderer.ScenePushInto( pushArena.AsSpan( pushAt, CoreSceneRenderer.PushSize ), world, partTint, record.Numbers,
+				said.IsEmpty ? MemoryMarshal.CreateReadOnlySpan( ref record.Said0.X, 8 ) : said );
+
+			var queued = new Queued
+			{
+				Mesh = mesh,
+				Part = drawn,
+				PushAt = pushAt,
+				World = world,
+				Center = centre,
+				Radius = radius,
+				Tint = partTint,
+				Pose = pose,
+				Skinned = skinned,
+				Morphs = morphs,
+				NoShadow = noShadow,
+				ShadowOnly = shadowOnly || hidden,
+				EditableMesh = entry.Object.IsValid() && entry.Object.Flags.IsEditableMesh,
+				Moves = CoreSceneRenderer.MovesVertices( drawn.Shader, drawn.Combo ),
+				InMotion = skinned || morphs is not null || record.Moving != 0,
+				Kind = new CoreSceneRenderer.PipelineKind( skinned, drawn.Translucent, drawn.TwoSided )
+				{
+					Morphed = morphs is not null && !mesh.Pulled,
+					Shader = drawn.Shader,
+					Combo = drawn.Combo,
+					Pulled = mesh.Pulled,
+				},
+			};
+
+			if ( into is not null )
+			{
+				queued.Distance = eye.Distance( centre );
+				into.Add( queued );
+				continue;
+			}
+
+			if ( drawn.Translucent )
+			{
+				queued.Distance = eye.Distance( centre );
+				translucent.Add( queued );
+			}
+			else
+			{
+				opaque.Add( queued );
+			}
+		}
+	}
+
+	//The drawer this thread is inside, for project command lists; set only for the length of one draw
+	internal static CoreSceneDrawer Drawing { get; private set; }
+
+	//Scratch for the parts of one named thing - see DrawRendererNow.
+	private readonly List<Queued> named = new();
+
+	//Draws one renderer now with the caller's material and numbers into the open target, ignoring cull
+	internal void DrawRendererNow( Renderer renderer, Material material,
+		bool noDepth, RenderAttributes attributes, bool pulled = false )
+	{
+		if ( tables is null ) return;
+		if ( renderer is not ModelRenderer model || !model.IsValid() ) return;
+		if ( !material.IsValid() || string.IsNullOrWhiteSpace( material.core?.Shader ) ) return;
+
+		//Into the picture the list named, or the picture the frame is in, over the world's depth where the draw tests against it - see CorePasses. Where there
+		//is no depth to test against - a picture not the world's size, the pictures the frame moves into after the world - only a draw that tests nothing goes.
+		if ( !CorePasses.OpenForDraw( depth: true, orNone: noDepth, out var target, out var pictureFormat,
+			out var withDepth, out var finishes ) )
+		{
+			return;
+		}
+
+		noDepth |= !withDepth;
+
+		var slot = tables.SlotOf( model );
+		if ( slot < 0 ) return;
+
+		var entry = tables.EntryAt( slot );
+		if ( entry?.Mesh is null ) return;
+
+		var live = CoreResources.Live( material );
+		if ( live == 0 ) return;
+
+		Span<float> said = stackalloc float[8];
+
+		said.Clear();
+		DrawSaid( said, material.core.Shader, attributes );
+
+		named.Clear();
+
+		ref var record = ref tables.RecordAt( slot );
+
+		QueueInstance( entry, ref record, lastEye, all: true,
+			into: named, shader: material.core.Shader, texture: live, said: said );
+
+		foreach ( var queued in named )
+		{
+			//Vertex-pulling meshes need their own shader to know the layout; drawn only when the caller allows
+			if ( queued.Mesh.Pulled && !pulled ) continue;
+
+			var kind = queued.Kind with
+			{
+				Target = target,
+				PictureFormat = pictureFormat,
+				NoDepth = noDepth,
+				Finishes = finishes,
+				ScreenChain = null,
+				DepthOnly = false,
+				Translucent = false,
+			};
+
+			SubmitAs( queued, kind );
+		}
+	}
+
+	//Fills the draw's two own slots from named attributes, falling back to the shader-declared defaults
+	internal static void DrawSaid( Span<float> said, string shader, RenderAttributes attributes, RenderAttributes fallback = null )
+	{
+		var declared = CoreResources.Declared( shader );
+
+		if ( declared is null ) return;
+
+		var slot = 0;
+
+		foreach ( var parameter in declared )
+		{
+			if ( !parameter.IsAttribute || parameter.IsTexture ) continue;
+			if ( slot >= CoreShaderParams.DrawSlots ) break;
+
+			var value = parameter.Default;
+
+			if ( attributes is not null &&
+				( attributes.TryGetDeclared( parameter.Attribute, out var set ) ||
+					attributes.TryGetDeclared( parameter.Name, out set ) ) )
+			{
+				value = set;
+			}
+			else if ( fallback is not null &&
+				( fallback.TryGetDeclared( parameter.Attribute, out set ) ||
+					fallback.TryGetDeclared( parameter.Name, out set ) ) )
+			{
+				value = set;
+			}
+
+			var at = slot * 4;
+
+			said[at] = value.x;
+			said[at + 1] = value.y;
+			said[at + 2] = value.z;
+			said[at + 3] = value.w;
+
+			slot++;
+		}
+	}
+
+	//Where the eye was for the frame being drawn - for the queue's own sorting.
+	private Vector3 lastEye;
+
+	//Queues one hand-drawn mesh the classic way; into, instance and attribute args as in QueueInstance
+	private void QueueMesh( CoreSceneRenderer.SceneMesh mesh, Transform transform, Color modelTint, ulong groups, Vector3 eye,
+		System.Numerics.Vector4 numbers = default, ulong overrideTexture = 0, bool? overrideTwoSided = null, bool? overrideTranslucent = null,
+		string overrideShader = null, string overrideCombo = null, bool noShadow = false, System.Numerics.Vector4? sphere = null,
+		ReadOnlySpan<float> placement = default, bool inMotion = false, List<Queued> into = null,
+		int instances = 0, ulong countFrom = 0, long countAt = 0, RenderAttributes attributes = null, int level = -1,
+		System.Numerics.Matrix4x4[] pose = null )
+	{
+		Span<float> said = stackalloc float[8];
+		var skinned = pose is not null && mesh.IsSkinned;
+
+		var maxScale = MathF.Max( transform.Scale.x, MathF.Max( transform.Scale.y, transform.Scale.z ) );
+		var center = transform.PointToWorld( mesh.BoundCentre );
+		var radius = mesh.BoundRadius * maxScale;
+
+		if ( sphere is { } given )
+		{
+			center = new Vector3( given.X, given.Y, given.Z );
+			radius = given.W;
+		}
+
+		var world = CoreSceneRenderer.WorldOf( transform );
+		var chosen = mesh.Chosen( groups );
+
+		//The level it was asked for, or the one its distance gives - see SceneMesh.PartsAt.
+		var parts = mesh.PartsAt( world, eye, looseErrorScale, Rinten.Rendering.DrawSettings.MeshLodPixels, level );
+
+		for ( var partAt = 0; partAt < parts.Count; partAt++ )
+		{
+			var part = parts[partAt];
+			if ( !CoreSceneRenderer.SceneMesh.Shows( part, chosen ) || part.StandsIn ) continue;
+			if ( part.IndexCount <= 0 && !mesh.Pulled ) continue;
+
+			var tint = part.Tint * modelTint;
+			var pushAt = TakePush();
+
+			var drawn = part;
+
+			if ( overrideTexture != 0 )
+			{
+				drawn = drawn with
+				{
+					Texture = overrideTexture,
+					TwoSided = overrideTwoSided ?? drawn.TwoSided,
+					Translucent = overrideTranslucent ?? drawn.Translucent,
+					Shader = overrideShader ?? drawn.Shader,
+					Combo = overrideCombo,
+				};
+			}
+			else if ( overrideShader is not null )
+			{
+				drawn = drawn with { Shader = overrideShader, Combo = overrideCombo };
+			}
+
+			if ( tint.a < 1.0f && !drawn.Translucent ) drawn = drawn with { Translucent = true };
+
+			Wears( in drawn, in world, center, radius, eye );
+
+			//What the draw set for itself, where it set anything, is read under the names this part's shader declared - each part may be another shader.
+			scoped ReadOnlySpan<float> drawnNumbers = placement;
+
+			if ( attributes is not null )
+			{
+				said.Clear();
+				DrawSaid( said, drawn.Shader, attributes );
+				drawnNumbers = said;
+			}
+
+			CoreSceneRenderer.ScenePushInto( pushArena.AsSpan( pushAt, CoreSceneRenderer.PushSize ), world, tint, numbers, drawnNumbers );
+
+			var queued = new Queued
+			{
+				Mesh = mesh,
+				Part = drawn,
+				PushAt = pushAt,
+				World = world,
+				Center = center,
+				Radius = radius,
+				Tint = tint,
+				Pose = skinned ? pose : null,
+				Skinned = skinned,
+				NoShadow = noShadow,
+				Moves = CoreSceneRenderer.MovesVertices( drawn.Shader, drawn.Combo ),
+				InMotion = inMotion,
+				Instances = instances,
+				CountFrom = countFrom,
+				CountAt = countAt,
+				ArgsAt = -1,
+				Kind = new CoreSceneRenderer.PipelineKind( skinned, drawn.Translucent, drawn.TwoSided )
+				{
+					Shader = drawn.Shader,
+					Combo = drawn.Combo,
+					Pulled = mesh.Pulled,
+				},
+			};
+
+			if ( into is not null )
+			{
+				queued.Distance = eye.Distance( center );
+				into.Add( queued );
+				continue;
+			}
+
+			if ( drawn.Translucent )
+			{
+				queued.Distance = eye.Distance( center );
+				translucent.Add( queued );
+			}
+			else
+			{
+				opaque.Add( queued );
+			}
+		}
+	}
+
+	//Which instances the camera being drawn leaves out by its tags, a bit a table slot - see CoreSceneTables.Hidden. Kept between frames
+	//and worked out again only when something it depends on changed: the tables' slots, any scene object's tags, or the camera's own tags.
+	private uint[] hiddenBits = [];
+	private bool hiding;
+	private (CoreSceneTables Tables, int Slots, int Count, int TagVersion, string Include, string Exclude) hiddenFor;
+
+	//Works hiddenBits out for a camera, if anything it depends on changed.
+	private void UpdateHidden( CameraComponent camera )
+	{
+		var include = camera.RenderTags;
+		var exclude = camera.RenderExcludeTags;
+
+		hiding = tables is not null && ( include.TryGetAll().Any() || exclude.TryGetAll().Any() );
+
+		if ( !hiding )
+		{
+			meshRender.HiddenFromCamera = default;
+			return;
+		}
+
+		var key = ( tables, tables.SlotGeneration, tables.InstanceCount, SceneObject.Internal.SceneObjectTags.Version,
+			include.ToString(), exclude.ToString() );
+
+		var words = ( tables.InstanceCount + 31 ) / 32;
+
+		if ( key != hiddenFor || hiddenBits.Length < words )
+		{
+			if ( hiddenBits.Length < words ) hiddenBits = new uint[Math.Max( words, hiddenBits.Length * 2 )];
+
+			tables.Hidden( include.GetTokens(), exclude.GetTokens(), hiddenBits.AsSpan( 0, words ) );
+			hiddenFor = key;
+		}
+
+		meshRender.HiddenFromCamera = hiddenBits.AsMemory( 0, words );
+	}
+
+	//The queue an instance drawn after the world goes in, or null for the world's own.
+	private List<Queued> LayerOf( CoreSceneTables.Entry entry ) => entry.Layer switch
+	{
+		CoreSceneTables.DrawLayer.Overlay => overlayLayer,
+		CoreSceneTables.DrawLayer.AfterUi => afterUiLayer,
+		_ => null,
+	};
+
+	//One layer's draws, squeezed to the near end of the depth range - see LayerDepth - into whichever
+	//target is open, solid first and then see-through, furthest first. Nothing the camera's tags hide.
+	private void DrawLayer( List<Queued> layer, CoreRender.TargetKind? onto = null )
+	{
+		if ( layer.Count == 0 ) return;
+
+		CoreRenderDevice.SetDepthCeiling( LayerDepth );
+
+		foreach ( var queued in layer )
+		{
+			if ( queued.ShadowOnly || queued.Kind.Translucent ) continue;
+			Draw( queued );
+		}
+
+		FurthestFirst( layer, layerOrder );
+
+		foreach ( var at in layerOrder )
+		{
+			var queued = layer[at];
+
+			if ( queued.ShadowOnly || !queued.Kind.Translucent ) continue;
+			Draw( queued );
+		}
+
+		CoreRenderDevice.SetDepthCeiling( 1.0f );
+
+		void Draw( in Queued queued )
+		{
+			if ( onto is { } finished ) SubmitAs( queued, Wired( queued.Kind with { Target = finished, Finishes = true, ScreenChain = null } ) );
+			else Submit( queued );
+		}
+	}
+
+	private bool HiddenFromCamera( int slot )
+		=> hiding && ( slot >> 5 ) < hiddenBits.Length && ( ( hiddenBits[slot >> 5] >> ( slot & 31 ) ) & 1u ) != 0;
+
+	//Everything the frame draws the classic way: the loose instances, or all of them where asked.
+	private void Gather( Scene scene, Vector3 eye, bool all, ReadOnlySpan<CoreImmediate.ModelBatch> immediateModels )
+	{
+		if ( tables is not null )
+		{
+			if ( all )
+			{
+				for ( var i = 0; i < tables.InstanceCount; i++ )
+				{
+					var entry = tables.EntryAt( i );
+					if ( entry is null || !entry.Live || entry.Mesh is null ) continue;
+					QueueInstance( entry, ref tables.RecordAt( i ), eye, true, into: LayerOf( entry ), hidden: HiddenFromCamera( i ) );
+				}
+			}
+			else
+			{
+				foreach ( var i in tables.Loose )
+				{
+					var entry = tables.EntryAt( i );
+					if ( entry is null || !entry.Live || entry.Mesh is null ) continue;
+					var layer = LayerOf( entry );
+					QueueInstance( entry, ref tables.RecordAt( i ), eye, all: layer is not null, into: layer, hidden: HiddenFromCamera( i ) );
+				}
+			}
+		}
+
+		var counted = false;
+
+		foreach ( var drawn in immediateModels )
+		{
+			var mesh = CoreResources.Mesh( drawn.Model );
+			if ( mesh is null ) continue;
+
+			//A material of the draw's own over every part, the way an override on a renderer is: its descriptor set, its shader and the features it wants.
+			ulong overrideTexture = 0;
+			string overrideShader = null;
+			string overrideCombo = null;
+			bool? twoSided = null;
+			bool? translucent = null;
+
+			if ( drawn.Override is { } material && material.IsValid() && material.core is not null )
+			{
+				overrideTexture = CoreResources.Live( material );
+				overrideShader = material.core.Shader;
+				overrideCombo = CoreResources.LiveCombo( material );
+
+				var flags = CoreResources.LiveFlags( material );
+				twoSided = flags.TwoSided;
+				translucent = flags.Translucent;
+			}
+
+			var countFrom = drawn.CountFrom is { } buffer ? buffer.Handle : 0;
+			counted |= countFrom != 0;
+
+			//Drawn by code every frame, wherever it says: what it casts goes in the maps drawn every frame, never in a page.
+			QueueMesh( mesh, drawn.Transform, drawn.Tint, ulong.MaxValue, eye,
+				overrideTexture: overrideTexture, overrideTwoSided: twoSided, overrideTranslucent: translucent,
+				overrideShader: overrideShader, overrideCombo: overrideCombo, inMotion: true,
+				instances: drawn.Instances, countFrom: countFrom, countAt: drawn.CountAt, attributes: drawn.Attributes, level: drawn.Level,
+				pose: drawn.Pose );
+		}
+
+		//The arguments of what a project's buffer counts, before any pass opens - every draw below takes them from where they were put.
+		if ( counted )
+		{
+			PrepareCounted( opaque );
+			PrepareCounted( translucent );
+		}
+	}
+
+	//What makes classic draws copies of each other: mesh, part, texture, pipeline handle (cheap to hash)
+	private readonly record struct RunKey( ulong Vertices, ulong Indices, int First, int Count,
+		int FirstVertex, ulong Texture, ulong Pipeline );
+
+	//Which run each key is, and the draws in each - kept between frames, cleared into.
+	private readonly Dictionary<RunKey, int> runOf = new();
+	private readonly List<List<int>> runMembers = new();
+	private bool[] runTaken = [];
+
+	//Which run a draw belongs to, or -1 - beside the queue, so pass two works none of it out again.
+	private int[] runIndex = [];
+	private ulong[] runPipeline = [];
+
+	//One ring slot's worth of copies, filled a draw at a time.
+	private readonly byte[] runBlock = new byte[CoreRenderDevice.BlockBytes];
+
+	//Whether a draw can join an instanced run (portable, rigid, one copy); -noinstancing disables runs
+	private static readonly bool runsOn = !Rinten.Utility.CommandLine.HasSwitch( "-noinstancing" );
+
+	private static bool Runnable( in Queued queued )
+		=> runsOn && CoreRenderDevice.PortableFrame &&
+			!queued.Skinned && queued.Morphs is null && !queued.Mesh.Pulled &&
+			queued.Instances <= 1 && queued.CountFrom == 0 &&
+			!queued.Kind.Translucent && !queued.Kind.Lines && !queued.Kind.Wireframe &&
+			queued.Mesh.Vertices != 0 && queued.Mesh.Indices != 0 && queued.Part.IndexCount > 0;
+
+	private void SubmitLoose( ReadOnlySpan<System.Numerics.Vector4> planes, bool rigidOnly = false,
+		bool prepass = false )
+	{
+		var queue = CollectionsMarshal.AsSpan( opaque );
+
+		if ( queue.Length == 0 ) return;
+
+		//Own profiler zone for classic draws; see RINTEN_LOOSE_WHY for why a thing took this path
+		CoreRenderDevice.ZoneBegin( prepass ? "loose depth" : "loose" );
+
+		var takes = Takes( queue.Length );
+
+		for ( var i = 0; i < queue.Length; i++ )
+		{
+			ref readonly var queued = ref queue[i];
+
+			//Camera draws only; vertex-moving surfaces skip the pre-pass: costly and depth may not match exactly
+			takes[i] = !queued.ShadowOnly &&
+				!( prepass && queued.Moves ) &&
+				!( rigidOnly && queued.Skinned ) &&
+				( planes.IsEmpty || queued.Radius <= 0.0f ||
+					CoreSceneRenderer.SphereVisible( planes, queued.Center, Reach( in queued ) ) );
+		}
+
+		for ( var i = 0; i < queue.Length; i++ )
+		{
+			if ( !takes[i] ) continue;
+
+			LooseDraws++;
+
+			var triangles = queue[i].Mesh.Pulled
+				? queue[i].Part.PulledVertices / 3
+				: queue[i].Part.IndexCount / 3;
+
+			LooseTriangles += triangles;
+
+			if ( queue[i].Moves ) LooseMovingTriangles += triangles;
+		}
+
+		SubmitRuns( queue, takes, prepass );
+
+		CoreRenderDevice.ZoneEnd();
+	}
+
+	//Classic-path draw and triangle counts this frame, incl. vertex-moving ones that get no distance LOD
+	internal static long LooseDraws;
+	internal static long LooseTriangles;
+	internal static long LooseMovingTriangles;
+
+	//The mark for one draw of a queue, a buffer kept between frames.
+	private Span<bool> Takes( int length )
+	{
+		if ( runTaken.Length < length ) runTaken = new bool[System.Math.Max( length, 64 )];
+
+		return runTaken.AsSpan( 0, length );
+	}
+
+	//Draws classic casters into a light's shadow layer, using a frame block copy with the light's matrix
+	private void DrawLooseView( in CoreMeshRender.ViewSetup view )
+	{
+		if ( frameNow is null || opaque.Count == 0 ) return;
+
+		Span<System.Numerics.Vector4> planes = stackalloc System.Numerics.Vector4[6]
+		{
+			view.Plane0, view.Plane1, view.Plane2, view.Plane3, view.Plane4, view.Plane5,
+		};
+
+		var queue = CollectionsMarshal.AsSpan( opaque );
+		var first = -1;
+
+		for ( var i = 0; i < queue.Length && first < 0; i++ )
+			if ( CastsInto( in queue[i], view.Casters, planes ) ) first = i;
+
+		if ( first < 0 ) return;
+
+		frameNow.AsSpan( 0, lightFrame.Length ).CopyTo( lightFrame );
+		MemoryMarshal.Write( MemoryMarshal.AsBytes( lightFrame.AsSpan() ), in view.WorldToClip );
+
+		var put = CoreRenderDevice.PutFrame( lightFrame.AsSpan( 0, CoreSceneRenderer.EffectsAt ) );
+		if ( put == 0 ) return;
+
+		var was = CoreRenderDevice.UseFrame( put );
+
+		var takes = Takes( queue.Length );
+
+		for ( var i = 0; i < queue.Length; i++ )
+			takes[i] = i >= first && CastsInto( in queue[i], view.Casters, planes );
+
+		//The same runs the camera's pass found, into the light's map - a field of copies casts as one draw there too.
+		inLightView = true;
+		SubmitRuns( queue, takes, prepass: true );
+		inLightView = false;
+
+		CoreRenderDevice.UseFrame( was );
+	}
+
+	//Hash of what DrawLooseView would draw, so an unchanged shadow map is skipped; live if it can't vouch
+	private ulong LooseViewSignature( in CoreMeshRender.ViewSetup view, out bool live )
+	{
+		live = false;
+
+		if ( frameNow is null ) return 0;
+
+		Span<System.Numerics.Vector4> planes = stackalloc System.Numerics.Vector4[6]
+		{
+			view.Plane0, view.Plane1, view.Plane2, view.Plane3, view.Plane4, view.Plane5,
+		};
+
+		var hash = 14695981039346656037ul;
+		var count = 0;
+
+		foreach ( ref readonly var queued in CollectionsMarshal.AsSpan( opaque ) )
+		{
+			if ( !CastsInto( in queued, view.Casters, planes ) ) continue;
+
+			if ( queued.Pose is not null || queued.Morphs is not null || queued.Skinned || queued.Moves
+				|| queued.Instances > 1 || queued.CountFrom != 0 || queued.ArgsBuffer != 0 )
+			{
+				live = true;
+				return 0;
+			}
+
+			//The mesh by its buffers as well as by itself: a mesh edited in place - an
+			//editable one, while it is being worked on - is new buffers under the same object.
+			var mesh = queued.Mesh;
+
+			count++;
+			hash = ( hash ^ (ulong)System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode( mesh ) ) * 1099511628211ul;
+			hash = ( hash ^ mesh.Vertices ) * 1099511628211ul;
+			hash = ( hash ^ mesh.Indices ) * 1099511628211ul;
+			hash = ( hash ^ (ulong)mesh.PoolVertexAt ) * 1099511628211ul;
+			hash = ( hash ^ (ulong)mesh.PoolIndexAt ) * 1099511628211ul;
+			hash = ( hash ^ (ulong)mesh.PoolVertexCount ) * 1099511628211ul;
+			hash = ( hash ^ (ulong)queued.Part.GetHashCode() ) * 1099511628211ul;
+			hash = ( hash ^ (ulong)queued.Kind.GetHashCode() ) * 1099511628211ul;
+			hash = ( hash ^ (ulong)queued.World.GetHashCode() ) * 1099511628211ul;
+
+			foreach ( var word in MemoryMarshal.Cast<byte, ulong>( pushArena.AsSpan( queued.PushAt, CoreSceneRenderer.PushSize ) ) )
+				hash = ( hash ^ word ) * 1099511628211ul;
+		}
+
+		return ( hash ^ (ulong)count ) * 1099511628211ul;
+	}
+
+	private CorePortableSun.CasterSignature looseSignature;
+
+	//Whether a classic draw casts into a light's view: it casts, the view takes what it is, and it stands inside.
+	private bool CastsInto( in Queued queued, int casters, ReadOnlySpan<System.Numerics.Vector4> planes )
+	{
+		if ( queued.NoShadow || queued.Kind.Translucent ) return false;
+		if ( casters == 1 && queued.InMotion ) return false;
+		if ( casters == 2 && !queued.InMotion ) return false;
+
+		return queued.Radius <= 0.0f || CoreSceneRenderer.SphereVisible( planes, queued.Center, Reach( in queued ) );
+	}
+
+	private ulong depthPyramid;
+	private int depthBufferSide;
+	private int depthBufferDown;
+	private readonly byte[] depthPush = new byte[48];
+
+	//Whether the pyramid holds a depth this viewport drew - what the cull may ask.
+	private bool depthKnown;
+
+	//The chain this viewport's depth is folded into, made to the picture's shape.
+	private ulong EnsurePyramid()
+	{
+		if ( pyramidPipeline == 0 ) return 0;
+
+		if ( depthPyramid != 0 &&
+			( depthBufferSide != CoreDepthPyramid.DepthWide || depthBufferDown != CoreDepthPyramid.DepthTall ) )
+		{
+			CoreRenderDevice.DestroyPyramid( depthPyramid );
+			depthPyramid = 0;
+			depthKnown = false;
+		}
+
+		if ( depthPyramid == 0 )
+		{
+			depthBufferSide = CoreDepthPyramid.DepthWide;
+			depthBufferDown = CoreDepthPyramid.DepthTall;
+			depthPyramid = CoreRenderDevice.CreatePyramid( depthBufferSide, depthBufferDown );
+			depthKnown = false;
+
+			if ( depthPyramid == 0 )
+				Log.Warning( $"no depth pyramid at {depthBufferSide}x{depthBufferDown}: {CoreRenderDevice.Description}" );
+		}
+
+		return depthPyramid;
+	}
+
+	//Folds this frame's depth into the pyramid; with ifAppeared the dispatch size comes from the cull
+	private void KeepDepth( ulong viewport, bool ifAppeared = false )
+	{
+		if ( EnsurePyramid() == 0 ) return;
+
+		var args = ifAppeared && meshRender.Ready ? meshRender.WorkBuffer : 0;
+		var argsAt = CoreMeshRender.PyramidArgsOffset;
+
+		var depth = CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Depth );
+		if ( depth == 0 ) return;
+
+		CoreRenderDevice.ZoneBegin( "depth pyramid" );
+
+		var built = true;
+
+		var levels = CoreDepthPyramid.DepthLevels;
+		var (depthWide, depthTall) = size;
+
+		//Where the depth actually is: the world's own picture, or the world's rectangle of the
+		//screen's depth buffer where the pre-pass wrote it there - see Swapchain.DepthOnScreen.
+		var read = CoreRenderDevice.DepthReadRect( viewport );
+
+
+		for ( var lod = 0; lod < levels && built; lod += CoreDepthPyramid.LevelsAtOnce )
+		{
+			var count = System.Math.Min( CoreDepthPyramid.LevelsAtOnce, levels - lod );
+			var wide = System.Math.Max( 1, CoreDepthPyramid.DepthWide >> lod );
+			var tall = System.Math.Max( 1, CoreDepthPyramid.DepthTall >> lod );
+			var sourceWide = lod == 0 ? depthWide : System.Math.Max( 1, CoreDepthPyramid.DepthWide >> ( lod - 1 ) );
+			var sourceTall = lod == 0 ? depthTall : System.Math.Max( 1, CoreDepthPyramid.DepthTall >> ( lod - 1 ) );
+
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 0 ), (uint)wide );
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 4 ), (uint)tall );
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 8 ), (uint)count );
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 12 ), lod == 0 ? 1u : 0u );
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 16 ), (uint)sourceWide );
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 20 ), (uint)sourceTall );
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 24 ), (uint)System.Math.Max( 0, lod - 1 ) );
+
+			//Only the first level reads anything but the pyramid itself, and only it may be reading a rectangle of a bigger picture.
+			var from = lod == 0 ? read : (X: 0, Y: 0, Wide: sourceWide, Tall: sourceTall);
+
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 28 ), (uint)from.X );
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 32 ), (uint)from.Y );
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 36 ), (uint)from.Wide );
+			BitConverter.TryWriteBytes( depthPush.AsSpan( 40 ), (uint)from.Tall );
+
+			built = CoreRenderDevice.BuildPyramid( pyramidPipeline, depthPyramid, lod, count, lod == 0 ? depth : 0, depthPush,
+				args, argsAt + ( ( lod / CoreDepthPyramid.LevelsAtOnce ) * 16 ) );
+		}
+
+		CoreRenderDevice.ZoneEnd();
+
+		if ( built ) depthKnown = true;
+	}
+
+	//Draws what moved into the picture of velocities, where it stands now over where it stood - and says whether it
+	//drew, because a frame in which nothing moved leaves the picture as it was, and what it held was some other frame's.
+	private bool DrawVelocities( ulong viewport )
+	{
+		if ( velocityPipeline == 0 || tables is null || tables.Moved.Count == 0 ) return false;
+
+		CoreRenderDevice.ZoneBegin( "velocity" );
+
+		var drawn = false;
+
+		if ( CoreRenderDevice.BeginTarget( CoreRender.TargetKind.Velocity, Color.Transparent ) )
+		{
+			drawn = true;
+
+			var push = new byte[128];
+
+			foreach ( var slot in tables.Moved )
+			{
+				var entry = tables.EntryAt( slot );
+				if ( entry?.Mesh is null || entry.Mesh.Pulled ) continue;
+
+				ref var record = ref tables.RecordAt( slot );
+				if ( record.Prev == record.World ) continue;
+
+				MemoryMarshal.Write( push.AsSpan(), in record.World );
+				MemoryMarshal.Write( push.AsSpan( 64 ), in record.Prev );
+
+				foreach ( var part in entry.Mesh.Meshes )
+				{
+					if ( part.StandsIn ) continue;
+
+					CoreRenderDevice.DrawIndexed( velocityPipeline, entry.Mesh.Vertices, entry.Mesh.Indices,
+						part.IndexCount, push, part.FirstIndex, part.FirstVertex );
+				}
+			}
+
+			CoreRenderDevice.EndTarget();
+		}
+
+		CoreRenderDevice.ZoneEnd();
+
+		return drawn;
+	}
+
+	//A copy of this frame's block seeing the world through viewProjection rather than the jittered matrix it was
+	//drawn through, put beside it for the overlays - see CoreRenderDevice.PutFrame. Nought where it could not be.
+	private ulong PutPlainFrame( in System.Numerics.Matrix4x4 viewProjection )
+	{
+		frameNow.AsSpan( 0, lightFrame.Length ).CopyTo( lightFrame );
+		CoreSceneRenderer.SetViewMatrix( lightFrame, viewProjection );
+
+		return CoreRenderDevice.PutFrame( lightFrame.AsSpan( 0, CoreSceneRenderer.EffectsAt ) );
+	}
+
+	//The vertical field of view a perspective projection was made with, in radians - nought for a flat one.
+	private static float VerticalField( in System.Numerics.Matrix4x4 projection )
+		=> projection.M34 == 0.0f || projection.M22 == 0.0f ? 0.0f : 2.0f * MathF.Atan( 1.0f / MathF.Abs( projection.M22 ) );
+
+	//This drawer's upscaler and the history it keeps - see CoreUpscaler.
+	private readonly CoreUpscaler upscaler = new();
+
+	//Whether world passes are built for two views; light views stay single-view (WebGL refuses otherwise)
+	private bool StereoPass => BothEyes && !inLightView && CoreRender.StereoPipelines;
+
+	//Whether current draws are a light view's, which must use single-view programs inside a stereo frame
+	private bool inLightView;
+
+	//Classic pipelines are specialized to what the frame holds (fog, lamps, debug), one per answer
+	private CoreSceneRenderer.PipelineKind Wired( in CoreSceneRenderer.PipelineKind kind )
+	{
+		var wired = wireframe == 0
+			? kind with { Specialize = CoreSceneRenderer.ShadeSpecialize() }
+			: kind with { Wireframe = true, Through = wireframe >= 2 && !wantNearWins };
+
+		return StereoPass ? wired with { Stereo = true } : wired;
+	}
+
+	private bool wantNearWins;
+
+	//Whether this frame's cull tests what the depth already covers, and so whether the depth is worth folding down at all - see KeepDepth.
+	private bool occluding;
+
+	//Distance slices of still clusters drawn in the depth pre-pass; 0 none, MaxValue all (see DepthTuner)
+	internal static uint PrepassSlices { get; private set; } = uint.MaxValue;
+
+	//Draws a queue the classic way, with runs of copies drawn once each (portable instanced draw)
+	private void SubmitRuns( ReadOnlySpan<Queued> queue, ReadOnlySpan<bool> takes, bool prepass )
+	{
+		runOf.Clear();
+
+		foreach ( var members in runMembers ) members.Clear();
+
+		if ( runIndex.Length < queue.Length )
+		{
+			runIndex = new int[System.Math.Max( queue.Length, 64 )];
+			runPipeline = new ulong[runIndex.Length];
+		}
+
+		var used = 0;
+
+		for ( var i = 0; i < queue.Length; i++ )
+		{
+			runIndex[i] = -1;
+
+			if ( !takes[i] || !Runnable( in queue[i] ) ) continue;
+
+			ref readonly var queued = ref queue[i];
+
+			//The pipeline this run would be drawn with, which is also what makes two draws the same kind. A run
+			//nobody baked an instanced stage for answers nought here and its draws go one at a time, as before.
+			var baked = CoreResources.Pipeline( KindOf( in queued, prepass ) with { Instanced = true } );
+
+			if ( baked == 0 ) continue;
+
+			var key = new RunKey( queued.Mesh.Vertices, queued.Mesh.Indices, queued.Part.FirstIndex,
+				queued.Part.IndexCount, queued.Part.FirstVertex, queued.Part.Texture, baked );
+
+			if ( !runOf.TryGetValue( key, out var at ) )
+			{
+				at = used++;
+
+				if ( at == runMembers.Count ) runMembers.Add( new List<int>() );
+
+				runOf[key] = at;
+			}
+
+			runMembers[at].Add( i );
+			runIndex[i] = at;
+			runPipeline[i] = baked;
+		}
+
+		for ( var i = 0; i < queue.Length; i++ )
+		{
+			if ( !takes[i] ) continue;
+
+			var at = runIndex[i];
+
+			if ( at < 0 )
+			{
+				Submit( in queue[i], prepass );
+				continue;
+			}
+
+			var members = runMembers[at];
+
+			//Not the first of its run: it was drawn with the first.
+			if ( members.Count > 1 && members[0] != i ) continue;
+
+			if ( members.Count < 2 )
+			{
+				Submit( in queue[i], prepass );
+				continue;
+			}
+
+			if ( SubmitRun( queue, members, i, runPipeline[i] ) ) continue;
+
+			//The run would not draw - the frame had no room in its ring, say. Its copies are drawn one at a time here,
+			//because the second pass below skips every member but the first: without this the field would be one block.
+			foreach ( var member in members ) Submit( in queue[member], prepass );
+		}
+	}
+
+	//One run, in blocks of as many copies as a ring slot holds. False where the frame would not take
+	//it - then the caller draws the copies one at a time, which is what it did before there were runs.
+	private bool SubmitRun( ReadOnlySpan<Queued> queue, List<int> members, int first, ulong baked )
+	{
+		var perBlock = CoreRenderDevice.BlockBytes / CoreSceneRenderer.PushSize;
+		if ( baked == 0 || perBlock < 2 ) return false;
+
+		ref readonly var head = ref queue[first];
+
+		var mesh = head.Mesh;
+		var part = head.Part;
+
+		System.Span<byte> pass = stackalloc byte[CoreSceneRenderer.PushSize];
+		pass.Clear();
+
+		var block = runBlock.AsSpan();
+
+		for ( var at = 0; at < members.Count; at += perBlock )
+		{
+			var copies = System.Math.Min( perBlock, members.Count - at );
+
+			for ( var c = 0; c < copies; c++ )
+			{
+				var push = PushOf( queue[members[at + c]].PushAt );
+				var into = block.Slice( c * CoreSceneRenderer.PushSize, CoreSceneRenderer.PushSize );
+
+				into.Clear();
+				push[..System.Math.Min( push.Length, into.Length )].CopyTo( into );
+			}
+
+			if ( !CoreRenderDevice.DrawIndexedInstancedBlock( baked, mesh.Vertices, mesh.Indices,
+				part.IndexCount, copies, block[..( copies * CoreSceneRenderer.PushSize )], pass,
+				part.FirstIndex, part.FirstVertex, part.Texture ) )
+			{
+				//Nothing of this block was drawn. The first block failing is a run that cannot be drawn at all, and the caller falls back; a
+				//later one failing has already drawn part of the field, and drawing the rest one at a time would draw the first copies twice.
+				return at > 0;
+			}
+		}
+
+		return true;
+	}
+
+	//The pipeline kind a draw would be submitted under - see Submit, which works it out the same way.
+	private CoreSceneRenderer.PipelineKind KindOf( in Queued queued, bool prepass )
+		=> prepass
+			? queued.Kind with { DepthOnly = true, Translucent = false, Target = CoreRender.TargetKind.Depth,
+				Stereo = StereoPass }
+			: Wired( queued.Kind with { Target = worldTarget, Finishes = worldFinishes, ScreenChain = worldFinishes ? worldChain : null } );
+
+	private void Submit( in Queued queued, bool prepass = false )
+	{
+		var kind = prepass
+			? queued.Kind with { DepthOnly = true, Translucent = false, Target = CoreRender.TargetKind.Depth,
+				Stereo = StereoPass }
+			: Wired( queued.Kind with { Target = worldTarget, Finishes = worldFinishes, ScreenChain = worldFinishes ? worldChain : null } );
+
+		//A pass carrying the frame's point effects still compiling for this one: the
+		//curve alone meanwhile. And one the frame is waiting on, asked for here too.
+		if ( !prepass )
+		{
+			if ( kind.ScreenChain is not null && CoreResources.Pipeline( kind ) == 0 )
+			{
+				CoreMeshRender.ChainWaiting++;
+				kind = kind with { ScreenChain = null };
+			}
+			else if ( warmChain is not null && !queued.Kind.Translucent &&
+				CoreResources.Pipeline( Wired( queued.Kind with { Target = CoreRender.TargetKind.Screen, Finishes = true, ScreenChain = warmChain } ) ) == 0 )
+			{
+				CoreMeshRender.ChainWaiting++;
+			}
+		}
+
+		SubmitAs( queued, kind );
+	}
+
+	//The same, with the pipeline said rather than worked out - for a pass that draws a named thing its own way. See DrawRendererNow.
+	private void SubmitAs( in Queued queued, in CoreSceneRenderer.PipelineKind kind )
+	{
+		var baked = CoreResources.Pipeline( kind );
+		if ( baked == 0 ) return;
+
+		var push = PushOf( queued.PushAt );
+
+		if ( queued.Instances > 1 || queued.CountFrom != 0 )
+		{
+			SubmitCopies( in queued, baked, push );
+			return;
+		}
+
+		if ( queued.Mesh.Pulled )
+		{
+			CoreRenderDevice.DrawPulled( baked, queued.Mesh.Vertices, queued.Mesh.Data,
+				queued.Part.PulledVertices, push, queued.Part.Texture );
+			return;
+		}
+
+		if ( queued.Skinned )
+		{
+			var bones = CoreRenderDevice.Bones( queued.Pose );
+
+			if ( bones != 0 && queued.Morphs is not null && queued.Mesh.MorphDeltas != 0 )
+			{
+				var weights = CoreRenderDevice.MorphWeights( queued.Morphs );
+
+				if ( weights != 0 )
+				{
+					CoreRenderDevice.DrawMorphedAt( baked, queued.Mesh.Vertices, queued.Mesh.Skin,
+						queued.Mesh.MorphRuns, queued.Mesh.MorphDeltas, queued.Mesh.Indices,
+						queued.Part.IndexCount, bones, weights, push,
+						queued.Part.FirstIndex, queued.Part.FirstVertex, queued.Part.Texture,
+						FirstRun( in queued ) );
+					return;
+				}
+			}
+
+			if ( bones != 0 )
+			{
+				CoreRenderDevice.DrawSkinnedAt( baked, queued.Mesh.Vertices, queued.Mesh.Skin, queued.Mesh.Indices,
+					queued.Part.IndexCount, bones, push,
+					queued.Part.FirstIndex, queued.Part.FirstVertex, queued.Part.Texture );
+				return;
+			}
+
+			CoreRenderDevice.DrawSkinned( baked, queued.Mesh.Vertices, queued.Mesh.Skin, queued.Mesh.Indices,
+				queued.Part.IndexCount, queued.Pose, push,
+				queued.Part.FirstIndex, queued.Part.FirstVertex, queued.Part.Texture );
+			return;
+		}
+
+		if ( queued.Morphs is not null && queued.Mesh.MorphDeltas != 0 )
+		{
+			var weights = CoreRenderDevice.MorphWeights( queued.Morphs );
+
+			if ( weights != 0 )
+			{
+				CoreRenderDevice.DrawMorphedIndexed( baked, queued.Mesh.Vertices,
+					queued.Mesh.MorphRuns, queued.Mesh.MorphDeltas, queued.Mesh.Indices,
+					queued.Part.IndexCount, weights, push,
+					queued.Part.FirstIndex, queued.Part.FirstVertex, queued.Part.Texture,
+					FirstRun( in queued ) );
+				return;
+			}
+		}
+
+		CoreRenderDevice.DrawIndexed( baked, queued.Mesh.Vertices, queued.Mesh.Indices,
+			queued.Part.IndexCount, push,
+			queued.Part.FirstIndex, queued.Part.FirstVertex, queued.Part.Texture );
+	}
+
+
+	//Where a part's vertices start in its own model, which is where its blend shape runs start: the runs are the
+	//model's, one per vertex from nought, while the part's first vertex counts from the start of the shared pool.
+	private static int FirstRun( in Queued queued )
+		=> queued.Mesh.Pooled ? queued.Part.FirstVertex - (int)queued.Mesh.PoolVertexAt : queued.Part.FirstVertex;
+
+	//A part drawn as many copies - the number said here, or read by the card out of a project's buffer into arguments of its own,
+	//see PrepareCounted. Rigid, in the pose it was modelled in: which copy is which is the shader's business, by SV_InstanceID.
+	private static void SubmitCopies( in Queued queued, ulong pipeline, ReadOnlySpan<byte> push )
+	{
+		var mesh = queued.Mesh;
+		var part = queued.Part;
+
+		var draw = new CoreBufferDraw
+		{
+			Pipeline = pipeline,
+			Texture = part.Texture,
+			Instances = Math.Max( queued.Instances, 1 ),
+		};
+
+		if ( mesh.Pulled )
+		{
+			draw.Geometry = mesh.Vertices;
+			draw.Data = mesh.Data;
+			draw.Count = part.PulledVertices;
+		}
+		else
+		{
+			draw.Vertices = mesh.Vertices;
+			draw.Indices = mesh.Indices;
+			draw.WideIndices = true;
+			draw.First = part.FirstIndex;
+			draw.Count = part.IndexCount;
+			draw.BaseVertex = part.FirstVertex;
+		}
+
+		if ( queued.CountFrom != 0 )
+		{
+			//Its arguments were never put - the frame would not take them - and a count it cannot read is not one to guess.
+			if ( queued.ArgsAt < 0 || queued.ArgsBuffer == 0 ) return;
+
+			draw.Arguments = queued.ArgsBuffer;
+			draw.ArgumentsOffset = queued.ArgsAt;
+			draw.DrawCount = 1;
+		}
+
+		CoreRenderDevice.DrawBuffers( draw, push );
+	}
+
+	//The arguments of every part in a queue whose copies a project's buffer counts, put where the frame is before any pass opens - see CoreInstanceArgs.
+	private static void PrepareCounted( List<Queued> queue )
+	{
+		var parts = CollectionsMarshal.AsSpan( queue );
+
+		for ( var i = 0; i < parts.Length; i++ )
+		{
+			ref var queued = ref parts[i];
+
+			if ( queued.CountFrom == 0 || queued.ArgsAt >= 0 ) continue;
+
+			var pulled = queued.Mesh.Pulled;
+
+			if ( CoreInstanceArgs.Put( !pulled,
+				pulled ? queued.Part.PulledVertices : queued.Part.IndexCount,
+				pulled ? 0 : queued.Part.FirstIndex,
+				pulled ? 0 : queued.Part.FirstVertex,
+				queued.CountFrom, queued.CountAt, out var buffer, out var at ) )
+			{
+				queued.ArgsBuffer = buffer;
+				queued.ArgsAt = at;
+			}
+		}
+	}
+
+	//A model's parts queued to be drawn now rather than with the frame, one set for each place it stands - see
+	//CoreListDraws.Model. What the draw set for itself is read under the names each part's shader declared.
+	internal bool QueueModelNow( CoreSceneRenderer.SceneMesh mesh, ReadOnlySpan<Transform> transforms, RenderAttributes attributes,
+		int instances = 0, ulong countFrom = 0, long countAt = 0, int level = -1 )
+	{
+		named.Clear();
+
+		if ( mesh is null ) return false;
+
+		foreach ( var transform in transforms )
+		{
+			QueueMesh( mesh, transform, Color.White, ulong.MaxValue, lastEye, inMotion: true, into: named,
+				instances: instances, countFrom: countFrom, countAt: countAt, attributes: attributes, level: level );
+		}
+
+		return countFrom != 0 && named.Count > 0;
+	}
+
+	//The arguments of what QueueModelNow queued, outside every pass.
+	internal void PrepareNamed() => PrepareCounted( named );
+
+	//What QueueModelNow queued, drawn into the target that is open: the solid parts, then the see-through ones furthest first.
+	internal void SubmitNamed( CoreRender.TargetKind target, int pictureFormat, bool noDepth, bool finishes )
+	{
+		for ( var pass = 0; pass < 2; pass++ )
+		{
+			if ( pass == 1 ) FurthestFirst( named, namedOrder );
+
+			for ( var at = 0; at < named.Count; at++ )
+			{
+				var queued = named[pass == 1 ? namedOrder[at] : at];
+
+				if ( queued.Kind.Translucent != ( pass == 1 ) ) continue;
+
+				SubmitAs( queued, queued.Kind with
+				{
+					Target = target,
+					PictureFormat = pictureFormat,
+					NoDepth = noDepth,
+					Finishes = finishes,
+					ScreenChain = null,
+					DepthOnly = false,
+				} );
+			}
+		}
+
+		named.Clear();
+	}
+
+	private static readonly List<(int Order, int At, Rinten.Rendering.CommandList List)> curveLists = new();
+
+	//The camera's tonemap curve, and whether the engine curve is all that's at the tonemap stage
+	private static bool CurveOf( CameraComponent camera, out float mode )
+	{
+		mode = 0.0f;
+
+		if ( camera is null ) return true;
+
+		//No post processing is no curve either - see EnablePostProcessing.
+		if ( !camera.EnablePostProcessing && !camera.KeepsCurveWithoutPost )
+		{
+			mode = (float)(int)Tonemapping.TonemappingMode.Linear;
+			return true;
+		}
+
+		curveLists.Clear();
+		camera.PostProcess?.ListsAt( Rinten.Rendering.Stage.Tonemapping, curveLists );
+		camera.CommandListsAt( Rinten.Rendering.Stage.Tonemapping, curveLists );
+
+		var alone = true;
+
+		foreach ( var (_, _, list) in curveLists )
+		{
+			if ( list.OnlyApply( out var material, out var attributes ) &&
+				material?.core?.Shader is { } shader &&
+				shader.Replace( '\\', '/' ).EndsWith( CorePointChain.CurveShader, StringComparison.OrdinalIgnoreCase ) )
+			{
+				mode = attributes?.GetFloat( "Mode", 0.0f ) ?? 0.0f;
+				continue;
+			}
+
+			alone = false;
+		}
+
+		return alone;
+	}
+
+	//Point effects the world's shading can carry instead of a compose; null if anything else is hung
+	private string FoldChain( CameraComponent camera )
+	{
+		foldPoints.Clear();
+
+		if ( camera?.PostProcess is null ) return null;
+
+		foreach ( var stage in unfolded )
+		{
+			foldLists.Clear();
+			camera.PostProcess.ListsAt( stage, foldLists );
+			camera.CommandListsAt( stage, foldLists );
+
+			foreach ( var (_, _, list) in foldLists )
+			{
+				if ( !list.IsEmpty ) return null;
+			}
+		}
+
+		foreach ( var stage in folded )
+		{
+			foldLists.Clear();
+			camera.PostProcess.ListsAt( stage, foldLists );
+			camera.CommandListsAt( stage, foldLists );
+			foldLists.Sort( static ( a, b ) => a.Order != b.Order ? a.Order.CompareTo( b.Order ) : a.At.CompareTo( b.At ) );
+
+			foreach ( var (order, _, list) in foldLists )
+			{
+				if ( list.IsEmpty ) continue;
+				if ( !list.OnlyApply( out var material, out var attributes ) ) return null;
+				if ( material?.core?.Shader is not { } shader || !CorePointChain.IsPoint( shader ) ) return null;
+
+				foldPoints.Add( new CorePointChain.Point( material, attributes, null, shader, stage, order ) );
+			}
+		}
+
+		if ( foldPoints.Count == 0 ) return null;
+
+		CorePointChain.WithCurve( foldPoints, frameCurve );
+
+		return CorePointChain.Foldable( CollectionsMarshal.AsSpan( foldPoints ) ) ? CorePointChain.ScreenKeyFor( CollectionsMarshal.AsSpan( foldPoints ) ) : null;
+	}
+
+	//The stages that must hold nothing for a run to be carried, and the ones it is laid at.
+	private static readonly Rinten.Rendering.Stage[] unfolded =
+	{
+		Rinten.Rendering.Stage.AfterDepthPrepass, Rinten.Rendering.Stage.AfterPostProcess,
+	};
+
+	private static readonly Rinten.Rendering.Stage[] folded =
+	{
+		Rinten.Rendering.Stage.AfterOpaque, Rinten.Rendering.Stage.AfterSkybox, Rinten.Rendering.Stage.AfterTransparent,
+		Rinten.Rendering.Stage.AfterViewmodel, Rinten.Rendering.Stage.BeforePostProcess, Rinten.Rendering.Stage.Tonemapping,
+	};
+
+	//The curve this frame names - see CurveOf - for the passes that finish the picture themselves.
+	private float frameCurve;
+
+	//The point effects the compose is compiled with this frame, kept rather than made.
+	private readonly List<CorePointChain.Point> composeChain = new();
+
+
+	//Where this viewport was looking the frame before, and whether there was one. Per drawer,
+	//which is per viewport: two views of one scene are two cameras and each has its own last frame.
+	private System.Numerics.Matrix4x4 previousViewProjection;
+	private bool hasPrevious;
+
+	//Pipelines for viewport furniture (lines, gizmos, billboards, UI); static so previews reuse them
+	private static ulong linePipeline;
+	private static ulong surfaceGridPipeline;
+	private static ulong overlayPipeline;
+	private static ulong gizmoLines;
+	private static ulong gizmoLinesOverlay;
+	private static ulong gizmoTriangles;
+	private static ulong gizmoTrianglesOverlay;
+	private static ulong billboardPipeline;
+
+	//Two-view builds of the pipelines a headset draws with; 0 where this build has none
+	private static ulong gizmoLinesTwo;
+	private static ulong gizmoLinesOverlayTwo;
+	private static ulong gizmoTrianglesTwo;
+	private static ulong gizmoTrianglesOverlayTwo;
+	private static ulong billboardTwo;
+
+	//The overlay billboards and the screen's own text and shapes, the panels standing in the world and the sheets in front of the head - all drawn in a
+	//headset, so all built twice too. A screen-space draw into both eyes is the same picture in both layers, which is what a mode-nought push already says.
+	private static ulong screenTwo;
+	private static ulong uiWorldTwo;
+	private static ulong uiSheetTwo;
+
+	//Whether every pipeline a both-eyes pass needs has a two-view build; else draw an eye at a time
+	internal static bool StereoReady =>
+		gizmoLinesTwo != 0 && gizmoLinesOverlayTwo != 0 &&
+		gizmoTrianglesTwo != 0 && gizmoTrianglesOverlayTwo != 0 &&
+		billboardTwo != 0 && screenTwo != 0 && uiWorldTwo != 0 && uiSheetTwo != 0;
+
+	//The build of a pipeline this pass wants: the two-view one where both eyes are
+	//being drawn at once and there is one, and the ordinary one everywhere else.
+	private ulong Pick( ulong one, ulong two ) => BothEyes && two != 0 ? two : one;
+	private static ulong screenPipeline;
+	private static ulong uiPipeline;
+
+	//The UI shader with the depth test on, for a panel standing in the world: a sign on a wall is behind the wall when the wall is in front of it.
+	private static ulong uiWorldPipeline;
+
+	//The same world build without the depth test, for a screen panel hung in front of a headset's eyes - see DrawHeadsetPanels. Read over everything.
+	private static ulong uiSheetPipeline;
+
+	//UI vertex stride taken from the struct, so it can't drift from the layout again
+	private static readonly int UiVertexStride =
+		System.Runtime.InteropServices.Marshal.SizeOf<CoreUiRenderer.UiVertex>();
+
+	//Sky pipelines keyed by shader, target, specialization (night/day/cloud/fog) and stereo
+	private static readonly Dictionary<(string Shader, CoreRender.TargetKind Target, int Specialize, bool Stereo), ulong> skyPipelines = new();
+
+	//The sky material this frame draws with - its shader, and its numbers on the device
+	//- read off the scene at the top of the frame. See CoreSceneRenderer.SkyMaterialOf.
+	private string skyShader = CoreSceneRenderer.SkyShader;
+	private ulong skyDevice;
+
+	//The same material as its numbers stand on this side - what a fold is read off; see CoreResources.FoldBits.
+	private CoreMaterial skyCore;
+
+	//The camera's background colour where a scene has no sky - see shaders/engine/background.slang.
+	private static ulong backgroundPipeline;
+
+	private static ulong velocityPipeline;
+
+	//The pass that turns the frame's depth into what culls the next one.
+	private static ulong pyramidPipeline;
+
+	//Pipelines that fill the sky table, one per sky shader, built around its SkyLight
+	private static readonly Dictionary<string, ulong> skyTablePipelines = new();
+
+	//This drawer's casters and sun/lamp shadows; per drawer, as pages hold the world around one camera
+	private readonly CoreCasters casters = new();
+
+	private readonly CoreSunPages sunPages;
+	private readonly CoreLampMaps lampMaps;
+
+	//The sun's one map in the portable frame, which has neither of those - see RenderTier.
+	private readonly CorePortableSun portableSun = new();
+
+	//The classic draws a light's view takes, handed to the maps once rather than made a delegate a frame - see DrawLooseView.
+	private readonly CoreMeshRender.LooseView looseView;
+
+	//This frame's block as it went up, and the copy of it a light's view draws the classic draws with.
+	private float[] frameNow;
+	private readonly float[] lightFrame = new float[CoreSceneRenderer.FrameFloats];
+
+	internal CoreSceneDrawer()
+	{
+		sunPages = new CoreSunPages( casters );
+		lampMaps = new CoreLampMaps( casters );
+		looseView = DrawLooseView;
+		looseSignature = LooseViewSignature;
+	}
+
+	private static ulong composePipeline;
+
+	//The same pass, drawing into the picture the effects after it read rather than onto the window - see RunStage and
+	//Stage. AfterPostProcess. Baked beside the other one and used on a frame where something is hung on that stage.
+	private static ulong composeFinalPipeline;
+
+	//All four again with the upscale compiled in, for a frame whose world is drawn smaller than the window - baked
+	//the first time one is wanted, because the ordinary frame never wants them. See shaders/engine/compose.slang.
+	private static ulong composeCarryPipeline;
+	private static ulong composeCarryFinalPipeline;
+	private static bool composeCarryTried;
+
+	//Which tonemap curve those two were baked with.
+	private static int composeCurve = -1;
+
+
+	//The picture the compose reads, as a material - see MakePostInputs. Rebuilt with the window, because the picture is the window's size.
+	private ulong composeInputs;
+
+	//The same, reading the other full-size picture instead of the world's own - see frameIn.
+	private ulong composeInputsPost;
+
+	//Which other picture those were built against, or nothing.
+	private ulong postBuiltFromPost;
+
+	//Which full-size picture the frame is in now; later passes read from it instead of copying back
+	private CoreRender.TargetKind frameIn = CoreRender.TargetKind.Scene;
+
+	//The one shadow push block, written again for every caster in every pass rather than made again. See Submit.
+
+	//World picture handle the materials were built against; a change means they're stale (e.g. resize)
+	private ulong postBuiltFrom;
+
+	//Screen exposure: a fixed number now, no auto-exposure
+	private float exposure = Rinten.Rendering.DrawSettings.Exposure;
+
+	//Which picture the world's own draws are going into this frame - its own, or straight at the screen when the passes in between could not be had.
+	private CoreRender.TargetKind worldTarget = CoreRender.TargetKind.Screen;
+
+	//Whether the world's own passes leave the picture finished - the exposure and the curve applied
+	//where each pixel is shaded, because no compose runs behind them. See PipelineKind.Finishes.
+	private bool worldFinishes = true;
+
+	//The run of point effects the world's own shading carries this frame, or null - see FoldChain.
+	private string worldChain;
+
+	//A run the frame could carry but whose passes are still compiling - asked for beside the compose.
+	private string warmChain;
+
+	//The last run found with every pass it needs there; a frame that lays it next carries it.
+	private string readyChain;
+
+	//This frame's run by its key, where it has one - and the last run the log was told about.
+	private string foldKey;
+	private string saidChain;
+
+	private readonly List<CorePointChain.Point> foldPoints = new();
+	private readonly List<(int Order, int At, Rinten.Rendering.CommandList List)> foldLists = new();
+
+	//The sky onto the screen with a run carried in it, by the run's key.
+	private static readonly Dictionary<string, ulong> skyChainPipelines = new( StringComparer.Ordinal );
+
+	//Whether the reason for the world's own picture has been said, and what it was.
+	private bool saidReads;
+	private bool saidReadsWorld;
+
+	//Wireframe mode this frame (convar and camera, read once); 0 is the normal path
+	private int wireframe;
+
+	//Debug view this frame or Normal; camera setting wins over mat_toolsvis when both are set
+	private SceneCameraDebugMode debugView;
+
+	private static ulong whiteTexture;
+
+	//A white picture's texture - a material set for a pass that has no material of its own.
+	internal static ulong WhiteTexture => whiteTexture;
+
+	//Rasterised text labels by content, kept between frames since the same label repeats every frame
+	private static readonly System.Collections.Generic.Dictionary<int, (ulong Texture, Vector2 Size, long Used)> textCache = new();
+
+	//The loop frame used to age the text cache
+	private static long textFrame => Rinten.EngineLoop.LoopFrames;
+
+	//The loop frame the old labels were last retired on - once a frame, whoever asks first.
+	private static long textRetiredAt = -1;
+
+	//Frames a label must go unused before its texture is freed; well past frames in flight
+	private const long TextKeptFor = 30;
+
+	//The engine's own textures, copied onto our device and kept by identity. Keyed by the Texture object rather than by its path: UI images
+	//are as often generated - an atlas, a render target, an SVG somebody rasterised - as loaded from a file, and those have no path to key on.
+	private static readonly System.Collections.Generic.Dictionary<Texture, ulong> uiTextures = new();
+
+	//The floor's lines, worked out once and drawn by everyone.
+	private static LineVertex[] grid;
+
+	//The spacing the cached grid above was built at.
+	private static float gridSpacing;
+
+	//And where it was centred, so it is rebuilt when the camera leaves it.
+	private static float gridCentreX;
+	private static float gridCentreZ;
+
+	//And whether the cells were in it, which a perspective view leaves out.
+	private static bool gridCells;
+
+	//World X and Z axis colours as the gizmo hex says (line.slang decodes sRGB itself); opaque on purpose
+	private static readonly Color32 AxisX = new( 255, 112, 150, 255 );
+	private static readonly Color32 AxisZ = new( 0, 168, 232, 255 );
+
+	//Which viewport is being drawn, and how big it is. Set for the length of one drawing - a viewport is what it draws into, not what it is.
+	private ulong viewport;
+	private (int Width, int Height) size;
+
+	//The size of the view being drawn, in its own pixels - what a HUD is laid out in.
+	internal (int Width, int Height) ViewSize => size;
+
+	/// <summary>Device-wide resources made once: furniture shaders, icon glyphs, and the passes from world to screen</summary>
+	public static bool EnsureResources()
+	{
+		if ( !CoreNative.Available ) return false;
+
+		if ( linePipeline != 0 ) return true;
+
+		//Registered on the way in rather than at startup: nothing else in the editor has to know this exists, and by here it certainly does.
+		if ( !listening )
+		{
+			CoreResources.Clearing += ReleaseResources;
+			listening = true;
+		}
+
+		if ( gizmoLines == 0 )
+		{
+			Compile( EngineShaders.Gizmo, ( vs, ps ) =>
+			{
+				gizmoLines = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: true, CoreRender.Topology.Lines, blend: true );
+				gizmoLinesOverlay = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: false, CoreRender.Topology.Lines, blend: true );
+				gizmoTriangles = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: true, CoreRender.Topology.Triangles, blend: true );
+				gizmoTrianglesOverlay = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: false, CoreRender.Topology.Triangles, blend: true );
+			} );
+
+			CompileStereo( EngineShaders.Gizmo, null, ( vs, ps ) =>
+			{
+				gizmoLinesTwo = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: true, CoreRender.Topology.Lines, blend: true );
+				gizmoLinesOverlayTwo = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: false, CoreRender.Topology.Lines, blend: true );
+				gizmoTrianglesTwo = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: true, CoreRender.Topology.Triangles, blend: true );
+				gizmoTrianglesOverlayTwo = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: false, CoreRender.Topology.Triangles, blend: true );
+			} );
+		}
+
+		if ( billboardPipeline == 0 )
+		{
+			Compile( EngineShaders.Billboard, ( vs, ps ) =>
+			{
+				billboardPipeline = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: true,
+					CoreRender.Topology.Triangles, blend: true );
+
+				//The same shader with screen-space eyes: no depth, always on top - it draws the text.
+				screenPipeline = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: false,
+					CoreRender.Topology.Triangles, blend: true );
+			} );
+
+			//And the screen's too: an overlay billboard - depth off, drawn over everything - is drawn with it in a headset as anywhere else.
+			CompileStereo( EngineShaders.Billboard, null, ( vs, ps ) =>
+			{
+				billboardTwo = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: true,
+					CoreRender.Topology.Triangles, blend: true );
+
+				screenTwo = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: false,
+					CoreRender.Topology.Triangles, blend: true );
+			} );
+		}
+
+		if ( uiPipeline == 0 )
+		{
+			Compile( EngineShaders.Ui, ( vs, ps ) =>
+			{
+				uiPipeline = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Ui, depthTest: false,
+					CoreRender.Topology.Triangles, blend: true );
+			} );
+
+			//A panel standing in the world is built with UI_WORLD, which can take its view from the eye being drawn - see UiPush - so a pass that draws both eyes
+			//at once puts it where each eye sees it. The screen's own build above never includes the frame block, and an editor window needs nothing bound for it.
+			Compile( EngineShaders.Ui, EngineShaders.UiWorld, ( vs, ps ) =>
+			{
+				//Tested against the world, never written: a panel is a stack of boxes on one plane,
+				//and each one writing its depth left the next fighting it for the same pixels.
+				uiWorldPipeline = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Ui, depthTest: true,
+					CoreRender.Topology.Triangles, blend: true, depthWrite: false );
+
+				uiSheetPipeline = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Ui, depthTest: false,
+					CoreRender.Topology.Triangles, blend: true );
+			} );
+
+			CompileStereo( EngineShaders.Ui, EngineShaders.UiWorld, ( vs, ps ) =>
+			{
+				uiWorldTwo = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Ui, depthTest: true,
+					CoreRender.Topology.Triangles, blend: true, depthWrite: false );
+
+				uiSheetTwo = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Ui, depthTest: false,
+					CoreRender.Topology.Triangles, blend: true );
+			} );
+
+			//The shader always samples; plain boxes sample this and multiply by one.
+			Span<byte> white = stackalloc byte[4] { 255, 255, 255, 255 };
+			whiteTexture = CoreRenderDevice.CreateTextureRgba( white, 1, 1, srgb: false );
+		}
+
+		Compile( EngineShaders.Line, ( vs, ps ) =>
+		{
+			//The grid respects depth - it lies under the world. Selection outlines ignore it - what is picked stays visible through walls.
+			linePipeline = CoreRenderDevice.CreatePipeline( vs, ps,
+				CoreRender.VertexLayoutKind.Line, depthTest: true,
+				CoreRender.Topology.Lines, blend: true );
+
+			overlayPipeline = CoreRenderDevice.CreatePipeline( vs, ps,
+				CoreRender.VertexLayoutKind.Line, depthTest: false,
+				CoreRender.Topology.Lines, blend: true );
+		} );
+
+		Compile( EngineShaders.SurfaceGrid, ( vs, ps ) =>
+		{
+			//The same triangles the surface was drawn with, a second time. It reads depth and writes none - what is in front of the surface hides its grid,
+			//and the grid is not something anything else should be hidden by - and it is drawn from both sides, because a room is worked on from inside.
+			surfaceGridPipeline = CoreRenderDevice.CreatePipeline( vs, ps,
+				CoreRender.VertexLayoutKind.Engine, depthTest: true,
+				CoreRender.Topology.Triangles, blend: true, depthWrite: false, cullBack: false );
+		} );
+
+		MakePostPipelines();
+		MakeSkyPipelines();
+
+		//The scene's pipelines are baked on demand. The grid's line pipeline is what is
+		//waited for - on a page too, whose export bakes it; see CoreShaderCache.WriteForWeb.
+		return linePipeline != 0;
+	}
+
+	private static bool listening;
+
+	//Gets both stages of a built-in shader, from the bake cache where present, else compiled via Slang
+	private static void Compile( string file, Action<byte[], byte[]> made ) => Compile( file, null, made );
+
+	//A pass built with defines in front of it - one of EngineShaders' variants.
+	private static void Compile( string file, string defines, Action<byte[], byte[]> made )
+	{
+		var vs = CoreShaderCache.Pass( file, "MainVs", CoreShaderCompiler.Stage.Vertex, defines );
+		var ps = CoreShaderCache.Pass( file, "MainPs", CoreShaderCompiler.Stage.Pixel, defines );
+
+		if ( vs is not null && ps is not null )
+		{
+			made( vs, ps );
+			return;
+		}
+
+		//Passes not meant for the portable frame are skipped silently, not reported as compile failures
+		if ( !EngineShaders.InPortableFrame( file ) ) return;
+
+		//Said out loud, once, because the alternative is what happened: a pipeline left at zero, every draw
+		//that wanted it skipped without a word, and a feature that looks unimplemented rather than broken.
+		Log.Warning( $"{file} did not compile - {( vs is null ? "vertex" : "pixel" )} stage failed. " +
+			"Everything drawn with it will be missing." );
+	}
+
+	//Two-view build of a pass, browser only; quietly absent in older builds (eyes then drawn one by one)
+	private static void CompileStereo( string file, string defines, Action<byte[], byte[]> made )
+	{
+		if ( !CoreRender.StereoPossible ) return;
+
+		var format = CoreShaderCompiler.Format.GlslStereo;
+
+		var vs = CoreShaderCache.Pass( file, "MainVs", CoreShaderCompiler.Stage.Vertex, defines, format, optional: true );
+		var ps = CoreShaderCache.Pass( file, "MainPs", CoreShaderCompiler.Stage.Pixel, defines, format, optional: true );
+
+		if ( vs is not null && ps is not null ) made( vs, ps );
+	}
+
+	/// <summary>Lets go of everything held for the device. Called when the device goes, not when a viewport does.</summary>
+	public static void ReleaseResources()
+	{
+		CoreRenderDevice.DestroyPipeline( linePipeline );
+		CoreRenderDevice.DestroyPipeline( surfaceGridPipeline );
+		CoreRenderDevice.DestroyPipeline( overlayPipeline );
+		CoreRenderDevice.DestroyPipeline( gizmoLines );
+		CoreRenderDevice.DestroyPipeline( gizmoLinesOverlay );
+		CoreRenderDevice.DestroyPipeline( gizmoTriangles );
+		CoreRenderDevice.DestroyPipeline( gizmoTrianglesOverlay );
+		CoreRenderDevice.DestroyPipeline( billboardPipeline );
+		CoreRenderDevice.DestroyPipeline( screenPipeline );
+
+		//The two-view twins, which are nought on every build that has no such run. DestroyPipeline
+		//survives nought, and saying so once is cheaper than five tests - see StereoReady.
+		CoreRenderDevice.DestroyPipeline( gizmoLinesTwo );
+		CoreRenderDevice.DestroyPipeline( gizmoLinesOverlayTwo );
+		CoreRenderDevice.DestroyPipeline( gizmoTrianglesTwo );
+		CoreRenderDevice.DestroyPipeline( gizmoTrianglesOverlayTwo );
+		CoreRenderDevice.DestroyPipeline( gizmoTrianglesCulled );
+		CoreRenderDevice.DestroyPipeline( gizmoTrianglesCulledOverlay );
+		CoreRenderDevice.DestroyPipeline( gizmoTrianglesCulledTwo );
+		CoreRenderDevice.DestroyPipeline( gizmoTrianglesCulledOverlayTwo );
+		CoreRenderDevice.DestroyPipeline( billboardTwo );
+		CoreRenderDevice.DestroyPipeline( screenTwo );
+		CoreRenderDevice.DestroyPipeline( uiWorldTwo );
+		CoreRenderDevice.DestroyPipeline( uiSheetTwo );
+		CoreRenderDevice.DestroyPipeline( uiPipeline );
+		CoreRenderDevice.DestroyPipeline( uiWorldPipeline );
+		CoreRenderDevice.DestroyPipeline( uiSheetPipeline );
+		foreach ( var pipeline in skyPipelines.Values ) CoreRenderDevice.DestroyPipeline( pipeline );
+		foreach ( var pipeline in skyTablePipelines.Values ) CoreRenderDevice.DestroyPipeline( pipeline );
+		CoreRenderDevice.DestroyPipeline( backgroundPipeline );
+		CoreRenderDevice.DestroyPipeline( velocityPipeline );
+		CoreRenderDevice.DestroyPipeline( pyramidPipeline );
+		CoreRenderDevice.DestroyPipeline( composePipeline );
+		CoreMeshRender.ReleasePipelines();
+		CorePasses.ReleasePipelines();
+
+		foreach ( var made in uiTargetPipelines.Values ) CoreRenderDevice.DestroyPipeline( made );
+		uiTargetPipelines.Clear();
+
+		CoreInstanceArgs.Release();
+		CoreGpuWork.Release();
+
+		CoreRenderDevice.DestroyTexture( whiteTexture );
+
+		foreach ( var entry in textCache.Values ) CoreRenderDevice.DestroyTexture( entry.Texture );
+		foreach ( var uploaded in uiTextures.Values ) CoreRenderDevice.DestroyTexture( uploaded );
+
+		textCache.Clear();
+		uiTextures.Clear();
+
+		linePipeline = 0;
+		surfaceGridPipeline = 0;
+		overlayPipeline = 0;
+		gizmoLines = 0;
+		gizmoLinesOverlay = 0;
+		gizmoTriangles = 0;
+		gizmoTrianglesOverlay = 0;
+		billboardPipeline = 0;
+		screenPipeline = 0;
+		gizmoLinesTwo = 0;
+		gizmoLinesOverlayTwo = 0;
+		gizmoTrianglesTwo = 0;
+		gizmoTrianglesOverlayTwo = 0;
+		gizmoTrianglesCulled = 0;
+		gizmoTrianglesCulledOverlay = 0;
+		gizmoTrianglesCulledTwo = 0;
+		gizmoTrianglesCulledOverlayTwo = 0;
+		culledMade = false;
+		billboardTwo = 0;
+		screenTwo = 0;
+		uiWorldTwo = 0;
+		uiSheetTwo = 0;
+		uiPipeline = 0;
+		uiWorldPipeline = 0;
+		uiSheetPipeline = 0;
+		skyPipelines.Clear();
+		skyChainPipelines.Clear();
+		skyTablePipelines.Clear();
+		backgroundPipeline = 0;
+		velocityPipeline = 0;
+		pyramidPipeline = 0;
+		composePipeline = 0;
+		whiteTexture = 0;
+	}
+
+	/// <summary>Lets go of what this drawing held of its own: the materials naming its viewport's pictures. Nothing else here is its own.</summary>
+	public void Release()
+	{
+		DropPostInputs();
+		upscaler.Release();
+
+		for ( var i = 0; i < 2; i++ )
+		{
+			if ( displayInputs[i] != 0 ) CoreRenderDevice.DestroyTexture( displayInputs[i] );
+			displayInputs[i] = 0;
+			displayInputFrom[i] = 0;
+		}
+		meshRender.Release();
+		sunPages.Dispose();
+		lampMaps.Dispose();
+
+		if ( depthPyramid != 0 ) CoreRenderDevice.DestroyPyramid( depthPyramid );
+		depthPyramid = 0;
+		depthKnown = false;
+	}
+
+	//The last drawn view and its size, for reports that want a picture of it
+	internal static (ulong View, int Width, int Height) LastDrawn;
+
+	//The views the cull decides for this frame, the camera first.
+	private readonly CoreMeshRender.ViewSetup[] views = new CoreMeshRender.ViewSetup[CoreMeshShaders.MaxViews];
+	private static CoreMeshRender.ViewSetup ViewOf( ReadOnlySpan<System.Numerics.Vector4> planes, in System.Numerics.Matrix4x4 worldToClip, Vector3 eye )
+	{
+		var view = new CoreMeshRender.ViewSetup { WorldToClip = worldToClip, Eye = eye };
+		view.SetPlanes( planes );
+		return view;
+	}
+
+	//The view this drawer's frame is being drawn from - see CameraComponent.RenderView.
+	private CameraView eyeView;
+
+	//The headset eye this drawer draws, where it draws one: its place in the world and its four angles,
+	//in place of the camera's own place and field - see CoreXr.DrawEyes. Null for every other drawer.
+	internal XrEyeView? Eye { get; set; }
+
+	public void Draw( Scene scene, CameraComponent camera, ulong viewport, int width, int height )
+	{
+		LastDrawn = (viewport, width, height);
+		drawingView = viewport;
+		if ( !scene.IsValid() || !camera.IsValid() ) return;
+
+		this.viewport = viewport;
+		size = (width, height);
+
+		//The frame this thread is inside, for the commands a project records - see Drawing, and CommandList.
+		Drawing = this;
+
+		//The components that asked to be called at the render stages, as the scene has them
+		//now - see RunLists - and nothing left over from a frame that stopped half way.
+		CorePasses.EndFrame();
+		CorePostBlit.NewFrame();
+
+		//A new frame is drawn into the world's own picture, wherever the last one ended.
+		frameIn = CoreRender.TargetKind.Scene;
+
+		//What the sky is drawn with, and what its table is filled from: the scene's sky material,
+		//or the engine's own where the scene names none that could be put on the device.
+		var skyMaterial = CoreSceneRenderer.SkyMaterialOf( scene );
+
+		skyDevice = skyMaterial is null ? 0 : CoreResources.Live( skyMaterial );
+		skyShader = skyDevice != 0 && !string.IsNullOrWhiteSpace( skyMaterial.core?.Shader )
+			? skyMaterial.core.Shader
+			: CoreSceneRenderer.SkyShader;
+
+		skyCore = skyDevice == 0 ? null : skyMaterial.core;
+
+		//What the project asked for, the first time anything draws - a bool here rather than a setting read in the frame.
+		RenderingSettings.EnsureApplied();
+
+		//Before anything reads the shape: the views are written before the pyramid is built and the two have to agree on it.
+		CoreDepthPyramid.Fit( width, height );
+
+		var gameView = GameViewSource?.Invoke() ?? false;
+		var editorOverlays = EditorOverlaysSource?.Invoke() ?? false;
+
+		if ( CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene ) != postBuiltFrom )
+			MakePostInputs();
+
+		var pixels = size;
+		var aspect = pixels.Height > 0 ? pixels.Width / (float)pixels.Height : 1.0f;
+		var overlayOnly = camera.OverlayOnly;
+
+		//The view the camera is drawn from - its modifiers and the scene's shakes and punches applied - rather than the
+		//component's own transform; see CameraComponent.RenderView. Everything below that faces the eye takes it from here.
+		eyeView = camera.RenderView;
+
+		//A headset's eye, where there is one: the headset says where it is and how wide it sees, and the camera says
+		//everything else - see CoreXr. Both eyes' field at once where both are drawn in one pass - see SecondEye.
+		var field = Field;
+
+		if ( field is { } headsetEye )
+		{
+			eyeView.Position = headsetEye.Position;
+			eyeView.Rotation = headsetEye.Rotation;
+		}
+
+		var position = eyeView.Position;
+
+		//Kept for the passes that queue something after the walk is over - see DrawRendererNow, which sorts nothing but takes the same argument.
+		lastEye = position;
+		var forward = eyeView.Rotation.Forward;
+		var up = eyeView.Rotation.Up;
+
+		var view = System.Numerics.Matrix4x4.CreateLookAt(
+			new System.Numerics.Vector3( position.x, position.y, position.z ),
+			new System.Numerics.Vector3( position.x + forward.x, position.y + forward.y, position.z + forward.z ),
+			new System.Numerics.Vector3( up.x, up.y, up.z ) );
+
+		var near = System.MathF.Max( 0.001f, eyeView.ZNear );
+
+		//A headset's eye sees the player's own hands a hand's breadth away, and a camera's near plane - ten
+		//centimetres by default - cut them off. Five at most there; closer than that an eye cannot focus anyway.
+		if ( field is not null ) near = System.MathF.Min( near, 0.05f );
+
+		var far = System.MathF.Max( near + 0.001f, eyeView.ZFar );
+
+		var projection = field is { } eyeFov
+			? eyeFov.Projection( near, far )
+			: ProjectionMatrix( camera.Orthographic, camera.RenderFieldOfView( aspect ),
+				camera.OrthographicHeight, aspect, near, far );
+
+		var viewProjection = view * projection;
+
+		//Upscaler and jitter for this frame; the world uses the jittered matrix, the rest the plain one
+		var worldPictures = CoreRenderDevice.WorldSize();
+
+		upscaler.Begin( headset: field is not null || overlayOnly,
+			(int)worldPictures.x, (int)worldPictures.y, pixels.Width, pixels.Height,
+			position, eyeView.Rotation, camera.RenderFieldOfView( aspect ) );
+
+		var drawnProjection = upscaler.Temporal ? projection * upscaler.JitterMatrix : projection;
+		var drawnViewProjection = view * drawnProjection;
+
+		//The world's shading size (its pictures' size when upscaled), so screen-position lookups match it
+		var upscaledSmaller = worldPictures.x > 0.5f && worldPictures.y > 0.5f &&
+			( worldPictures.x < pixels.Width - 0.5f || worldPictures.y < pixels.Height - 0.5f ) &&
+			( upscaler.Temporal || upscaler.Kind is CoreUpscale.Kind.Stretch or CoreUpscale.Kind.Fsr1 );
+
+		(int Width, int Height) shaded = upscaledSmaller ? ((int)worldPictures.x, (int)worldPictures.y) : (pixels.Width, pixels.Height);
+
+		//The sun itself: where it points, and how finely its shadow is kept - in this drawer's pages, see CoreSunPages.
+		var sunLight = !overlayOnly && scene.IsValid()
+			? CoreSceneRenderer.FirstEnabled<DirectionalLight>( scene )
+			: null;
+
+		var hasSun = sunLight is not null;
+
+		//And whether it casts. The Shadows box on the sun was once read by nothing on this path, and a sun told to
+		//cast nothing had its shadows drawn anyway; its pages are neither baked nor read now - see CoreSunPages.
+		var sunCasts = hasSun && sunLight.Shadows;
+
+		CoreRenderDevice.ZoneBegin( "frame block" );
+
+		var frame = CoreSceneRenderer.BuildFrame( scene, drawnViewProjection, position );
+
+		//Rotation-only inverse view for direction lookups (the sky); headset eyes write their own
+		if ( !overlayOnly && !BothEyes )
+		{
+			var still = System.Numerics.Matrix4x4.CreateLookAt(
+				System.Numerics.Vector3.Zero,
+				new System.Numerics.Vector3( forward.x, forward.y, forward.z ),
+				new System.Numerics.Vector3( up.x, up.y, up.z ) );
+
+			if ( System.Numerics.Matrix4x4.Invert( still * drawnProjection, out var rayToWorld ) )
+				CoreSceneRenderer.SetRayToWorld( frame, rayToWorld );
+		}
+
+		//Last frame's matrix with this frame's jitter, so still things read as still in motion vectors
+		CoreSceneRenderer.SetPrevious( frame, ( hasPrevious ? previousViewProjection : viewProjection ) * upscaler.JitterMatrix );
+		CoreSceneRenderer.SetMipBias( frame, upscaler.MipBias );
+
+		debugView = camera.DebugMode != SceneCameraDebugMode.Normal
+			? camera.DebugMode
+			: DebugOverlay.ToolsVisualization.mat_toolsvis;
+
+		CoreSceneRenderer.SetDebugView( frame, debugView );
+
+		previousViewProjection = viewProjection;
+		hasPrevious = true;
+
+		//Each eye's own place and field over the one both are culled by.
+		if ( BothEyes ) WriteEyes( frame, near, far );
+
+		var curveAlone = CurveOf( camera, out frameCurve );
+
+		//No occlusion yet (see LayOcclusion); sky table slot: bindless index, or 1 as a flag if portable
+		CoreSceneRenderer.SetOcclusion( frame, shaded.Width, shaded.Height,
+			SkyTablePipeline( skyShader ) == 0 ? 0
+				: CoreRenderDevice.PortableFrame ? 1
+				: Indexed( CoreRenderDevice.SkyTableTexture ) );
+
+		//Upload the point effects the world's shading may carry, whichever way the frame ends up drawn
+		foldKey = FoldChain( camera );
+
+		var foldAt = foldKey is null ? -1 : CorePointChain.UploadInto( frame, CollectionsMarshal.AsSpan( foldPoints ) );
+		if ( foldAt < 0 ) foldKey = null;
+
+		CoreSceneRenderer.SetFinish( frame, exposure, frameCurve, Math.Max( foldAt, 0 ) );
+
+		//Next frame's exposure, taken here since the compose may not run when shading straight to screen
+		exposure = Rinten.Rendering.DrawSettings.Exposure;
+
+		var perspective = viewProjection.M14 != 0.0f || viewProjection.M24 != 0.0f || viewProjection.M34 != 0.0f;
+
+		CoreRenderDevice.ZoneEnd();
+
+		System.Numerics.Matrix4x4.Invert( viewProjection, out var clipToWorld );
+
+		Span<System.Numerics.Vector4> planes = stackalloc System.Numerics.Vector4[6];
+		CoreSceneRenderer.FrustumPlanes( viewProjection, planes );
+
+		//The editor's gizmos for this view: the custom objects tools put in the instance's own
+		//world, which a game's view leaves out, and the models the last recorded gizmo frame drew.
+		var gizmos = GizmoSource?.Invoke();
+		var gizmoWorld = gameView ? null : gizmos?.ExistingWorld;
+
+		//Overrides run for every view; this also begins the view's CoreImmediate list, replayed later
+		CoreRenderDevice.ZoneBegin( "overrides" );
+
+		RunOverrides( scene, gizmoWorld, gizmos?.Draws, camera, new Rect( 0, 0, pixels.Width, pixels.Height ),
+			CoreSceneRenderer.FrustumOf( viewProjection ), eyeView, viewProjection, eye: Eye is not null );
+
+		CoreRenderDevice.ZoneEnd();
+
+		var immediateModels = overlayOnly ? ReadOnlySpan<CoreImmediate.ModelBatch>.Empty : CoreImmediate.ModelSpan;
+
+		opaque.Clear();
+		translucent.Clear();
+		overlayLayer.Clear();
+		afterUiLayer.Clear();
+		pushUsed = 0;
+
+		wireframe = Rinten.Rendering.Wireframe.For( camera.WireframeMode );
+		wantNearWins = wireframe >= 2 && Rinten.Rendering.Wireframe.NearWins;
+
+		//Everything of the scene the card knows: brought up to date, and what changed sent where the frame is.
+		tables = overlayOnly ? null : CoreSceneTables.Of( scene );
+
+		if ( tables is not null )
+		{
+			CoreRenderDevice.ZoneBegin( "scene tables" );
+			tables.Sync( scene );
+			CoreRenderDevice.ZoneEnd();
+		}
+
+		//What the camera leaves out by its tags, for the cull and for the classic draws alike - worked out once the tables are this frame's.
+		UpdateHidden( camera );
+
+		//What is drawn the classic way: the loose instances, the ground, the models drawn by hand - or everything, for a bake and for edges.
+		var everything = wireframe != 0;
+
+		looseErrorScale = perspective ? pixels.Height * 0.5f * MathF.Abs( projection.M22 ) : 0.0f;
+
+		if ( !overlayOnly )
+		{
+			CoreRenderDevice.ZoneBegin( "gather" );
+			Gather( scene, position, everything, immediateModels );
+			CoreRenderDevice.ZoneEnd();
+		}
+
+		var meshes = !everything && !overlayOnly && tables is not null && CoreMeshRender.EnsurePipelines();
+
+		//Note table changes for the still-world shadow maps; full frame only, the portable one has no pages
+		if ( !overlayOnly && !CoreRenderDevice.PortableFrame )
+		{
+			casters.Note( tables );
+			sunPages.Note();
+
+			//And what this frame draws by hand and holds still - the ground's blocks - which the tables do not hold,
+			//into the sun's depth along the light; it is drawn into the maps with the classic draws, see DrawLooseView.
+			foreach ( ref readonly var queued in CollectionsMarshal.AsSpan( opaque ) )
+				if ( !queued.NoShadow && !queued.InMotion && queued.Radius > 0.0f ) sunPages.Cover( queued.Center, queued.Radius );
+		}
+
+		//This frame's block, for the copies a light's view draws the classic draws with.
+		frameNow = frame;
+
+		//Plan sun pages and lamp faces now, before the frame block and lights go up
+		CoreRenderDevice.ZoneBegin( "shadow plan" );
+
+		var towards = hasSun
+			? new Vector3( frame[CoreSceneRenderer.SunAt], frame[CoreSceneRenderer.SunAt + 1], frame[CoreSceneRenderer.SunAt + 2] )
+			: Vector3.Up;
+
+		//A fully baked sun gets no pages; a shadow-baked one only needs pages for the fog march
+		var sunChannel = CoreSceneRenderer.BakedOn && sunLight is not null
+			? CoreBakedLighting.ChannelOf( sunLight ) : CoreBakedLighting.NotBaked;
+		var sunBaked = sunChannel == CoreBakedLighting.BakedWhole;
+		var sunPagesWanted = sunChannel < 0 || CoreSceneRenderer.FogVolumes;
+
+		if ( CoreRenderDevice.PortableFrame )
+		{
+			//One square of depth about the camera instead, and no lamp casts - see CorePortableSun.
+			portableSun.Plan( frame, sunCasts && !sunBaked && !overlayOnly, towards, sunLight?.ShadowDetail ?? 64.0f,
+				position, forward, far );
+		}
+		else
+		{
+			sunPages.Plan( frame, sunCasts && !sunBaked && !overlayOnly, towards, sunLight?.ShadowDetail ?? 256.0f, position, far,
+				Rinten.Rendering.DrawSettings.MeshLodPixels, stillWorld: sunPagesWanted );
+
+			lampMaps.Plan( frame, CoreSceneRenderer.LightBlock, CoreSceneRenderer.FrameLights, CoreSceneRenderer.LightsInFrame,
+				!overlayOnly, Rinten.Rendering.DrawSettings.MeshLodPixels, CoreMeshShaders.MaxViews - 1 - sunPages.ViewCount,
+				//The frustum is one eye's: with two, a face only the other sees would be left undrawn - see CoreLampMaps.Meets - so a headset gets none.
+				position, looseErrorScale, BothEyes ? default : planes, in clipToWorld );
+		}
+
+		CoreRenderDevice.SetupFrame( frame );
+		if ( BothEyes ) SetupSecondEye( frame );
+
+		//The decals, which travel with the lights and are read by the same shaders - see CoreDecals.
+		//None for a bake or an overlay: what those draw is not surfaces the decals would land on.
+		CoreDecals.Gather( overlayOnly ? null : scene?.SceneWorld, position, planes );
+
+		//And the lights themselves, which every world shader reads out of a buffer rather than out of the block, with the grid saying which of
+		//them reach where - see CoreLights. A bake has no screen to cut up and a flat view no depth to slice, and both read every light instead.
+		CoreLights.Frame( CoreSceneRenderer.LightBlock, CoreSceneRenderer.LightsInFrame, shaded,
+			view, projection.M11, projection.M22, near, far,
+			grid: !overlayOnly && perspective );
+
+		CoreRenderDevice.ZoneEnd();
+
+		var errorScale = pixels.Height * 0.5f * MathF.Abs( projection.M22 );
+
+		if ( meshes )
+		{
+			CoreRenderDevice.ZoneBegin( "cull" );
+
+			tables.Upload();
+
+			var count = 0;
+			//Rasterised through the jittered matrix, which the cluster passes read out of here rather than
+			//out of the frame block; culled by the plain planes, which a fraction of a pixel does not move.
+			views[count] = ViewOf( planes, drawnViewProjection, position );
+			views[count].Camera = true;
+			views[count].Perspective = perspective;
+			views[count].ErrorScale = errorScale;
+			views[count].LodPixels = Rinten.Rendering.DrawSettings.MeshLodPixels;
+			views[count].Near = near;
+			views[count].Far = far;
+			views[count].CullPixels = Rinten.Rendering.DrawSettings.CullPixels;
+			views[count].HalfHeight = pixels.Height * 0.5f;
+			views[count].ScaleX = projection.M11;
+			views[count].ScaleY = projection.M22;
+			views[count].Fovea = CoreFovea.ForCull( Fovea, Field );
+			count++;
+
+			//And the sun's: this frame's bakes of its pages and the zones of its map of what moves, planned before
+			//the frame block went up - see CoreSunPages.Plan. Their lists are drawn straight after the cull.
+			count = sunPages.AddViews( views, count );
+
+			//Then the lamps' faces - see CoreLampMaps.Plan.
+			count = lampMaps.AddViews( views, count );
+			meshRender.ShadowTriangles = sunPages.Triangles + lampMaps.Triangles;
+
+			var pyramid = EnsurePyramid();
+			var canOcclude = pyramid != 0 && perspective;
+
+			//Which way this view draws its depth and culls by it, where the settings leave it to the frame - measured on the card,
+			//see DepthTuner. Occlusion is one of the ways where the project has not turned it on for good and has not ruled it out.
+			var way = depthTuner.Pick( CoreRenderDevice.ReadFrameSummary( viewport )?.GpuMs ?? 0.0f,
+				canOcclude && !Rinten.Rendering.DrawSettings.Occlusion ? 4 : 3 );
+
+			occluding = canOcclude && ( Rinten.Rendering.DrawSettings.Occlusion || way == DepthWay.Occlusion );
+
+			//A pyramid nobody folded this frame is not this frame's depth any more, and the frame that turns occlusion on again must not cull by it.
+			if ( !occluding ) depthKnown = false;
+
+			var useDepth = occluding && depthKnown;
+
+			//Pre-pass draws all still clusters when depth is needed first (occlusion, depth stages, paint)
+			var depthFirst = occluding || Rinten.Rendering.Wireframe.Clusters > 0 || ( camera.PostProcess is not null &&
+				Hung( camera, Rinten.Rendering.Stage.AfterDepthPrepass ) );
+
+			//Otherwise what the tuner picked: nothing, or the clusters nearer than the far cut - the ones that cover the screen
+			//and hide things, where the far ones are small, hide little, and have their depth written by the pass that shades them.
+			PrepassSlices = depthFirst || way == DepthWay.FullPrepass ? uint.MaxValue
+				: way == DepthWay.NoPrepass ? 0u : (uint)CoreMeshShaders.FarSlice;
+
+			if ( meshRender.Begin( tables, views.AsSpan( 0, count ), pixels, useDepth ) && pyramid != 0 )
+			{
+				meshRender.Cull( pyramid );
+				meshRender.Skin();
+			}
+
+			CoreRenderDevice.ZoneEnd();
+		}
+		else
+		{
+			meshes = false;
+		}
+
+		var drawn = meshes && meshRender.Ready;
+
+		//Whether nothing goes into the world picture this frame; clusters always count as drawing
+		var worldEmpty = !drawn && opaque.Count == 0 && translucent.Count == 0 &&
+			!overlayOnly && !CoreSceneRenderer.HasSky( frame );
+
+		//Sky ambient table (by elevation and sun angle), drawn every frame with a sky, with the sky material
+		var skyTable = CoreSceneRenderer.HasSky( frame ) ? SkyTablePipeline( skyShader ) : 0;
+
+		//Draw the sky table once per headset frame, not once per eye; texture cameras still draw their own
+		var tableDone = SharingViews && skyTableFrame == EngineLoop.LoopFrames;
+
+		if ( skyTable != 0 && !tableDone &&
+			CoreRenderDevice.BeginTarget( CoreRender.TargetKind.SkyTable, default, clearFirst: false ) )
+		{
+			CoreRenderDevice.ZoneBegin( "sky table" );
+			CoreRenderDevice.Draw( skyTable, 3, System.Array.Empty<byte>(), skyDevice );
+			CoreRenderDevice.ZoneEnd();
+
+			CoreRenderDevice.EndTarget();
+
+			skyTableFrame = SharingViews ? EngineLoop.LoopFrames : -1;
+		}
+
+		//Whether anything reads the world picture; if not, the world is shaded straight onto the window
+		var worldSize = CoreRenderDevice.WorldSize();
+
+		//Stretching is the compose reading a smaller picture at the window's size, which needs the picture: drawn
+		//straight onto the window, the world was the window's size whatever the scale said, and the setting did nothing.
+		var stretching = upscaledSmaller && upscaler.Kind == CoreUpscale.Kind.Stretch;
+
+		var carryingUp = Rinten.Rendering.DrawSettings.Upscaler == 2 &&
+			worldSize.x > 1.0f && worldSize.y > 1.0f &&
+			( worldSize.x < pixels.Width - 0.5f || worldSize.y < pixels.Height - 0.5f );
+
+		//A temporal upscaler reads the world's picture and hands the compose one of its own - see CoreUpscaler.
+		//It is the anti-aliasing too, and the edge filter over it would only soften what it gathered.
+		var upscaling = upscaler.Temporal && !worldEmpty;
+
+		//Not in the portable frame, which has no picture of the world for the filter to read - see RenderTier.
+		var softening = Rinten.Rendering.DrawSettings.Fxaa && !carryingUp && !upscaling && !worldEmpty &&
+			!CoreRenderDevice.PortableFrame;
+
+		//And whatever a project hung between the depth pre-pass and the window. Every one of these stages
+		//draws into the world's picture or reads it; AfterUI is the only one that happens past all of this.
+		var staged = camera.PostProcess is not null && (
+			Hung( camera, Rinten.Rendering.Stage.AfterDepthPrepass ) ||
+			Hung( camera, Rinten.Rendering.Stage.AfterOpaque ) ||
+			Hung( camera, Rinten.Rendering.Stage.AfterSkybox ) ||
+			Hung( camera, Rinten.Rendering.Stage.AfterTransparent ) ||
+			Hung( camera, Rinten.Rendering.Stage.AfterViewmodel ) ||
+			Hung( camera, Rinten.Rendering.Stage.BeforePostProcess ) ||
+			( Hung( camera, Rinten.Rendering.Stage.Tonemapping ) && !curveAlone ) ||
+			Hung( camera, Rinten.Rendering.Stage.AfterPostProcess ) );
+
+		//The debug views and the cluster paint are drawn over the world's picture and read what is already in it.
+		var inspecting = debugView != DebugOverlay.ToolsVisualization.mat_toolsvis ||
+			Rinten.Rendering.Wireframe.Clusters > 0;
+
+		//Translucency needs an offscreen picture: blending onto the window would leak alpha to the compositor
+		var blending = translucent.Count > 0;
+
+		//Whether every world pixel gets written (sky or background); else keep an offscreen picture
+		var fills = !overlayOnly && ( CoreSceneRenderer.HasSky( frame ) || backgroundPipeline != 0 );
+
+		//Whether the world's shading carries the point effects instead of the compose (see FoldChain)
+		var folding = foldKey is not null && !softening && !carryingUp && !stretching && !upscaling && !inspecting &&
+			( !blending || CoreRenderDevice.PortableFrame ) &&
+			!overlayOnly && CoreSceneRenderer.HasSky( frame ) && !CorePointChain.Refused( foldKey );
+
+		var folds = folding && foldKey == readyChain &&
+			SkyChainPipeline( skyShader, foldKey, CoreSceneRenderer.SkySpecialize( skyCore ) ) != 0;
+
+		worldChain = folds ? foldKey : null;
+		warmChain = folding && !folds ? foldKey : null;
+		CoreMeshRender.ChainWaiting = 0;
+
+		LooseDraws = 0;
+		LooseTriangles = 0;
+		LooseMovingTriangles = 0;
+
+		if ( worldChain != saidChain )
+		{
+			saidChain = worldChain;
+
+			if ( worldChain is not null )
+				Log.Info( $"the frame's {foldPoints.Count} point effects are carried by the world's own shading - no compose" );
+		}
+
+		//Nothing reads the world's picture where there is none to read: the portable frame - see RenderTier - shades straight
+		//onto the screen whatever a camera has been given, and says so below rather than claiming a picture it cannot make.
+		var readsWorld = !CoreRenderDevice.PortableFrame &&
+			( softening || carryingUp || stretching || upscaling || ( staged && !folds ) || inspecting || blending || !fills );
+
+		//Log when readsWorld flips, since the extra full-screen pass isn't visible in the picture
+		if ( readsWorld != saidReadsWorld || !saidReads )
+		{
+			saidReads = true;
+			saidReadsWorld = readsWorld;
+
+			//Trace: a view that comes and goes - play, a preview - said it again each time it came back. The bisect convars are how it is chased.
+			Log.Trace( readsWorld
+				? "the world is drawn into a picture of its own: " +
+					( softening ? "edges " : "" ) + ( carryingUp ? "upscale " : "" ) +
+					( upscaling ? $"{upscaler.Kind} " : "" ) +
+					( staged && !folds ? "an effect " : "" ) +
+					( inspecting ? "a debug view " : "" ) + ( blending ? "something translucent " : "" ) +
+					( !fills ? "nothing to fill the gaps " : "" )
+				: "the world is shaded straight onto the screen" );
+		}
+
+		var wantsOffscreen = composePipeline != 0 && composeInputs != 0 && readsWorld;
+		worldTarget = wantsOffscreen ? CoreRender.TargetKind.Scene : CoreRender.TargetKind.Screen;
+
+		//And so whether the world's own passes are the last ones over the picture, which is what makes them apply the exposure and the curve.
+		worldFinishes = !wantsOffscreen;
+
+		//Let the pre-pass write the screen's depth directly when the frame shades onto the window
+		CoreRenderDevice.DepthOnScreen( viewport,
+			worldFinishes && CoreRenderDevice.DepthOnScreenPossible( viewport ) );
+
+		//The shape of the world before its colour: the clusters, then the loose draws beside them, into the depth.
+		var clustersDrawn = false;
+
+		//Whether the lights' views were drawn - after the bin, inside the depth's block. A frame that never got there has bakes planned that nobody drew.
+		var lightsDrawn = false;
+
+		if ( !overlayOnly && CoreRenderDevice.BeginTarget( CoreRender.TargetKind.Depth ) )
+		{
+			CoreRenderDevice.ZoneBegin( "depth" );
+
+			//Under a name of its own: it was the one part of `depth` the report could not account for.
+			CoreRenderDevice.ZoneBegin( "prepass" );
+
+			if ( drawn && PrepassSlices > 0 ) meshRender.DrawCamera( appeared: false );
+			SubmitLoose( planes, prepass: true );
+
+			CoreRenderDevice.ZoneEnd();
+
+			CoreRenderDevice.EndTarget();
+
+			//Fold depth, retest set-aside clusters, fold again; only when clusters were drawn and occlusion is on
+			if ( drawn && occluding ) KeepDepth( viewport );
+
+			if ( drawn && occluding && depthKnown )
+			{
+				meshRender.Retest( depthPyramid );
+
+				if ( CoreRenderDevice.BeginTarget( CoreRender.TargetKind.Depth, default, clearFirst: false ) )
+				{
+					meshRender.DrawCamera( appeared: true );
+					CoreRenderDevice.EndTarget();
+				}
+
+				KeepDepth( viewport, ifAppeared: true );
+			}
+
+			//And the camera's clusters sorted by material, for the passes that shade them - after the last
+			//cull pass, whichever it was - with the lights' lists filled into their run in the same pass.
+			if ( drawn ) meshRender.Bin( depthPyramid );
+
+			//And the depth of everything that moves its own vertices, out of its own shader, now that the bin has sorted them - see
+			//DrawMoverDepth, which is what lets the pass that shades them be tested early instead of shading a canopy four times over.
+			if ( drawn && CoreRenderDevice.BeginTarget( CoreRender.TargetKind.Depth, default, clearFirst: false ) )
+			{
+				meshRender.DrawMoverDepth();
+				CoreRenderDevice.EndTarget();
+			}
+
+			//Bake sun pages and the movers map from the cull's lists, before the materials that read them
+			sunPages.Draw( drawn ? meshRender : null, 1, looseView );
+
+			//And the lamps' faces, from the views after the sun's - see CoreLampMaps.
+			lampMaps.Draw( drawn ? meshRender : null, 1 + sunPages.ViewCount, looseView );
+			lightsDrawn = true;
+
+			clustersDrawn = drawn;
+
+			//The air, into its own sheet of slices: one march a froxel rather than one a fragment, read by every surface that follows in a
+			//single tap. After the sun's maps, because a froxel asks them what reaches it, and before anything shades. See CoreVolumeFog.
+			var air = CoreVolumeFog.Draw( pixels, far );
+
+			RunStage( camera, Rinten.Rendering.Stage.AfterDepthPrepass, CoreRender.TargetKind.Scene, near, far );
+
+			//A picture named Occlusion, drawn at that stage by whatever drew it, is what the world's surfaces darken by - see AmbientOcclusion.
+			//Said in the frame block now it exists, and the block put up again: nothing drawn before this reads either lane it changes.
+			var laid = false;
+
+			if ( air.Picture > 0 )
+			{
+				CoreSceneRenderer.LayFogVolumeSheet( frame, air.Picture, CoreVolumeFog.Slices,
+					CoreVolumeFog.Laid.Near, CoreVolumeFog.Laid.Far, CoreVolumeFog.Columns );
+				laid = true;
+			}
+
+			if ( CorePasses.Find( "Occlusion" ) is { Index: > 0 } occlusion )
+			{
+				CoreSceneRenderer.LayOcclusion( frame, occlusion.Index );
+				laid = true;
+			}
+
+			//And the picture of the depth itself, for the surfaces that read what is behind them - see DepthPicture.
+			if ( CorePasses.Find( DepthPicture.PictureName ) is { Index: > 0 } depthPicture )
+			{
+				CoreSceneRenderer.LayDepthPicture( frame, depthPicture.Index );
+				laid = true;
+			}
+
+			if ( laid ) CoreRenderDevice.SetupFrame( frame );
+
+			//Emptied again where the edges arbitrate between themselves - see Wireframe.NearWins.
+			if ( wantNearWins && CoreRenderDevice.BeginTarget( CoreRender.TargetKind.Depth ) )
+				CoreRenderDevice.EndTarget();
+
+			CoreRenderDevice.ZoneEnd();
+		}
+
+		//Bakes planned for a frame whose depth never opened are given back, or their slots would be read as holding a shadow nobody drew.
+		if ( !lightsDrawn )
+		{
+			sunPages.Draw( null, 1, null );
+			lampMaps.Draw( null, 1, null );
+		}
+
+		//The portable frame has no depth block to draw its sun in: it is drawn here, before anything of the world, which reads it.
+		if ( CoreRenderDevice.PortableFrame && !overlayOnly ) portableSun.Draw( looseView, looseSignature );
+
+		//The clusters' pixels first, a material at a time over the depth of material numbers; then the world's
+		//own picture opens over the real depth, keeping what was shaded, for everything drawn the classic way.
+		var offscreen = false;
+
+		CoreRenderDevice.ZoneBegin( "world opaque" );
+
+
+		//Whether the world's picture needs clearing at all. With a sky every pixel the materials leave alone is the sky's, so the clear of the colour
+		//is a screen of writes nobody reads, and so are the normals beside it: a pass that reads them checks the depth first - see SceneSurface.
+		var skyCovers = !overlayOnly && CoreSceneRenderer.HasSky( frame );
+
+		if ( wantsOffscreen )
+		{
+			offscreen = CoreRenderDevice.BeginTarget( CoreRender.TargetKind.Scene, camera.BackgroundColor,
+				clearFirst: !skyCovers, discard: skyCovers );
+
+			if ( !offscreen )
+			{
+				if ( !warnedMaterials ) { warnedMaterials = true; Log.Warning( $"the world's picture would not open: {CoreRenderDevice.Description}" ); }
+				worldTarget = CoreRender.TargetKind.Screen;
+				worldFinishes = true;
+			}
+		}
+
+		//The clusters first, a material at a time over the depth each was drawn into; then everything drawn the classic way over the same depth.
+		if ( clustersDrawn && ( offscreen || worldFinishes ) )
+			meshRender.DrawMaterials( worldTarget, worldFinishes, worldFinishes ? worldChain : null, warmChain );
+
+		if ( drawn ) meshRender.Debug();
+
+		//What is drawn a draw at a time rather than out of the clusters - see SubmitLoose - under a name of its own in the frame's report.
+		if ( !overlayOnly )
+		{
+			CoreRenderDevice.ZoneBegin( "loose" );
+			SubmitLoose( planes );
+			CoreRenderDevice.ZoneEnd();
+		}
+
+		if ( clustersDrawn && offscreen )
+			meshRender.DrawClusterView( Rinten.Rendering.Wireframe.Clusters );
+
+		Between( camera, offscreen, near, far, Rinten.Rendering.Stage.AfterOpaque );
+
+		if ( !overlayOnly && CoreSceneRenderer.HasSky( frame ) )
+		{
+			CoreRenderDevice.ZoneBegin( "sky" );
+			DrawSky();
+			CoreRenderDevice.ZoneEnd();
+		}
+		else if ( !overlayOnly && worldFinishes )
+		{
+			//No sky, and nothing behind this pass to fill what the world left - see DrawBackground, which is the clear the world's own picture would have had.
+			CoreRenderDevice.ZoneBegin( "background" );
+			DrawBackground( camera, frameCurve );
+			CoreRenderDevice.ZoneEnd();
+		}
+
+		CoreRenderDevice.ZoneEnd();
+
+		//Whether every pass the run being asked for needs is there now: then the next frame that lays it carries it - see FoldChain.
+		if ( warmChain is not null && CoreMeshRender.ChainWaiting == 0 &&
+			SkyChainPipeline( skyShader, warmChain, CoreSceneRenderer.SkySpecialize( skyCore ) ) != 0 )
+			readyChain = warmChain;
+
+		Between( camera, offscreen, near, far, Rinten.Rendering.Stage.AfterSkybox );
+
+		CoreRenderDevice.ZoneBegin( "world glass" );
+		FurthestFirst( translucent, translucentOrder );
+
+		foreach ( var at in translucentOrder )
+		{
+			var queued = translucent[at];
+
+			if ( !CoreSceneRenderer.SphereVisible( planes, queued.Center, Reach( queued ) ) ) continue;
+			Submit( queued );
+		}
+		CoreRenderDevice.ZoneEnd();
+
+		//Sprite batches go into the world picture after glass so post effects reach them
+		instancedInWorld = false;
+
+		if ( !overlayOnly && !StereoPass && ( CoreImmediate.Instanced.Length > 0 || CoreImmediate.Blocks.Length > 0 ) )
+		{
+			CoreRenderDevice.ZoneBegin( "world sprites" );
+			DrawInstanced( worldTarget );
+			CoreRenderDevice.ZoneEnd();
+
+			instancedInWorld = true;
+		}
+
+		//And what is laid over the world with depth of its own - a weapon held up to the eye - into the same picture, so the frame's effects reach it too.
+		CoreRenderDevice.ZoneBegin( "world overlay" );
+		DrawLayer( overlayLayer );
+		CoreRenderDevice.ZoneEnd();
+
+		if ( offscreen )
+		{
+			CoreRenderDevice.EndTarget();
+
+			//Draw velocities only if motion blur or a temporal upscaler will read them
+			var moved = ( ( camera.PostProcess?.WantsMotion ?? false ) || upscaling ) && DrawVelocities( viewport );
+
+			//The frame may stay where the chain leaves it once the other picture exists; until then copy back
+			var settle = !PostInputsReady();
+
+			//Upscale before the effects so they run at window size; full frame only, 0 when nothing to do
+			var upscaled = worldEmpty || CoreRenderDevice.PortableFrame ? 0ul : upscaler.Run(
+				CoreRenderDevice.TargetTexture( viewport, frameIn ),
+				CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene, 2 ),
+				moved ? CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Velocity ) : 0ul,
+				near, far, VerticalField( drawnProjection ), RealTime.Delta, CoreSceneRenderer.ExposureOf( frame ) );
+
+			//Effects to run over it: into the window-size pair first - see TargetKind.Display - and the
+			//stages there. With none, the compose reads the upscaler's own picture and nothing is copied.
+			var display = upscaled != 0 && HungBeforeCompose( camera ) && IntoDisplay( upscaler.LastTexture, near, far );
+
+			if ( display )
+			{
+				foreach ( var stage in beforePostStages )
+					RunStage( camera, stage, CoreRender.TargetKind.Display, near, far, settle: false, pair: displayPair, holds: true );
+			}
+			else if ( upscaled == 0 )
+			{
+				RunStages( camera, CoreRender.TargetKind.Scene, near, far, settle, beforePostStages );
+			}
+
+			CoreRenderDevice.ZoneBegin( "compose" );
+
+			var world = CoreRenderDevice.WorldSize();
+
+			var carrying = Rinten.Rendering.DrawSettings.Upscaler == 2 &&
+				world.x > 1.0f && world.y > 1.0f &&
+				( world.x < pixels.Width - 0.5f || world.y < pixels.Height - 0.5f );
+
+			//Nothing drawn is nothing to soften: the picture is one colour, and the filter would spend five reads a pixel
+			//finding that out. Its own early-out does the same thing a tap later, per pixel; this does it once for the frame.
+			var soften = Rinten.Rendering.DrawSettings.Fxaa && !carrying && !upscaling && !worldEmpty;
+
+			//Everything still held - every point effect since the last pass that read the frame, and the curve - goes into
+			//the compose itself: its arithmetic on every pixel of a pass that reads every pixel anyway. See CorePointChain.
+			if ( display )
+				RunStage( camera, Rinten.Rendering.Stage.Tonemapping, CoreRender.TargetKind.Display, near, far,
+					settle: false, pair: displayPair, holds: true );
+			else if ( upscaled == 0 )
+				RunStage( camera, Rinten.Rendering.Stage.Tonemapping, CoreRender.TargetKind.Scene, near, far,
+					settle: !PostInputsReady(), holds: true );
+
+			if ( upscaled != 0 )
+			{
+				carrying = false;
+				soften = false;
+			}
+
+			composeChain.Clear();
+			CorePostBlit.TakeChain( composeChain );
+
+			var split = CorePointChain.WithCurve( composeChain, frameCurve ) + 1;
+
+			//Whether anything runs after the compose. Where nothing does, the compose draws straight onto the window and the two finished pictures are never made.
+			var after = Hung( camera, Rinten.Rendering.Stage.AfterPostProcess );
+
+			//No edge filter where an effect moved where the frame is read: the blocks of a pixelation are the point.
+			if ( soften && CorePointChain.Moves( CollectionsMarshal.AsSpan( composeChain ) ) ) soften = false;
+
+			var target = after ? CoreRender.TargetKind.Final : CoreRender.TargetKind.Screen;
+			var pipeline = CorePointChain.Compose( CollectionsMarshal.AsSpan( composeChain ), split, target, carrying );
+			var numbers = pipeline == 0 ? -1 : CorePointChain.Upload( CollectionsMarshal.AsSpan( composeChain ) );
+
+			//A chain the compose could not be compiled with - no compiler here, and never baked - is drawn a pass an
+			//effect before it, and the compose is the plain one with the frame's own curve. See ComposeSeparately.
+			if ( pipeline == 0 || numbers < 0 )
+			{
+				ComposeSeparately( composeChain, split, near, far );
+
+				if ( carrying ) EnsureCarryCompose();
+
+				pipeline = carrying && composeCarryPipeline != 0
+					? ( after ? composeCarryFinalPipeline : composeCarryPipeline )
+					: ( after ? composeFinalPipeline : composePipeline );
+
+				numbers = 0;
+			}
+
+			var composeWith = display ? DisplayInput( displayIn )
+				: upscaled != 0 ? upscaled
+				: frameIn == CoreRender.TargetKind.Post ? composeInputsPost : composeInputs;
+
+			//The picture the compose's point effects read their neighbours from: the one it composes.
+			var composeFrame = display ? CoreRenderDevice.TargetTexture( viewport, displayIn )
+				: upscaled != 0 ? upscaler.LastTexture
+				: CoreRenderDevice.TargetTexture( viewport, frameIn );
+
+			var composePush = CorePostBlit.ComposePush( stackalloc byte[128],
+				new Vector2( pixels.Width, pixels.Height ),
+				new Vector2( carrying ? world.x : 0.0f, carrying ? world.y : 0.0f ),
+				soften, numbers, near, far,
+				Indexed( composeFrame ),
+				Indexed( CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene, 1 ) ),
+				Indexed( CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene, 2 ) ),
+				Indexed( CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Velocity ) ) );
+
+			var finishing = after && CoreRenderDevice.BeginTarget( CoreRender.TargetKind.Final, Color.Transparent,
+				clearFirst: false, discard: true );
+
+			//Asked for the finished picture and could not have it: the compose onto the window after all, and nothing after it.
+			if ( after && !finishing )
+			{
+				pipeline = CorePointChain.Compose( CollectionsMarshal.AsSpan( composeChain ), split, CoreRender.TargetKind.Screen, carrying );
+				if ( pipeline == 0 ) pipeline = composePipeline;
+			}
+
+			if ( pipeline != 0 ) CoreRenderDevice.Draw( pipeline, 3, composePush, composeWith );
+
+			if ( finishing ) CoreRenderDevice.EndTarget();
+
+			CoreRenderDevice.ZoneEnd();
+
+			if ( finishing )
+			{
+				RunStage( camera, Rinten.Rendering.Stage.AfterPostProcess, CoreRender.TargetKind.Final,
+					near, far, settle: false,
+					pair: ( CoreRender.TargetKind.Final, CoreRender.TargetKind.FinalSecond ), holds: true );
+
+				//And onto the window, out of whichever of the two the chain left it in - with the point effects asked for after the compose laid on the way.
+				FinalToScreen( near, far );
+			}
+			else
+			{
+				RunStage( camera, Rinten.Rendering.Stage.AfterPostProcess, CoreRender.TargetKind.Screen, near, far );
+			}
+		}
+
+		//Overlays use the unjittered matrix so gizmos don't shake; frame-block readers get a plain copy
+		var overlayBlock = upscaler.Temporal && frameNow is not null
+			? PutPlainFrame( viewProjection )
+			: 0ul;
+
+		var blockBefore = overlayBlock != 0 ? CoreRenderDevice.UseFrame( overlayBlock ) : 0ul;
+
+		CoreRenderDevice.ZoneBegin( "editor overlay" );
+
+		CoreRenderDevice.ZoneBegin( "world panels" );
+		DrawWorldPanels( scene, viewProjection );
+		CoreRenderDevice.ZoneEnd();
+
+		CoreRenderDevice.ZoneBegin( "overlay text" );
+		DrawWorldText( scene, camera, viewProjection );
+		CoreRenderDevice.ZoneEnd();
+
+		if ( editorOverlays )
+		{
+			CoreRenderDevice.ZoneBegin( "overlay grid" );
+			if ( !overlayOnly && ( GroundGridSource?.Invoke() ?? true ) ) DrawGrid( camera, viewProjection );
+
+			//And the same grid where it meets the level: on the faces of the meshes being laid out, which is what the ground grid was for and could not do.
+			if ( !overlayOnly ) DrawSurfaceGrid( viewProjection, planes );
+			CoreRenderDevice.ZoneEnd();
+
+		}
+
+		//What the scene's own code drew with Gizmo.Draw - its debug drawing.
+		var overlayDraws = scene?.GizmoDraws;
+
+		CoreRenderDevice.ZoneBegin( "overlay dynamic" );
+		DrawDynamicObjects( scene, viewProjection, overlay: false );
+		DrawDebug( overlayDraws, camera, viewProjection, overlay: false );
+		CoreRenderDevice.ZoneEnd();
+
+		CoreRenderDevice.ZoneBegin( "overlay immediate" );
+		DrawImmediate( viewProjection, overlay: false );
+		CoreRenderDevice.ZoneEnd();
+
+		if ( GizmoSource is not null )
+		{
+			lastCameraPosition = eyeView.Position;
+			lastCameraSize = camera.SceneCamera?.Size ?? default;
+			lastCameraFov = eyeView.FieldOfView;
+
+			var gizmoDraws = gizmos?.Draws;
+			MeasureGizmos( gizmoDraws );
+
+			CoreRenderDevice.ZoneBegin( "overlay gizmos" );
+
+			using ( Diagnostics.Performance.Scope( "gizmo world" ) )
+			{
+				DrawDebug( gizmoDraws, camera, viewProjection, overlay: false );
+			}
+
+			if ( editorOverlays )
+			{
+				using ( Diagnostics.Performance.Scope( "gizmo selection" ) )
+				{
+					DrawSelection( viewProjection );
+				}
+			}
+
+			using ( Diagnostics.Performance.Scope( "gizmo over" ) )
+			{
+				DrawDebug( gizmoDraws, camera, viewProjection, overlay: true );
+			}
+
+			CoreRenderDevice.ZoneEnd();
+
+			CoreRenderDevice.ZoneBegin( "overlay screen" );
+			DrawDebugScreen( gizmoDraws, viewProjection );
+			CoreRenderDevice.ZoneEnd();
+		}
+
+		CoreRenderDevice.ZoneBegin( "overlay dynamic late" );
+		DrawDynamicObjects( scene, viewProjection, overlay: true );
+		DrawDebug( overlayDraws, camera, viewProjection, overlay: true );
+		DrawDebugScreen( overlayDraws, viewProjection );
+		CoreRenderDevice.ZoneEnd();
+
+		CoreRenderDevice.ZoneBegin( "overlay immediate late" );
+		DrawImmediate( viewProjection, overlay: true );
+		CoreRenderDevice.ZoneEnd();
+
+		CoreRenderDevice.ZoneEnd();
+
+		if ( overlayBlock != 0 ) CoreRenderDevice.UseFrame( blockBefore );
+
+		//A headset's eye has no screen for the game's panels: each becomes a sheet in front of the head instead - see ScreenPanel.
+		if ( Eye is not null )
+		{
+			CoreRenderDevice.ZoneBegin( "headset ui" );
+			DrawHeadsetPanels( scene, viewProjection );
+			CoreRenderDevice.ZoneEnd();
+		}
+
+		if ( gameView )
+		{
+			CoreRenderDevice.ZoneBegin( "game ui" );
+			DrawGameUi( scene );
+			CoreRenderDevice.ZoneEnd();
+
+			//What is drawn over the interface: onto the window, finished there.
+			CoreRenderDevice.ZoneBegin( "after ui" );
+			DrawLayer( afterUiLayer, CoreRender.TargetKind.Screen );
+			CoreRenderDevice.ZoneEnd();
+		}
+
+		//After-UI passes read a copy of the window (with UI) and each draws over the window; no chaining
+		var overUi = camera.PostProcess is not null && Hung( camera, Rinten.Rendering.Stage.AfterUI );
+
+		var captured = overUi && CoreRenderDevice.CaptureBackdrop()
+			? CoreRenderDevice.BackdropTexture()
+			: 0;
+
+		RunStage( camera, Rinten.Rendering.Stage.AfterUI, CoreRender.TargetKind.Screen, near, far,
+			reads: captured );
+
+		//The frame's pictures back to the pool - see CorePasses.
+		CorePasses.EndFrame();
+
+		//Nothing records commands against this drawer outside its own frame.
+		Drawing = null;
+
+		if ( Watched || gameView )
+		{
+			CoreRenderProfiler.LastViewport = viewport;
+			CoreRenderProfiler.LogPeriodically( viewport );
+
+			Rinten.Diagnostics.PerfReport.LastViewportPixels = (long)pixels.Width * pixels.Height;
+
+			if ( CoreRenderProfiler.Enabled ) DrawProfilerOverlay();
+		}
+	}
+
+
+	//Draws the profiler overlay with the screen text pipeline; lines refresh a few times a second
+	private void DrawProfilerOverlay()
+	{
+		if ( screenPipeline == 0 || whiteTexture == 0 ) return;
+
+		var (width, height) = size;
+		if ( width <= 0 || height <= 0 ) return;
+
+		var lines = CoreRenderProfiler.OverlayLines( viewport );
+		if ( lines.Length == 0 ) return;
+
+		var ortho = ScreenProjection( width, height );
+
+		var push = LinePush( stackalloc byte[80], ortho );
+		var corners = iconCorners;
+
+		//Handed the push block rather than capturing it - see DrawSprites' Flush.
+		void Quad( ReadOnlySpan<byte> block, float x, float y, float w, float h, Color32 tint )
+		{
+			corners[0] = IconVertex( new Vector3( x, y, 0 ), 0, 0, tint );
+			corners[1] = IconVertex( new Vector3( x + w, y, 0 ), 1, 0, tint );
+			corners[2] = IconVertex( new Vector3( x, y + h, 0 ), 0, 1, tint );
+			corners[3] = IconVertex( new Vector3( x, y + h, 0 ), 0, 1, tint );
+			corners[4] = IconVertex( new Vector3( x + w, y, 0 ), 1, 0, tint );
+			corners[5] = IconVertex( new Vector3( x + w, y + h, 0 ), 1, 1, tint );
+
+			CoreRenderDevice.DrawDynamic( Pick( screenPipeline, screenTwo ),
+				System.Runtime.InteropServices.MemoryMarshal.AsBytes( corners ),
+				corners.Length, 76, block, whiteTexture );
+		}
+
+		const float left = 12.0f;
+		const float top = 12.0f;
+		const float rowHeight = 16.0f;
+		const float barLeft = 460.0f;
+		const float barWidth = 160.0f;
+		const float barScaleMs = 16.0f;
+
+		//One translucent sheet behind everything, so the numbers read over any scene.
+		Quad( push, left - 6, top - 6, barLeft + barWidth + 12 - left + 6, lines.Length * rowHeight + 12,
+			new Color32( 0, 0, 0, 150 ) );
+
+		var y = top;
+
+		foreach ( var line in lines )
+		{
+			if ( line.BarMs >= 0.0f )
+			{
+				var portion = System.MathF.Min( 1.0f, line.BarMs / barScaleMs );
+
+				//Green within a 60 Hz frame's budget, amber past half of one, red past all of it.
+				var tint = line.BarMs > barScaleMs * 0.66f
+					? new Color32( 235, 90, 80, 220 )
+					: line.BarMs > barScaleMs * 0.33f
+						? new Color32( 235, 180, 70, 220 )
+						: new Color32( 110, 200, 120, 220 );
+
+				Quad( push, barLeft, y + 3, System.MathF.Max( 1.0f, barWidth * portion ), rowHeight - 6, tint );
+			}
+
+			var scope = new TextRendering.Scope( line.Text, Color.White.WithAlpha( 0.92f ), 12,
+				"Roboto Mono", line.Depth == 0 ? 700 : 500 );
+
+			var text = RasteriseCached( scope );
+
+			if ( text.Texture != 0 )
+			{
+				var x = left + ( line.Depth > 1 ? ( line.Depth - 1 ) * 12.0f : 0.0f );
+				var white = Color32.White;
+
+				corners[0] = IconVertex( new Vector3( x, y, 0 ), 0, 0, white );
+				corners[1] = IconVertex( new Vector3( x + text.Size.x, y, 0 ), 1, 0, white );
+				corners[2] = IconVertex( new Vector3( x, y + text.Size.y, 0 ), 0, 1, white );
+				corners[3] = IconVertex( new Vector3( x, y + text.Size.y, 0 ), 0, 1, white );
+				corners[4] = IconVertex( new Vector3( x + text.Size.x, y, 0 ), 1, 0, white );
+				corners[5] = IconVertex( new Vector3( x + text.Size.x, y + text.Size.y, 0 ), 1, 1, white );
+
+				CoreRenderDevice.DrawDynamic( Pick( screenPipeline, screenTwo ),
+					System.Runtime.InteropServices.MemoryMarshal.AsBytes( corners ),
+					corners.Length, 76, push, text.Texture );
+			}
+
+			y += rowHeight;
+		}
+	}
+
+	//The four passes between the world and the screen, baked once.
+	private static void MakePostPipelines()
+	{
+		//There is nothing between the world and the screen in the portable frame - see RenderTier - so none of
+		//these is made, and the world's own passes finish the picture as they do in any frame with no compose.
+		if ( CoreRenderDevice.PortableFrame ) return;
+
+		//The compose carries the tonemap curve in it, and that is a file a project may replace - so a compose baked before
+		//the project was mounted, or before somebody edited the curve, is out of date and the pipeline goes with it.
+		if ( composePipeline != 0 && composeCurve == CoreShaderCache.Revision ) return;
+
+		if ( composePipeline != 0 )
+		{
+			foreach ( var stale in new[] { composePipeline, composeFinalPipeline,
+				composeCarryPipeline, composeCarryFinalPipeline } )
+			{
+				if ( stale != 0 ) CoreRenderDevice.DestroyPipeline( stale );
+			}
+
+			composePipeline = 0;
+			composeFinalPipeline = 0;
+			composeCarryPipeline = 0;
+			composeCarryFinalPipeline = 0;
+			composeCarryTried = false;
+		}
+
+		composeCurve = CoreShaderCache.Revision;
+
+		//Not a full-screen pass: this one draws the meshes that moved, with the depth the world left, and writes only where they are.
+		{
+			var vs = CoreShaderCache.Pass( EngineShaders.Velocity, "MainVs",
+				CoreShaderCompiler.Stage.Vertex );
+
+			var ps = CoreShaderCache.Pass( EngineShaders.Velocity, "MainPs",
+				CoreShaderCompiler.Stage.Pixel );
+
+			velocityPipeline = vs is null || ps is null
+				? 0
+				: CoreRenderDevice.CreatePipeline( vs, ps, CoreRender.VertexLayoutKind.Engine,
+					depthTest: true, CoreRender.Topology.Triangles, blend: false,
+					depthWrite: false, target: CoreRender.TargetKind.Velocity );
+
+			if ( velocityPipeline == 0 )
+				Log.Warning( $"the velocity pass did not compile: {CoreRenderDevice.ShaderError}" );
+		}
+		if ( pyramidPipeline == 0 )
+		{
+			var pyramid = CoreShaderCache.Pass( EngineShaders.DepthPyramid, "main",
+				CoreShaderCompiler.Stage.Compute );
+
+			//Its own maker: a level of the pyramid is read and written through set one, where every other compute pass has a material.
+			pyramidPipeline = pyramid is null ? 0 : CoreRenderDevice.CreatePyramidPipeline( pyramid );
+			if ( pyramidPipeline == 0 )
+				Log.Warning( $"the depth pyramid did not compile: {CoreRenderDevice.ShaderError}" );
+		}
+
+		composePipeline = BakePost( EngineShaders.Compose, CoreRender.TargetKind.Screen );
+
+		//The same pass into the finished picture rather than onto the window, for a frame with something hung after it - see Stage.AfterPostProcess.
+		composeFinalPipeline = BakePost( EngineShaders.Compose, CoreRender.TargetKind.Final );
+
+		//And the compose with the engine's curve in it, which is what a frame with no effect of its own draws - made here
+		//rather than on the first frame, where a compile on a machine with no cache would be a hitch. See CorePointChain.
+		CorePointChain.WarmUp();
+	}
+
+	//A full-screen post pass out of its source: three vertices out of nothing, no depth.
+	private static ulong BakePost( string file, CoreRender.TargetKind target, string defines = null )
+	{
+		var vs = CoreShaderCache.Pass( file, "MainVs", CoreShaderCompiler.Stage.Vertex, defines );
+		var ps = CoreShaderCache.Pass( file, "MainPs", CoreShaderCompiler.Stage.Pixel, defines );
+
+		if ( vs is null || ps is null )
+		{
+			Log.Warning( $"{file} did not compile: {CoreRenderDevice.ShaderError}" );
+			return 0;
+		}
+
+		//No vertex buffer, no depth: three vertices out of nothing, covering everything.
+		return CoreRenderDevice.CreatePipeline( vs, ps,
+			CoreRender.VertexLayoutKind.None, depthTest: false,
+			CoreRender.Topology.Triangles, blend: false,
+			depthWrite: false, target: target );
+	}
+
+	//The four composes with the upscale in them, the first time a frame wants one. A bake is a compile
+	//on a machine with no cache, so this is a hitch on the frame the render scale drops - once.
+	private static void EnsureCarryCompose()
+	{
+		if ( composeCarryTried ) return;
+
+		composeCarryTried = true;
+
+		composeCarryPipeline = BakePost( EngineShaders.Compose, CoreRender.TargetKind.Screen, EngineShaders.Carry );
+		composeCarryFinalPipeline = BakePost( EngineShaders.Compose, CoreRender.TargetKind.Final, EngineShaders.Carry );
+
+		if ( composeCarryPipeline == 0 )
+			Log.Warning( $"the upscaling compose did not bake: {CoreRenderDevice.ShaderError}" );
+	}
+
+	//Drop the sky's pipelines so the next frame bakes them again - what an edited sky shader,
+	//or an edited include under it, needs. See CoreResources.Forget, which is the one caller.
+	internal static void ForgetSkyPipelines()
+	{
+		foreach ( var pipeline in skyPipelines.Values ) CoreRenderDevice.DestroyPipeline( pipeline );
+		foreach ( var pipeline in skyChainPipelines.Values ) CoreRenderDevice.DestroyPipeline( pipeline );
+
+		foreach ( var pipeline in skyTablePipelines.Values ) CoreRenderDevice.DestroyPipeline( pipeline );
+
+		skyPipelines.Clear();
+		skyChainPipelines.Clear();
+		skyTablePipelines.Clear();
+	}
+
+	//Only the background pass is made upfront; sky pipelines bake on demand per frame specialization
+	private static void MakeSkyPipelines()
+	{
+		MakeBackgroundPipeline();
+	}
+
+	//Pipeline filling the sky table from a sky shader, baked on first ask; unspecialized, it's tiny
+	private static ulong SkyTablePipeline( string shader )
+	{
+		if ( string.IsNullOrWhiteSpace( shader ) ) return 0;
+
+		if ( skyTablePipelines.TryGetValue( shader, out var made ) ) return made;
+
+		var stages = CoreResources.Shader( shader );
+
+		var vertex = stages?[(int)CoreShaderFile.Stage.SkyTableVertex];
+		var pixel = stages?[(int)CoreShaderFile.Stage.SkyTablePixel];
+
+		if ( vertex is null || pixel is null )
+		{
+			//Not cached: a non-sky shader or one not yet loaded from a mounting filesystem answers this way too
+			return 0;
+		}
+
+		//From here the answer is kept whatever it is: a sky whose table will not bake costs one
+		//try and then draws without an ambient of its own, rather than a compile every frame.
+
+		made = CoreRenderDevice.CreatePipeline( vertex, pixel, CoreRender.VertexLayoutKind.None,
+			depthTest: false, CoreRender.Topology.Triangles, blend: false, depthWrite: false,
+			cullBack: false, target: CoreRender.TargetKind.SkyTable );
+
+		if ( made == 0 )
+			Log.Warning( $"the sky's table did not compile for {shader}: {CoreRenderDevice.ShaderError}" );
+
+		skyTablePipelines[shader] = made;
+
+		return made;
+	}
+
+	//Pipeline drawing a sky shader into a target, baked once (failures cached); stereo for both eyes
+	private static ulong SkyPipeline( string shader, CoreRender.TargetKind target, int specialize, bool stereo )
+	{
+		var key = (shader, target, specialize, stereo);
+
+		if ( skyPipelines.TryGetValue( key, out var made ) ) return made;
+
+		skyPipelines[key] = 0;
+
+		var stages = CoreResources.Shader( shader, null, stereo );
+
+		if ( stages is null )
+		{
+			if ( stereo ) CoreSceneRenderer.StereoRefused( $"the sky {shader} has no two-view build" );
+			return 0;
+		}
+
+		var vertex = stages[(int)CoreShaderFile.Stage.Vertex];
+		if ( vertex is null ) return 0;
+
+		//Depth tested but not written (sky is at the far plane), and no normals output
+		ulong Bake( byte[] pixel, CoreRender.TargetKind target )
+			=> pixel is null
+				? 0
+				: CoreRenderDevice.CreatePipeline( vertex, pixel, CoreRender.VertexLayoutKind.None,
+					depthTest: true, CoreRender.Topology.Triangles, blend: false,
+					depthWrite: false, target: target, colourAlone: true, specialize: specialize );
+
+		//The screen's own stage, not the plain one: a sky drawn onto the window is the last pass
+		//over those pixels, so the curve is its own business - see CoreShaderFile.Stage.ScreenPixel.
+		made = target == CoreRender.TargetKind.Scene
+			? Bake( stages[(int)CoreShaderFile.Stage.ScenePixel], CoreRender.TargetKind.Scene )
+			: Bake( stages[(int)CoreShaderFile.Stage.ScreenPixel], CoreRender.TargetKind.Screen );
+
+		if ( made == 0 )
+			Log.Warning( $"the sky shader {shader} did not bake: {CoreRenderDevice.ShaderError}" );
+
+		skyPipelines[key] = made;
+
+		return made;
+	}
+
+	//The sky onto the screen with a run of point effects carried in it - see FoldChain.
+	//Nought while it compiles beside the frame, and for good where it would not.
+	private static ulong SkyChainPipeline( string shader, string key, int specialize )
+	{
+		if ( key is null ) return 0;
+
+		var held = shader + "|" + key + "|" + specialize;
+
+		if ( skyChainPipelines.TryGetValue( held, out var made ) ) return made;
+
+		var vertex = CoreResources.Shader( shader )?[(int)CoreShaderFile.Stage.Vertex];
+		if ( vertex is null ) return 0;
+
+		var pixel = CoreResources.ScreenChainWords( shader, null, CoreShaderFile.Stage.ScreenPixel, key, out var waiting );
+
+		if ( pixel is null )
+		{
+			if ( waiting ) return 0;
+
+			CorePointChain.Refuse( key );
+		}
+		else
+		{
+			made = CoreRenderDevice.CreatePipeline( vertex, pixel, CoreRender.VertexLayoutKind.None,
+				depthTest: true, CoreRender.Topology.Triangles, blend: false,
+				depthWrite: false, target: CoreRender.TargetKind.Screen, colourAlone: true,
+				specialize: specialize );
+		}
+
+		skyChainPipelines[held] = made;
+
+		return made;
+	}
+
+	//Background pass for skyless frames: depth-tested, no depth write, reads only the frame block
+	private static void MakeBackgroundPipeline()
+	{
+		if ( backgroundPipeline != 0 ) return;
+
+		var vs = CoreShaderCache.Pass( EngineShaders.Background, "MainVs", CoreShaderCompiler.Stage.Vertex );
+		var ps = CoreShaderCache.Pass( EngineShaders.Background, "MainPs", CoreShaderCompiler.Stage.Pixel );
+
+		if ( vs is null || ps is null )
+		{
+			Log.Warning( $"the background pass did not compile: {CoreRenderDevice.ShaderError}" );
+			return;
+		}
+
+		backgroundPipeline = CoreRenderDevice.CreatePipeline( vs, ps, CoreRender.VertexLayoutKind.None,
+			depthTest: true, CoreRender.Topology.Triangles, blend: false,
+			depthWrite: false, target: CoreRender.TargetKind.Screen );
+
+	}
+
+	//Fills what the world left with the camera's background colour, for a scene with no sky
+	//that is being shaded straight onto the window - see shaders/engine/background.slang.
+	private void DrawBackground( CameraComponent camera, float curve )
+	{
+		if ( backgroundPipeline == 0 ) return;
+
+		var colour = camera.IsValid() ? camera.BackgroundColor : Color.Black;
+
+		BitConverter.TryWriteBytes( backgroundPush.AsSpan( 0 ), colour.r );
+		BitConverter.TryWriteBytes( backgroundPush.AsSpan( 4 ), colour.g );
+		BitConverter.TryWriteBytes( backgroundPush.AsSpan( 8 ), colour.b );
+		BitConverter.TryWriteBytes( backgroundPush.AsSpan( 12 ), 1.0f );
+		BitConverter.TryWriteBytes( backgroundPush.AsSpan( 16 ), exposure );
+		BitConverter.TryWriteBytes( backgroundPush.AsSpan( 20 ), curve );
+		BitConverter.TryWriteBytes( backgroundPush.AsSpan( 24 ), 0.0f );
+		BitConverter.TryWriteBytes( backgroundPush.AsSpan( 28 ), 0.0f );
+
+		CoreRenderDevice.Draw( backgroundPipeline, 3, backgroundPush );
+	}
+
+	//The background pass's push block, kept rather than made every frame.
+	private readonly byte[] backgroundPush = new byte[32];
+
+	private void DrawSky()
+	{
+		//What this frame's sky can reach, which is what its pipeline is baked with - see CoreSceneRenderer.SkySpecialize.
+		//Read once here rather than in each of the two asks below, so both cannot be baked differently.
+		var specialize = CoreSceneRenderer.SkySpecialize( skyCore );
+
+		var pipeline = SkyPipeline( skyShader, worldTarget, specialize, StereoPass );
+
+		//And with the frame's point effects in it, where the world's shading carries
+		//them. Not into both eyes at once: that run is only ever built for one view.
+		if ( worldTarget != CoreRender.TargetKind.Scene && worldChain is not null && !StereoPass )
+		{
+			var chained = SkyChainPipeline( skyShader, worldChain, specialize );
+			if ( chained != 0 ) pipeline = chained;
+		}
+
+		if ( pipeline == 0 ) return;
+
+		//With the sky material's numbers bound, which is what its shader reads its settings from - see SkyBox2D.SkyMaterial.
+		CoreRenderDevice.Draw( pipeline, 3, System.Array.Empty<byte>(), skyDevice );
+	}
+
+	//Whether anything is hung on a stage: a post-process or a camera command list
+	private static bool Hung( CameraComponent camera, Rinten.Rendering.Stage stage )
+		=> ( camera.PostProcess?.Count( stage ) ?? 0 ) > 0 ||
+			camera.CommandListCount( stage ) > 0;
+
+	private readonly List<(int Order, int At, Rinten.Rendering.CommandList List)> stageLists = new();
+
+	//Runs everything hung on a stage: post-process and camera lists sorted by order, then components
+	private void RunLists( CameraComponent camera, Rinten.Rendering.Stage stage, bool beforeWindow = false )
+	{
+		stageLists.Clear();
+
+		camera.PostProcess?.ListsAt( stage, stageLists );
+		camera.CommandListsAt( stage, stageLists );
+
+		stageLists.Sort( static ( a, b ) => a.Order != b.Order ? a.Order.CompareTo( b.Order ) : a.At.CompareTo( b.At ) );
+
+		//On the stage after the compose, on a frame that copies onto the window after it, the last pass of the last list with anything in it may
+		//draw there itself - see CorePostBlit.Lands. The camera's HUD list is hung after every effect and is empty on every frame nobody drew a HUD.
+		var last = -1;
+
+		for ( var i = stageLists.Count - 1; beforeWindow && i >= 0; i-- )
+		{
+			if ( stageLists[i].List.IsEmpty ) continue;
+
+			last = i;
+			break;
+		}
+
+		for ( var i = 0; i < stageLists.Count; i++ )
+		{
+			var (order, _, list) = stageLists[i];
+
+			//The camera's HUD is a screen's, painted at the window's pixels: in a headset's eye it would be stuck to the eye, the same
+			//in both, at the edge of the lens. A HUD for a headset is a ScreenPanel, which becomes a sheet in front of the head there.
+			if ( Eye is not null && ( list.Flags & Rinten.Rendering.CommandList.Flag.Hud ) != 0 ) continue;
+
+			CorePasses.Unwant();
+			CorePostBlit.ListOrder = order;
+			CorePostBlit.LastBeforeWindow = i == last;
+			list.ExecuteOnRenderThread();
+		}
+
+		CorePostBlit.LastBeforeWindow = false;
+		CorePasses.Unwant();
+	}
+
+	private void RunStage( CameraComponent camera, Rinten.Rendering.Stage stage,
+		CoreRender.TargetKind into, float near, float far, bool settle = true,
+		(CoreRender.TargetKind First, CoreRender.TargetKind Second)? pair = null,
+		ulong reads = 0, bool holds = false )
+	{
+		if ( camera is null ) return;
+		if ( camera.PostProcess is null ) return;
+
+		//Nothing hung on this stage, which is the ordinary case and every stage of a scene with no post-process of its own. Asked
+		//before anything is set up: four picture lookups and a push block times nine stages, a frame, to find nine empty lists.
+		if ( !Hung( camera, stage ) ) return;
+
+		var finished = pair is { First: CoreRender.TargetKind.Final };
+		var onDisplay = pair is { First: CoreRender.TargetKind.Display };
+
+		OpenPost( stage, into, near, far, pair, reads, holds, onDisplay ? displayIn : null );
+
+		try
+		{
+			CoreRenderDevice.ZoneBegin( "post pass" );
+
+			RunLists( camera, stage, beforeWindow: finished );
+
+			//A stage whose point effects do not outlive it draws them now, before asking where the frame was left: drawn at its end, after the copy back below, they
+			//landed in the other picture of the pair while the world reopened in its own - and every point effect hung inside the world drew nothing anybody saw.
+			if ( !holds ) CorePostBlit.Flush();
+
+			//On the window-size pair the frame stays wherever the chain left it - the compose reads either of the two.
+			if ( onDisplay )
+			{
+				displayIn = CorePostBlit.Settled;
+			}
+			else if ( into != CoreRender.TargetKind.Screen && !finished )
+			{
+				//An odd number of effects leaves the frame in the other picture. Where what comes next can be told - see
+				//frameIn - it is; where it cannot, one pass puts the frame back where the world's pass will look for it.
+				if ( settle && CorePostBlit.Settled == CoreRender.TargetKind.Post )
+					CopyBack();
+
+				frameIn = CorePostBlit.Settled;
+			}
+		}
+		catch ( System.Exception e )
+		{
+			Log.Warning( e, $"a post-process at {stage}" );
+		}
+		finally
+		{
+			CoreRenderDevice.ZoneEnd();
+			CorePostBlit.End();
+		}
+	}
+
+	//Opens the frame a stage's passes draw in: the size they draw at and the pictures they may read - see RunStage.
+	private void OpenPost( Rinten.Rendering.Stage stage, CoreRender.TargetKind into, float near, float far,
+		(CoreRender.TargetKind First, CoreRender.TargetKind Second)? pair = null, ulong reads = 0, bool holds = false,
+		CoreRender.TargetKind? heldIn = null )
+	{
+		var (width, height) = size;
+
+		//Finished pictures are window-sized whatever the world's render scale was
+		var finished = pair is { First: CoreRender.TargetKind.Final };
+
+		//And so is the world's own pair at the window's size - see TargetKind.Display.
+		var windowSized = finished || pair is { First: CoreRender.TargetKind.Display or CoreRender.TargetKind.DisplaySecond };
+
+		if ( into != CoreRender.TargetKind.Screen && !windowSized )
+		{
+			var world = CoreRenderDevice.WorldSize();
+
+			if ( world.x >= 1.0f && world.y >= 1.0f )
+			{
+				width = (int)world.x;
+				height = (int)world.y;
+			}
+		}
+
+		//What the frame is read as. For the stages before the compose that is the world's own picture; after it, the finished one this pass drew.
+		var colour = reads != 0
+			? reads
+			: windowSized
+				? CoreRenderDevice.TargetTexture( viewport, pair.Value.First )
+				: CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene );
+
+		CorePostBlit.Begin( new CorePostBlit.Frame(
+			into,
+			Indexed( colour ),
+			Indexed( CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene, 1 ) ),
+			Indexed( CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene, 2 ) ),
+			Indexed( CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Velocity ) ),
+			width, height, near, far, (float)(int)stage, viewport ),
+			heldIn ?? ( windowSized ? pair.Value.First : frameIn ), pair, holds );
+	}
+
+	//Fallback when the compose can't compile the chain: draw effects as passes before a plain compose
+	private void ComposeSeparately( List<CorePointChain.Point> chain, int split, float near, float far )
+	{
+		if ( chain.Count <= 1 ) return;
+
+		OpenPost( Rinten.Rendering.Stage.Tonemapping, CoreRender.TargetKind.Scene, near, far );
+
+		try
+		{
+			for ( var i = 0; i < chain.Count; i++ )
+			{
+				if ( i == split - 1 ) continue;
+
+				CorePostBlit.Single( chain[i] );
+			}
+
+			frameIn = CorePostBlit.Settled;
+		}
+		finally
+		{
+			CorePostBlit.End();
+		}
+	}
+
+	//The window-size pair as the stages before the compose run over it - see TargetKind.Display.
+	private static readonly (CoreRender.TargetKind First, CoreRender.TargetKind Second) displayPair =
+		( CoreRender.TargetKind.Display, CoreRender.TargetKind.DisplaySecond );
+
+	//Which of the window-size pair the frame is in - see IntoDisplay and RunStage.
+	private CoreRender.TargetKind displayIn = CoreRender.TargetKind.Display;
+
+	//Whether anything is hung on the stages run over the frame before the compose.
+	private bool HungBeforeCompose( CameraComponent camera )
+	{
+		if ( camera?.PostProcess is null ) return false;
+
+		foreach ( var stage in beforePostStages )
+			if ( Hung( camera, stage ) ) return true;
+
+		return Hung( camera, Rinten.Rendering.Stage.Tonemapping );
+	}
+
+	//The upscaler's picture into the window-size pair, for the effects to run over: one pass, the copy the world's own chain uses -
+	//see CopyBack. False where it could not be, and the frame is composed from the upscaler's picture with the effects left out of it.
+	private bool IntoDisplay( ulong upscaledTexture, float near, float far )
+	{
+		if ( upscaledTexture == 0 ) return false;
+
+		CoreRenderDevice.ReadyToRead( upscaledTexture );
+
+		//Read out of the upscaler's picture, drawn into the pair's first.
+		OpenPost( Rinten.Rendering.Stage.BeforePostProcess, CoreRender.TargetKind.Display, near, far,
+			( CoreRender.TargetKind.DisplaySecond, CoreRender.TargetKind.Display ), upscaledTexture,
+			holds: true, heldIn: CoreRender.TargetKind.DisplaySecond );
+
+		try
+		{
+			CopyBack();
+			displayIn = CorePostBlit.Settled;
+			return copyBack is not null;
+		}
+		finally
+		{
+			CorePostBlit.End();
+		}
+	}
+
+	//The compose's material over one of the window-size pair, made once a picture.
+	private ulong DisplayInput( CoreRender.TargetKind kind )
+	{
+		var which = kind == CoreRender.TargetKind.DisplaySecond ? 1 : 0;
+		var picture = CoreRenderDevice.TargetTexture( viewport, kind );
+
+		if ( picture != displayInputFrom[which] )
+		{
+			if ( displayInputs[which] != 0 ) CoreRenderDevice.DestroyTexture( displayInputs[which] );
+
+			displayInputFrom[which] = picture;
+			displayInputs[which] = picture == 0 ? 0 : CoreRenderDevice.CreateMaterial( picture, picture, picture, picture, 1, 0, 0, 0 );
+		}
+
+		return displayInputs[which];
+	}
+
+	private readonly ulong[] displayInputs = new ulong[2];
+	private readonly ulong[] displayInputFrom = new ulong[2];
+
+	private void CopyBack()
+	{
+		copyBack ??= Material.FromShader( "shaders/postprocess/copy.shader" );
+
+		if ( copyBack is null ) return;
+
+		CorePostBlit.Draw( copyBack, null );
+	}
+
+	//Held, because a material is a device object and not a value.
+	private Material copyBack;
+
+	//Copies the finished picture onto the window when post-compose passes ran offscreen
+	private void FinalToScreen( float near, float far )
+	{
+		//The chain's last pass drew onto the window itself - see CorePostBlit.Lands.
+		if ( CorePostBlit.Landed )
+		{
+			CorePostBlit.Landed = false;
+			return;
+		}
+
+		var settled = CorePostBlit.Settled;
+		var texture = CoreRenderDevice.TargetTexture( viewport, settled );
+
+		if ( texture == 0 ) return;
+
+		var (width, height) = size;
+
+		//The pair is that one picture twice: nothing alternates here, there is one pass and it draws on the window.
+		CorePostBlit.Begin( new CorePostBlit.Frame(
+			CoreRender.TargetKind.Screen,
+			Indexed( texture ),
+			Indexed( CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene, 1 ) ),
+			Indexed( CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene, 2 ) ),
+			Indexed( CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Velocity ) ),
+			width, height, near, far, (float)(int)Rinten.Rendering.Stage.AfterPostProcess, viewport ),
+			settled, ( settled, settled ) );
+
+		try
+		{
+			//The point effects asked for after the compose, laid on the way; the picture copied across where there are none.
+			if ( CorePostBlit.Pending ) CorePostBlit.Flush();
+			else CopyBack();
+		}
+		finally
+		{
+			CorePostBlit.End();
+		}
+	}
+
+	//A stage inside the world pass: close it so effects can read it, then reopen keeping colour and depth
+	private void Between( CameraComponent camera, bool offscreen, float near, float far,
+		Rinten.Rendering.Stage stage )
+	{
+		if ( !offscreen ) return;
+		if ( camera?.PostProcess is null ) return;
+		if ( !Hung( camera, stage ) ) return;
+
+		CoreRenderDevice.EndTarget();
+
+		RunStage( camera, stage, CoreRender.TargetKind.Scene, near, far );
+
+		//What the reflections left for the water and glass still to come - the chain they traced through, and the solid world copied once
+		//they are in - said in the frame block before those draw. Only on a frame that has any: see ScreenSpaceReflections.SceneCopy.
+		if ( stage == Rinten.Rendering.Stage.AfterOpaque && frameNow is not null && translucent.Count > 0 &&
+			CorePasses.Find( ScreenSpaceReflections.DepthPicture ) is { Index: > 0 } chain )
+		{
+			OpenPost( stage, CoreRender.TargetKind.Scene, near, far );
+
+			try
+			{
+				ScreenSpaceReflections.SceneCopy.ExecuteOnRenderThread();
+			}
+			finally
+			{
+				CorePostBlit.End();
+			}
+
+			if ( CorePasses.Find( ScreenSpaceReflections.ScenePicture ) is { Index: > 0 } solid )
+			{
+				CoreSceneRenderer.LayScreenTrace( frameNow, chain.Index, solid.Index );
+				CoreRenderDevice.SetupFrame( frameNow );
+			}
+		}
+
+		if ( !CoreRenderDevice.BeginTarget( CoreRender.TargetKind.Scene,
+			camera.BackgroundColor, clearFirst: false ) )
+		{
+			Log.Warning( $"the world's pass would not reopen after {stage}: {CoreRenderDevice.Description}" );
+		}
+	}
+
+	//Runs every stage between two points in order; a stage is where a project may hang a full-screen pass
+	private void RunStages( CameraComponent camera, CoreRender.TargetKind into,
+		float near, float far, bool settle, params Rinten.Rendering.Stage[] stages )
+	{
+		//Nothing reopens the world's pass after these, so a point effect asked for in one is held for the next reader of the frame - see CorePostBlit.Begin.
+		foreach ( var stage in stages ) RunStage( camera, stage, into, near, far, settle, holds: true );
+	}
+
+	//The stages run over the world's picture before the post chain, as one array for the life of the process - a params list is a new array at every call.
+	private static readonly Rinten.Rendering.Stage[] beforePostStages =
+	{
+		Rinten.Rendering.Stage.AfterTransparent,
+		Rinten.Rendering.Stage.AfterViewmodel,
+		Rinten.Rendering.Stage.BeforePostProcess,
+	};
+
+	//Where a picture sits in the table a shader indexes.
+	internal static int Indexed( ulong texture )
+		=> texture == 0 ? 0 : (int)CoreRender.TextureIndex( texture );
+
+	//The material the compose reads the frame through. A material is four textures in one
+	//set; the compose reads one of them, and every other picture by its place in the table.
+	private void MakePostInputs()
+	{
+		DropPostInputs();
+
+		var colour = CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene );
+		postBuiltFrom = colour;
+
+		//The numbers are nobody's business here - this material exists to carry a picture, not to describe a surface.
+		if ( colour != 0 )
+			composeInputs = CoreRenderDevice.CreateMaterial( colour, colour, colour, colour, 1, 0, 0, 0 );
+	}
+
+
+	//Whether post-chain passes can read the frame from the other picture; false until it exists
+	private bool PostInputsReady()
+	{
+		var post = CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Post );
+
+		if ( post == 0 ) return false;
+
+		if ( post != postBuiltFromPost ) MakePostInputsPost( post );
+
+		return composeInputsPost != 0;
+	}
+
+	//The compose's reader of the frame, built against the other picture.
+	private void MakePostInputsPost( ulong post )
+	{
+		DropPostInputsPost();
+
+		postBuiltFromPost = post;
+
+		composeInputsPost = CoreRenderDevice.CreateMaterial( post, post, post, post, 1, 0, 0, 0 );
+	}
+
+	private void DropPostInputsPost()
+	{
+		if ( composeInputsPost != 0 ) CoreRenderDevice.DestroyTexture( composeInputsPost );
+
+		composeInputsPost = 0;
+		postBuiltFromPost = 0;
+	}
+
+	private void DropPostInputs()
+	{
+		//A material is destroyed the way a texture is - they share a handle space, and the material owns none of the images it names.
+		if ( composeInputs != 0 ) CoreRenderDevice.DestroyTexture( composeInputs );
+
+		composeInputs = 0;
+		postBuiltFrom = 0;
+
+
+		//The world's pictures were remade, so the other one was too.
+		DropPostInputsPost();
+	}
+
+	//The game's screen panels, walked after their own layout and redrawn on top of the world - which is what a HUD is.
+	private void DrawGameUi( Scene scene )
+	{
+		var (width, height) = size;
+
+		//The other cameras' boxes, made each frame - see CoreUiRenderer.Recycle, which keeps their vertex lists for the next.
+		CoreUiRenderer.Recycle( batches );
+		CoreUiRenderer.BuildCameraLayers( scene, batches );
+
+		screenBatches.Clear();
+		screenBatches.AddRange( batches );
+
+		//And each screen's panels as its root last left them while nothing in its tree moved, or walked again - the kept path an editor window and
+		//a headset's sheet take. A HUD that changes ten times a second was walked into boxes from nothing on every frame: 0.9 ms of a browser's.
+		foreach ( var screen in scene.GetAllComponents<ScreenPanel>() )
+		{
+			if ( !screen.IsValid() || screen.GetPanel() is not Rinten.UI.RootPanel root ) continue;
+
+			//A sheet in front of a headset is drawn in the eyes - see DrawHeadsetPanels.
+			if ( root is GameRootPanel { InHeadset: true } ) continue;
+
+			screenBatches.AddRange( ScreenPanelBatches( root ) );
+		}
+
+		DrawPanels( screenBatches, width, height );
+	}
+
+	//What DrawGameUi draws this frame: the cameras' boxes, then every screen's kept batches.
+	private static readonly System.Collections.Generic.List<CoreUiRenderer.UiBatch> screenBatches = new();
+
+	//A screen's batches, kept while nothing they were made from has moved - see CoreUiRenderer.TryReuseFrame.
+	private static System.Collections.Generic.List<CoreUiRenderer.UiBatch> ScreenPanelBatches( Rinten.UI.RootPanel root )
+	{
+		root.Frame ??= new();
+
+		//Uncut: batches a headset's sheet cut to its edge are not the screen's.
+		if ( root.Frame.Cut == default && CoreUiRenderer.TryReuseFrame( root, UploadUiTexture ) )
+			return root.Frame.Batches;
+
+		root.Frame.Kept = false;
+		CoreUiRenderer.Recycle( root.Frame.Batches );
+		CoreUiRenderer.Build( root, root.Frame.Batches, RasteriseCached, UploadUiTexture );
+		CoreUiRenderer.KeepFrame( root );
+		root.Frame.Cut = default;
+
+		KeepOnDevice( root );
+
+		return root.Frame.Batches;
+	}
+
+	//Draws a panel tree into the open frame at this size, through the same UI pass the game uses
+	internal static void DrawUi( Rinten.UI.Panel root, int width, int height,
+		System.Action<Rect> world = null )
+	{
+		if ( !EnsureResources() ) return;
+
+		//The editor's own windows hold their batches themselves, so a kept frame is not written over by the next
+		//window's walk. Anything else - the game played inside the editor included - goes the ordinary way below.
+		if ( root is Rinten.UI.RootPanel { IsEditorUi: true } editor )
+		{
+			BuildEditorUi( editor, keepable: world is null );
+
+			using ( Diagnostics.Performance.Scope( "ui record" ) )
+			{
+				//With the world, as the ordinary branch below does it. An editor window is the only kind that ever holds the world, so dropping it here
+				//dropped it everywhere: the batch that says "the world goes at this point" was in the list and reached, and nothing was ever handed to draw it.
+				DrawPanels( editor.Frame.Batches, width, height, world );
+			}
+
+			return;
+		}
+
+		//Handed back before the walk rather than after it, so a set of batches stays readable for as long as anything might still want to look at it.
+		CoreUiRenderer.Recycle( windowBatches );
+
+		//Building is walking the panels and making geometry out of them; recording is handing that geometry to the device. The first is where
+		//a widget that rebuilds itself every frame shows up and the second is where a batch per panel does, and they are not the same fault.
+		using ( Diagnostics.Performance.Scope( "ui build" ) )
+		{
+			CoreUiRenderer.Build( root, windowBatches, RasteriseCached, UploadUiTexture );
+		}
+
+		using ( Diagnostics.Performance.Scope( "ui record" ) )
+		{
+			DrawPanels( windowBatches, width, height, world );
+		}
+	}
+
+	//What BuildEditorUi made of a window's panels this frame.
+	internal enum UiBuilt
+	{
+		/// <summary>Walked afresh: the panels moved, or something in them did.</summary>
+		Walked,
+
+		/// <summary>Last frame's batches as they stand, over a picture that has new pixels.</summary>
+		KeptChanged,
+
+		/// <summary>Last frame's batches, and every picture on them as it was: the window's picture is the one already on the screen.</summary>
+		KeptSame,
+	}
+
+	//Builds an editor window's UI batches, or reuses last frame's; never reused while the world is inline
+	internal static UiBuilt BuildEditorUi( Rinten.UI.RootPanel editor, bool keepable )
+	{
+		editor.Frame ??= new();
+
+		using var building = Diagnostics.Performance.Scope( "ui build" );
+
+		if ( keepable && CoreUiRenderer.TryReuseFrame( editor, UploadUiTexture ) )
+			return editor.Frame.Changed ? UiBuilt.KeptChanged : UiBuilt.KeptSame;
+
+		//Unkept until the walk finishes: a walk that throws must not leave a half-built list under the old key.
+		editor.Frame.Kept = false;
+		CoreUiRenderer.Recycle( editor.Frame.Batches );
+		CoreUiRenderer.Build( editor, editor.Frame.Batches, RasteriseCached, UploadUiTexture );
+		CoreUiRenderer.KeepFrame( editor );
+
+		return UiBuilt.Walked;
+	}
+
+	//An editor window's batches, as BuildEditorUi last left them, into the open frame - without the world.
+	internal static void DrawEditorUi( Rinten.UI.RootPanel editor, int width, int height )
+	{
+		if ( editor.Frame is null || !EnsureResources() ) return;
+
+		using ( Diagnostics.Performance.Scope( "ui record" ) )
+		{
+			DrawPanels( editor.Frame.Batches, width, height );
+		}
+	}
+
+	//The world, and whatever an editor window paints over it, into the frame of a layer lying over the world's place at
+	//origin on the window. What is painted before the world is the window's own, under the layer, and not drawn here.
+	internal static void DrawEditorUiOverWorld( Rinten.UI.RootPanel editor, Vector2 origin, int width, int height,
+		System.Action<Rect> world )
+	{
+		if ( editor.Frame is null || !EnsureResources() ) return;
+
+		using ( Diagnostics.Performance.Scope( "ui record" ) )
+		{
+			DrawPanels( editor.Frame.Batches, width, height, world, origin, fromWorld: true );
+		}
+	}
+
+	//Draws a still of the world plus the editor UI over it, for screenshots of a layered-world window
+	internal static void DrawEditorUiOverPicture( Rinten.UI.RootPanel editor, int width, int height, ulong world )
+	{
+		if ( editor.Frame is null || world == 0 || !EnsureResources() ) return;
+
+		using ( Diagnostics.Performance.Scope( "ui record" ) )
+		{
+			DrawPanels( editor.Frame.Batches, width, height, area =>
+			{
+				CoreUiRenderer.Recycle( pictureBatches );
+				CoreUiRenderer.Picture( pictureBatches, area, world );
+				DrawPanels( pictureBatches, width, height );
+			}, fromWorld: true );
+		}
+	}
+
+	//The one box the still of the world is drawn with - see DrawEditorUiOverPicture.
+	private static readonly System.Collections.Generic.List<CoreUiRenderer.UiBatch> pictureBatches = new();
+
+	//The batches of the game's panels, reused every frame.
+	private static readonly System.Collections.Generic.List<CoreUiRenderer.UiBatch> batches = new();
+
+	//And a window's own, apart from the game's: the world is drawn from inside a window's walk, and the
+	//game's panels are part of the world. One list for both was cleared under the window's own iteration.
+	private static readonly System.Collections.Generic.List<CoreUiRenderer.UiBatch> windowBatches = new();
+
+	//The batches themselves, drawn in order. origin is where on the window the target's corner is - nothing for a window's own frame,
+	//the layer's place for a layer's. From the world on, only what comes after the world's marker is drawn: the rest is under the layer.
+	private static void DrawPanels( System.Collections.Generic.List<CoreUiRenderer.UiBatch> batches,
+		int width, int height, System.Action<Rect> world = null, Vector2 origin = default, bool fromWorld = false )
+	{
+		if ( uiPipeline == 0 || whiteTexture == 0 ) return;
+		if ( width <= 0 || height <= 0 ) return;
+
+		if ( batches.Count == 0 ) return;
+
+		var ortho = new System.Numerics.Matrix4x4
+		{
+			M11 = 2.0f / width,
+			M22 = 2.0f / height,
+			M33 = 1.0f,
+			M41 = -1.0f - ( 2.0f * origin.x / width ),
+			M42 = -1.0f - ( 2.0f * origin.y / height ),
+			M44 = 1.0f,
+		};
+
+		//The UI shader also needs target size and window offset (clips are in window pixels) and screen mode
+		Span<byte> push = stackalloc byte[UiPushSize];
+		UiPush( push, ortho, new System.Numerics.Vector4( width, height, origin.x, origin.y ), inWorld: false );
+
+		CoreRenderDevice.ZoneBegin( "ui panels" );
+
+		var reached = !fromWorld;
+
+		foreach ( var batch in batches )
+		{
+			//The world, drawn where a panel wears it - see Panel.WearsWorld. Its own passes close the screen's and reopen it, so the panels after it land on top.
+			if ( batch.Texture == CoreUiRenderer.WorldTexture )
+			{
+				reached = true;
+
+				CoreRenderDevice.ZoneEnd();
+				world?.Invoke( batch.Area );
+				CoreRenderDevice.ZoneBegin( "ui panels" );
+				continue;
+			}
+
+			if ( !reached || batch.Vertices.Count == 0 ) continue;
+
+			var texture = batch.Texture;
+
+			if ( texture == CoreUiRenderer.BackdropTexture )
+			{
+				//Backdrop is captured here, in draw order, so it includes panels already drawn below this one
+				if ( !CoreRenderDevice.CaptureBackdrop() ) continue;
+
+				texture = CoreRenderDevice.BackdropTexture();
+
+				//No copy, nothing to filter: the panel drops out rather than drawing whatever happened to be in the texture slot.
+				if ( texture == 0 ) continue;
+			}
+
+			DrawUiBatch( uiPipeline, batch, texture != 0 ? texture : whiteTexture, push );
+		}
+
+		CoreRenderDevice.ZoneEnd();
+	}
+
+	//One batch of panels: out of the device buffer its kept walk put it in, or written into the frame's ring where it has none - see KeepOnDevice.
+	private static void DrawUiBatch( ulong pipeline, in CoreUiRenderer.UiBatch batch, ulong texture, ReadOnlySpan<byte> push )
+	{
+		if ( batch.Buffer != 0 )
+		{
+			var draw = new CoreBufferDraw
+			{
+				Pipeline = pipeline,
+				Vertices = batch.Buffer,
+				First = batch.First,
+				Count = batch.Vertices.Count,
+				Texture = texture,
+			};
+
+			if ( CoreRenderDevice.DrawBuffers( draw, push ) ) return;
+		}
+
+		CoreRenderDevice.DrawDynamic( pipeline,
+			System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+				System.Runtime.InteropServices.CollectionsMarshal.AsSpan( batch.Vertices ) ),
+			batch.Vertices.Count, UiVertexStride, push, texture );
+	}
+
+	//Uploads an engine texture to our device once via the CPU; fine for still images only
+	private static ulong UploadUiTexture( Texture texture )
+	{
+		if ( texture?.core is null ) return 0;
+
+		return texture.core.Device();
+	}
+
+	//The gizmo text cache, lent to the UI - same strings, same textures, one eviction policy.
+	private static (ulong Texture, Vector2 Size) RasteriseCached( in TextRendering.Scope scope )
+	{
+		var key = System.HashCode.Combine( scope );
+
+		RetireOldText();
+
+		if ( textCache.TryGetValue( key, out var cached ) )
+		{
+			//A cache hit counts as a use, or the sweeper would keep evicting and re-rasterising the label
+			cached.Used = textFrame;
+			textCache[key] = cached;
+
+			return (cached.Texture, cached.Size);
+		}
+
+		//Only the miss: a hit is a dictionary lookup and putting a zone round it would cost more than it measures.
+		using ( Diagnostics.Performance.Scope( "ui text" ) )
+		{
+			var made = RasteriseText( scope );
+			textCache[key] = (made.Texture, made.Size, textFrame);
+
+			return made;
+		}
+	}
+
+	//Screen pixels to clip space, for everything drawn in the view's own pixels: the gizmo labels and shapes, the profiler, the immediate quads.
+	//Vulkan's clip Y points down, and so does the screen's - for once, no flip. Was written out by hand wherever it was wanted, four times over.
+	private static System.Numerics.Matrix4x4 ScreenProjection( int width, int height )
+		=> new()
+		{
+			M11 = 2.0f / width,
+			M22 = 2.0f / height,
+			M33 = 1.0f,
+			M41 = -1.0f,
+			M42 = -1.0f,
+			M44 = 1.0f,
+		};
+
+	//One owner's debug drawing that is flat on the screen: shapes in pixels - a box select, the camera speed
+	//bar, a picture put on the screen - and the labels, whether at a pixel or over a point in the world.
+	private void DrawDebugScreen( DebugDrawList list, System.Numerics.Matrix4x4 viewProjection )
+	{
+		if ( list is null || screenPipeline == 0 ) return;
+		if ( list.Flats.Count == 0 && list.Labels.Count == 0 ) return;
+
+		var (width, height) = size;
+		if ( width <= 0 || height <= 0 ) return;
+
+		var push = LinePush( stackalloc byte[80], ScreenProjection( width, height ) );
+
+		DrawFlats( list.Flats, push );
+		DrawScreenLabels( list.Labels, viewProjection, width, height, push );
+	}
+
+	//Draws screen shapes in runs sharing a pipeline, push and texture, keeping request order
+	private void DrawFlats( List<DebugDrawList.Flat> flats, ReadOnlySpan<byte> push )
+	{
+		if ( flats.Count == 0 || whiteTexture == 0 ) return;
+
+		var pipeline = Pick( screenPipeline, screenTwo );
+		var built = 0;
+		ulong running = 0;
+
+		foreach ( var flat in flats )
+		{
+			var picture = flat.Picture is null ? whiteTexture : UploadUiTexture( flat.Picture );
+			if ( picture == 0 ) picture = whiteTexture;
+
+			if ( picture != running && built > 0 )
+			{
+				CoreRenderDevice.DrawDynamic( pipeline,
+					System.Runtime.InteropServices.MemoryMarshal.AsBytes( screenScratch.AsSpan( 0, built ) ),
+					built, 76, push, running );
+
+				built = 0;
+			}
+
+			running = picture;
+
+			if ( screenScratch.Length < built + flat.Count )
+				System.Array.Resize( ref screenScratch, Math.Max( 256, ( built + flat.Count ) * 2 ) );
+
+			flat.Span.CopyTo( screenScratch.AsSpan( built ) );
+			built += flat.Count;
+		}
+
+		if ( built > 0 )
+		{
+			CoreRenderDevice.DrawDynamic( pipeline,
+				System.Runtime.InteropServices.MemoryMarshal.AsBytes( screenScratch.AsSpan( 0, built ) ),
+				built, 76, push, running );
+		}
+	}
+
+	//Where the frame's screen shapes are laid end to end - see DrawFlats.
+	private Vertex[] screenScratch = System.Array.Empty<Vertex>();
+
+	//Draws screen labels at a pixel or over a world point (skipped behind the eye), from the label cache
+	private void DrawScreenLabels( List<DebugDrawList.Label> labels, in System.Numerics.Matrix4x4 viewProjection,
+		int width, int height, ReadOnlySpan<byte> push )
+	{
+		if ( labels.Count == 0 ) return;
+
+		Span<Vertex> corners = stackalloc Vertex[6];
+		var white = Color32.White;
+
+		foreach ( var label in labels )
+		{
+			Vector2 anchor;
+
+			if ( label.Placing == DebugDrawList.Placing.Screen )
+			{
+				anchor = new Vector2( label.Position.x, label.Position.y );
+			}
+			else if ( label.Placing == DebugDrawList.Placing.Projected )
+			{
+				var clip = Clip( viewProjection, label.Position );
+				if ( clip.W <= 0.0001f ) continue;
+
+				//The clip volume's y already runs down the screen - see ProjectionMatrix.
+				anchor = new Vector2(
+					( clip.X / clip.W * 0.5f + 0.5f ) * width,
+					( clip.Y / clip.W * 0.5f + 0.5f ) * height ) + label.Offset;
+			}
+			else
+			{
+				continue;
+			}
+
+			textLabels++;
+
+			var text = RasteriseCached( label.Scope );
+			if ( text.Texture == 0 ) continue;
+
+			var (left, top) = Anchored( label.Flags, text.Size );
+
+			//The corners about the anchor, turned if it asks to be.
+			var right = new Vector2( 1, 0 );
+			var down = new Vector2( 0, 1 );
+
+			if ( label.Angle != 0.0f )
+			{
+				var radians = label.Angle.DegreeToRadian();
+				right = new Vector2( MathF.Cos( radians ), MathF.Sin( radians ) );
+				down = new Vector2( -right.y, right.x );
+			}
+
+			var topLeft = anchor + ( right * left ) + ( down * top );
+			var across = right * text.Size.x;
+			var along = down * text.Size.y;
+
+			corners[0] = IconVertex( ToPoint( topLeft ), 0, 0, white );
+			corners[1] = IconVertex( ToPoint( topLeft + across ), 1, 0, white );
+			corners[2] = IconVertex( ToPoint( topLeft + along ), 0, 1, white );
+			corners[3] = corners[2];
+			corners[4] = corners[1];
+			corners[5] = IconVertex( ToPoint( topLeft + across + along ), 1, 1, white );
+
+			CoreRenderDevice.DrawDynamic( Pick( screenPipeline, screenTwo ),
+				System.Runtime.InteropServices.MemoryMarshal.AsBytes( corners ),
+				corners.Length, 76, push, text.Texture );
+		}
+
+		static Vector3 ToPoint( Vector2 at ) => new( at.x, at.y, 0 );
+	}
+
+	//Where a picture this big starts, from the point it is anchored to: how far right and how far down its top-left corner is, as the flags say.
+	private static (float Left, float Top) Anchored( TextFlag flags, Vector2 size )
+	{
+		var left = flags.Contains( TextFlag.CenterHorizontally ) ? -size.x * 0.5f
+			: flags.Contains( TextFlag.Right ) ? -size.x : 0.0f;
+
+		var top = flags.Contains( TextFlag.CenterVertically ) ? -size.y * 0.5f
+			: flags.Contains( TextFlag.Bottom ) ? -size.y : 0.0f;
+
+		return (left, top);
+	}
+
+	//The labels that stand in the world: turned to the eye, or lying in a plane of their own - a pixel of text Scale metres.
+	private void DrawWorldLabels( List<DebugDrawList.Label> labels, System.Numerics.Matrix4x4 viewProjection, bool overlay )
+	{
+		if ( labels.Count == 0 ) return;
+
+		var pipeline = overlay ? Pick( screenPipeline, screenTwo ) : Pick( billboardPipeline, billboardTwo );
+		if ( pipeline == 0 ) return;
+
+		var push = LinePush( stackalloc byte[80], viewProjection, world: true );
+
+		Span<Vertex> corners = stackalloc Vertex[6];
+		var white = Color32.White;
+
+		foreach ( var label in labels )
+		{
+			if ( label.IgnoreDepth != overlay ) continue;
+			if ( label.Placing is not ( DebugDrawList.Placing.Facing or DebugDrawList.Placing.Plane ) ) continue;
+
+			textLabels++;
+
+			var text = RasteriseCached( label.Scope );
+			if ( text.Texture == 0 ) continue;
+
+			var rotation = label.Placing == DebugDrawList.Placing.Facing ? eyeView.Rotation : label.Rotation;
+			var right = rotation.Right;
+			var up = rotation.Up;
+
+			var extent = text.Size * label.Scale;
+			var (left, top) = Anchored( label.Flags, extent );
+
+			//Down the picture is down the world: v grows as up falls.
+			var topLeft = label.Position + ( right * left ) - ( up * top );
+			var across = right * extent.x;
+			var along = -up * extent.y;
+
+			corners[0] = IconVertex( topLeft, 0, 0, white );
+			corners[1] = IconVertex( topLeft + across, 1, 0, white );
+			corners[2] = IconVertex( topLeft + along, 0, 1, white );
+			corners[3] = corners[2];
+			corners[4] = corners[1];
+			corners[5] = IconVertex( topLeft + across + along, 1, 1, white );
+
+			CoreRenderDevice.DrawDynamic( pipeline,
+				System.Runtime.InteropServices.MemoryMarshal.AsBytes( corners ),
+				corners.Length, 76, push, text.Texture );
+		}
+	}
+
+	//Per-frame text stats: labels asked, rasterised and textures released
+	internal static long textLabels;
+	internal static long textMade;
+	internal static long textGone;
+
+	private static void RetireOldText()
+	{
+		if ( textRetiredAt == textFrame ) return;
+		textRetiredAt = textFrame;
+
+		if ( textCache.Count == 0 ) return;
+
+		System.Collections.Generic.List<int> going = null;
+
+		foreach ( var (key, entry) in textCache )
+		{
+			if ( textFrame - entry.Used <= TextKeptFor ) continue;
+
+			going ??= new System.Collections.Generic.List<int>();
+			going.Add( key );
+		}
+
+		if ( going is null ) return;
+
+		foreach ( var key in going )
+		{
+			textGone++;
+
+			CoreRenderDevice.DestroyTexture( textCache[key].Texture );
+			textCache.Remove( key );
+		}
+	}
+
+	//Text into pixels: measured by the engine's own text machinery, drawn by it too, uploaded once. The colour is baked in - the scope carries it.
+	private static (ulong Texture, Vector2 Size) RasteriseText( in TextRendering.Scope scope )
+	{
+		var rasterStart = System.Diagnostics.Stopwatch.GetTimestamp();
+
+		//Measure with the block that draws it; MeasureText rasterised a second unused texture
+		const TextFlag flags = TextFlag.LeftTop | TextFlag.DontClip;
+		using var block = new TextRendering.TextBlock( scope, Vector2.Zero, flags );
+		var measured = block.PictureSize();
+
+		var width = System.Math.Clamp( (int)System.MathF.Ceiling( measured.x ), 1, 1024 );
+		var height = System.Math.Clamp( (int)System.MathF.Ceiling( measured.y ), 1, 256 );
+
+		using var bitmap = new Bitmap( width, height );
+
+		bitmap.Clear( new Color( 0, 0, 0, 0 ) );
+		bitmap.DrawText( block, bitmap.Rect );
+
+		//Straight out of the bitmap's own pixels, which are already eight-bit RGBA: a copy
+		//into an array of colours was a picture's worth of garbage per new string (plan В5).
+		var texture = CoreRenderDevice.CreateTextureRgba( bitmap.GetBuffer(), width, height, srgb: true );
+
+		Rinten.UI.TextStats.Scope( System.Diagnostics.Stopwatch.GetTimestamp() - rasterStart, (long)width * height * 4 );
+
+		return (texture, new Vector2( width, height ));
+	}
+
+	//Gizmo sprites as camera-facing quads built here; pixel sizes converted at depth to match picking
+	private void DrawSprites( List<DebugDrawList.Sprite> sprites, CameraComponent camera,
+		System.Numerics.Matrix4x4 viewProjection, bool overlay )
+	{
+		if ( sprites.Count == 0 ) return;
+
+		//The same shader either way; the overlay one is the copy with the depth test off, which is what a handle drawn over the world wants.
+		var pipeline = overlay ? Pick( screenPipeline, screenTwo ) : Pick( billboardPipeline, billboardTwo );
+		if ( pipeline == 0 ) return;
+
+		var (width, height) = size;
+		if ( width <= 0 || height <= 0 ) return;
+
+		var right = eyeView.Rotation.Right;
+		var up = eyeView.Rotation.Up;
+
+		var push = LinePush( stackalloc byte[80], viewProjection, world: true );
+
+		//Built into one buffer and drawn in runs of a shared picture rather than a call each: a mesh tool puts a dot on every
+		//vertex it can see, and on a dense mesh that is thousands of sprites a frame with the same blank texture on all of them.
+		var built = 0;
+		ulong running = 0;
+
+		//The push block is handed in rather than captured: it lives on the stack, and a local function cannot hold on to its caller's span.
+		void Flush( ReadOnlySpan<byte> block )
+		{
+			if ( built == 0 || running == 0 ) return;
+
+			CoreRenderDevice.DrawDynamic( pipeline,
+				System.Runtime.InteropServices.MemoryMarshal.AsBytes( spriteScratch.AsSpan( 0, built ) ),
+				built, 76, block, running );
+
+			built = 0;
+		}
+
+		foreach ( var sprite in sprites )
+		{
+			if ( sprite.IgnoreDepth != overlay ) continue;
+
+			//White where no picture was named: a sprite with no texture is a plain square, which is what the mesh tools draw their dots as.
+			var picture = UploadUiTexture( sprite.Picture );
+			if ( picture == 0 ) picture = whiteTexture;
+			if ( picture == 0 ) continue;
+
+			var half = HalfExtents( sprite, viewProjection, right, up, width, height );
+			if ( half.x <= 0.0f || half.y <= 0.0f ) continue;
+
+			//A different picture ends the run: what is already built is drawn with the texture it was built for, in the order it was asked for.
+			if ( picture != running )
+			{
+				Flush( push );
+				running = picture;
+			}
+
+			if ( spriteScratch.Length < built + 6 )
+				System.Array.Resize( ref spriteScratch, System.Math.Max( 96, ( built + 6 ) * 2 ) );
+
+			var r = right;
+			var u = up;
+
+			//Turned about the axis it is seen down, which is the only turn a picture facing the camera can be given.
+			if ( sprite.Angle != 0.0f )
+			{
+				var radians = sprite.Angle.DegreeToRadian();
+				var cos = System.MathF.Cos( radians );
+				var sin = System.MathF.Sin( radians );
+
+				r = ( right * cos ) + ( up * sin );
+				u = ( up * cos ) - ( right * sin );
+			}
+
+			r *= half.x;
+			u *= half.y;
+
+			var at = sprite.Position;
+			var tint = (Color32)sprite.Tint;
+
+			//Two triangles, the same winding and the same v-down as the text beside them: the top of the picture gets v = 0.
+			spriteScratch[built + 0] = IconVertex( at - r + u, 0, 0, tint );
+			spriteScratch[built + 1] = IconVertex( at + r + u, 1, 0, tint );
+			spriteScratch[built + 2] = IconVertex( at - r - u, 0, 1, tint );
+			spriteScratch[built + 3] = IconVertex( at - r - u, 0, 1, tint );
+			spriteScratch[built + 4] = IconVertex( at + r + u, 1, 0, tint );
+			spriteScratch[built + 5] = IconVertex( at + r - u, 1, 1, tint );
+
+			built += 6;
+		}
+
+		Flush( push );
+	}
+
+	//The quads a frame's sprites are built into, kept between them.
+	private Vertex[] spriteScratch = System.Array.Empty<Vertex>();
+
+	//Sprite half-extents in metres; screen-space sizes measured through the projection (works for ortho)
+	private static Vector2 HalfExtents( in DebugDrawList.Sprite sprite,
+		in System.Numerics.Matrix4x4 viewProjection, Vector3 right, Vector3 up, int width, int height )
+	{
+		if ( sprite.WorldSpace )
+			return new Vector2( sprite.Size.x, sprite.Size.y ) * 0.5f;
+
+		var centre = Clip( viewProjection, sprite.Position );
+
+		//Behind the eye, where a projection says nothing anybody can draw with.
+		if ( centre.W <= 0.0001f ) return default;
+
+		//Right and up are square to the way the camera looks, so a step along either leaves w alone and the clip-space step is the whole answer.
+		var alongRight = Clip( viewProjection, sprite.Position + right ).X - centre.X;
+		var alongUp = Clip( viewProjection, sprite.Position + up ).Y - centre.Y;
+
+		//Clip to the screen: the volume is two units across whatever the viewport is wide.
+		var pixelsPerMetreX = System.MathF.Abs( alongRight / centre.W ) * 0.5f * width;
+		var pixelsPerMetreY = System.MathF.Abs( alongUp / centre.W ) * 0.5f * height;
+
+		if ( pixelsPerMetreX <= 0.0001f || pixelsPerMetreY <= 0.0001f ) return default;
+
+		return new Vector2(
+			sprite.Size.x * 0.5f / pixelsPerMetreX,
+			sprite.Size.y * 0.5f / pixelsPerMetreY );
+	}
+
+	//A point in the world, in the clip volume.
+	private static System.Numerics.Vector4 Clip( in System.Numerics.Matrix4x4 viewProjection, Vector3 point )
+		=> System.Numerics.Vector4.Transform(
+			new System.Numerics.Vector4( point.x, point.y, point.z, 1.0f ), viewProjection );
+
+	//The UI shader's push block: the matrix, the target, the mode.
+	private const int UiPushSize = 96;
+
+	//The interface's pipeline for a target other than the screen, made the first time something draws boxes into one and kept - see DrawBoxes.
+	private static readonly Dictionary<(CoreRender.TargetKind Target, int Format), ulong> uiTargetPipelines = new();
+
+	private static ulong UiPipelineFor( CoreRender.TargetKind target, int pictureFormat )
+	{
+		if ( target == CoreRender.TargetKind.Screen ) return uiPipeline;
+
+		var key = ( target, target == CoreRender.TargetKind.Picture ? pictureFormat : 0 );
+
+		if ( uiTargetPipelines.TryGetValue( key, out var kept ) ) return kept;
+
+		var made = 0ul;
+
+		Compile( EngineShaders.Ui, ( vs, ps ) =>
+		{
+			made = CoreRenderDevice.CreatePipeline( vs, ps, CoreRender.VertexLayoutKind.Ui, depthTest: false,
+				CoreRender.Topology.Triangles, blend: true, target: target,
+				pictureFormat: target == CoreRender.TargetKind.Picture ? pictureFormat : -1 );
+		} );
+
+		//Remembered either way: one that will not bake is asked about once.
+		uiTargetPipelines[key] = made;
+
+		return made;
+	}
+
+	//Draws UI-style boxes into a command list's target, with the same shader as game panels (HUD)
+	internal static void DrawBoxes( ReadOnlySpan<CoreUiRenderer.UiVertex> vertices, ulong texture,
+		CoreRender.TargetKind target, int pictureFormat, int width, int height )
+	{
+		if ( vertices.IsEmpty || width <= 0 || height <= 0 ) return;
+		if ( !EnsureResources() || whiteTexture == 0 ) return;
+
+		var pipeline = UiPipelineFor( target, pictureFormat );
+		if ( pipeline == 0 ) return;
+
+		var ortho = ScreenProjection( width, height );
+
+		Span<byte> push = stackalloc byte[UiPushSize];
+		UiPush( push, ortho, new System.Numerics.Vector4( width, height, 0.0f, 0.0f ), inWorld: false );
+
+		CoreRenderDevice.DrawDynamic( pipeline, MemoryMarshal.AsBytes( vertices ), vertices.Length, UiVertexStride, push,
+			texture != 0 ? texture : whiteTexture );
+	}
+
+	//A string drawn as a picture, out of the cache the gizmo labels and the panels share.
+	internal static (ulong Texture, Vector2 Size) TextPicture( in TextRendering.Scope scope ) => RasteriseCached( scope );
+
+	private static void UiPush( Span<byte> into, in System.Numerics.Matrix4x4 toClip,
+		in System.Numerics.Vector4 screen, bool inWorld, bool eyeClip = false )
+	{
+		System.Runtime.InteropServices.MemoryMarshal.Write( into, in toClip );
+		System.Runtime.InteropServices.MemoryMarshal.Write( into[64..], in screen );
+		System.Runtime.InteropServices.MemoryMarshal.Write( into[80..],
+			new System.Numerics.Vector4( inWorld ? 1.0f : 0.0f, eyeClip ? 1.0f : 0.0f, 0, 0 ) );
+	}
+
+	//World panel matrix; in a both-eyes pass it's world-only and the shader applies each eye's view
+	private (System.Numerics.Matrix4x4 Matrix, bool EyeClip) PanelMatrix( Transform place, in System.Numerics.Matrix4x4 viewProjection )
+	{
+		var toWorld = (System.Numerics.Matrix4x4)ScenePanelObject.BuildPanelToWorldMatrix( place );
+
+		return BothEyes || ForceEyePush ? (toWorld, true) : (toWorld * viewProjection, false);
+	}
+
+	//The batches of the world panel being drawn; one at a time, so one list.
+	private static readonly System.Collections.Generic.List<CoreUiRenderer.UiBatch> worldPanelBatches = new();
+
+	//Draws world panels with the screen UI walk and shader through their own matrix; no backdrop filters
+	private void DrawWorldPanels( Scene scene, System.Numerics.Matrix4x4 viewProjection )
+	{
+		if ( uiWorldPipeline == 0 || whiteTexture == 0 || !scene.IsValid() ) return;
+
+		Span<byte> push = stackalloc byte[UiPushSize];
+
+		foreach ( var component in scene.GetAllComponents<Rinten.WorldPanel>() )
+		{
+			if ( !component.IsValid() || !component.Enabled ) continue;
+			if ( component.GetPanel() is not Rinten.UI.WorldPanel panel || !panel.IsValid ) continue;
+			if ( panel.SceneObject is not { } sceneObject || !sceneObject.RenderingEnabled ) continue;
+
+			CoreUiRenderer.Recycle( worldPanelBatches );
+			CoreUiRenderer.Build( panel, worldPanelBatches, RasteriseCached, UploadUiTexture );
+
+			if ( worldPanelBatches.Count == 0 ) continue;
+
+			var (matrix, eyeClip) = PanelMatrix( panel.Transform, viewProjection );
+
+			var bounds = panel.PanelBounds;
+			UiPush( push, matrix, new System.Numerics.Vector4( bounds.Width, bounds.Height, 0, 0 ), inWorld: true, eyeClip );
+
+			foreach ( var batch in worldPanelBatches )
+			{
+				if ( batch.Vertices.Count == 0 ) continue;
+				if ( batch.Texture == CoreUiRenderer.WorldTexture || batch.Texture == CoreUiRenderer.BackdropTexture ) continue;
+
+				ClipToPanel( batch.Vertices, bounds );
+
+				CoreRenderDevice.DrawDynamic( Pick( uiWorldPipeline, uiWorldTwo ),
+					System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+						System.Runtime.InteropServices.CollectionsMarshal.AsSpan( batch.Vertices ) ),
+					batch.Vertices.Count, UiVertexStride, push,
+					batch.Texture != 0 ? batch.Texture : whiteTexture );
+			}
+		}
+	}
+
+	//The game's screen panels that are sheets in a headset, in the order they are drawn.
+	private static readonly System.Collections.Generic.List<GameRootPanel> headsetPanels = new();
+
+	//Draws screen panels on headset sheets over the world, lowest layer first, without a depth test
+	private void DrawHeadsetPanels( Scene scene, System.Numerics.Matrix4x4 viewProjection )
+	{
+		if ( uiSheetPipeline == 0 || whiteTexture == 0 || !scene.IsValid() ) return;
+
+		headsetPanels.Clear();
+
+		foreach ( var screen in scene.GetAllComponents<ScreenPanel>() )
+		{
+			if ( !screen.IsValid() || !screen.Enabled ) continue;
+			if ( screen.GetPanel() is not GameRootPanel { InHeadset: true } root || !root.IsValid ) continue;
+
+			headsetPanels.Add( root );
+		}
+
+		if ( headsetPanels.Count == 0 ) return;
+
+		headsetPanels.Sort( static ( a, b ) => ( a.ComputedStyle?.ZIndex ?? 0 ).CompareTo( b.ComputedStyle?.ZIndex ?? 0 ) );
+
+		Span<byte> push = stackalloc byte[UiPushSize];
+
+		DropGoneSheets();
+
+		foreach ( var root in headsetPanels )
+		{
+			var bounds = root.PanelBounds;
+			HeadsetBatches( root, bounds );
+
+			var batches = root.Frame.Batches;
+			if ( batches.Count == 0 ) continue;
+
+			var (matrix, eyeClip) = PanelMatrix( root.Sheet, viewProjection );
+
+			UiPush( push, matrix, new System.Numerics.Vector4( bounds.Width, bounds.Height, 0, 0 ), inWorld: true, eyeClip );
+
+			CoreRenderDevice.ZoneBegin( "sheet draw" );
+
+			//Out of the sheet's own buffer, written once when it was walked: a kept frame's vertices are the same
+			//bytes every frame, and writing them into the frame's ring again was most of what drawing the sheet cost.
+			var pipeline = Pick( uiSheetPipeline, uiSheetTwo );
+
+			foreach ( var batch in batches )
+			{
+				if ( !KeptDrawn( batch ) ) continue;
+
+				DrawUiBatch( pipeline, batch, batch.Texture != 0 ? batch.Texture : whiteTexture, push );
+			}
+
+			CoreRenderDevice.ZoneEnd();
+		}
+	}
+
+	//A headset sheet's clipped batches, reused from last frame while nothing changed
+	private static List<CoreUiRenderer.UiBatch> HeadsetBatches( Rinten.UI.RootPanel root, Rect bounds )
+	{
+		root.Frame ??= new();
+
+		CoreRenderDevice.ZoneBegin( "sheet kept" );
+		var reused = root.Frame.Cut == bounds && CoreUiRenderer.TryReuseFrame( root, UploadUiTexture );
+		CoreRenderDevice.ZoneEnd();
+
+		if ( reused ) return root.Frame.Batches;
+
+		CoreRenderDevice.ZoneBegin( "sheet walk" );
+		try
+		{
+			return WalkSheet( root, bounds );
+		}
+		finally
+		{
+			CoreRenderDevice.ZoneEnd();
+		}
+	}
+
+	//A headset sheet walked into batches, cut to its edge and kept - see HeadsetBatches.
+	private static List<CoreUiRenderer.UiBatch> WalkSheet( Rinten.UI.RootPanel root, Rect bounds )
+	{
+		//Unkept until the walk finishes: a walk that throws must not leave a half-built list under the old key.
+		root.Frame.Kept = false;
+		CoreUiRenderer.Recycle( root.Frame.Batches );
+		CoreUiRenderer.Build( root, root.Frame.Batches, RasteriseCached, UploadUiTexture );
+
+		foreach ( var batch in root.Frame.Batches )
+			ClipToPanel( batch.Vertices, bounds );
+
+		CoreUiRenderer.KeepFrame( root );
+		root.Frame.Cut = bounds;
+
+		KeepOnDevice( root );
+
+		return root.Frame.Batches;
+	}
+
+	//Uploads a kept walk's batches into one device buffer, drawn from there while the walk is kept
+	private static void KeepOnDevice( Rinten.UI.RootPanel root )
+	{
+		var frame = root.Frame;
+
+		if ( frame.Vertices != 0 ) CoreRenderDevice.DestroyBuffer( frame.Vertices );
+		frame.Vertices = 0;
+
+		var batches = frame.Batches;
+		var total = 0;
+
+		foreach ( var batch in batches )
+		{
+			if ( KeptDrawn( batch ) ) total += batch.Vertices.Count;
+		}
+
+		if ( total == 0 ) return;
+
+		//One array for every walk, grown when a walk needs more: the device takes a copy, so what is left in it after is nobody's.
+		var need = total * UiVertexStride;
+		if ( sheetBytes.Length < need ) sheetBytes = new byte[need];
+
+		var bytes = sheetBytes.AsSpan( 0, need );
+		var at = 0;
+
+		foreach ( var batch in batches )
+		{
+			if ( !KeptDrawn( batch ) ) continue;
+
+			System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+				System.Runtime.InteropServices.CollectionsMarshal.AsSpan( batch.Vertices ) ).CopyTo( bytes[( at * UiVertexStride )..] );
+
+			at += batch.Vertices.Count;
+		}
+
+		var buffer = CoreRenderDevice.CreateBuffer( bytes );
+		if ( buffer == 0 ) return;
+
+		frame.Vertices = buffer;
+		sheetsHolding.Add( root );
+
+		at = 0;
+
+		for ( var i = 0; i < batches.Count; i++ )
+		{
+			if ( !KeptDrawn( batches[i] ) ) continue;
+
+			batches[i] = batches[i] with { Buffer = buffer, First = at };
+			at += batches[i].Vertices.Count;
+		}
+	}
+
+	//Whether a kept batch is vertices to draw - not the world's place, a backdrop, or nothing.
+	private static bool KeptDrawn( in CoreUiRenderer.UiBatch batch ) => batch.Vertices.Count > 0
+		&& batch.Texture != CoreUiRenderer.WorldTexture && batch.Texture != CoreUiRenderer.BackdropTexture;
+
+	//Where a sheet's vertices are laid end to end before they go to the device - see KeepOnDevice.
+	private static byte[] sheetBytes = [];
+
+	//The sheets holding a buffer of their own - see KeepOnDevice.
+	private static readonly HashSet<Rinten.UI.RootPanel> sheetsHolding = new();
+
+	//Lets go of the buffers of sheets that are gone.
+	private static void DropGoneSheets()
+	{
+		if ( sheetsHolding.Count == 0 ) return;
+
+		sheetsHolding.RemoveWhere( static root =>
+		{
+			if ( root.IsValid ) return false;
+
+			if ( root.Frame is { Vertices: not 0 } frame )
+			{
+				CoreRenderDevice.DestroyBuffer( frame.Vertices );
+				frame.Vertices = 0;
+			}
+
+			return true;
+		} );
+	}
+
+	//Clips boxes to the panel's edge: ancestor clips are narrowed to it, unclipped boxes get it
+	private static void ClipToPanel( System.Collections.Generic.List<CoreUiRenderer.UiVertex> vertices, Rect panel )
+	{
+		var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan( vertices );
+
+		for ( var i = 0; i < span.Length; i++ )
+		{
+			ref var vertex = ref span[i];
+			var clip = vertex.Clip;
+
+			if ( clip.z > clip.x || clip.w > clip.y )
+			{
+				vertex.Clip = new Vector4(
+					System.MathF.Max( clip.x, panel.Left ), System.MathF.Max( clip.y, panel.Top ),
+					System.MathF.Min( clip.z, panel.Right ), System.MathF.Min( clip.w, panel.Bottom ) );
+			}
+			else
+			{
+				vertex.Clip = new Vector4( panel.Left, panel.Top, panel.Right, panel.Bottom );
+			}
+		}
+	}
+
+	//Draws scene text as billboard quads; one text pixel is 0.01 world units at scale one
+	private void DrawWorldText( Scene scene, CameraComponent camera,
+		System.Numerics.Matrix4x4 viewProjection )
+	{
+		if ( billboardPipeline == 0 || !scene.IsValid() ) return;
+
+		var push = LinePush( stackalloc byte[80], viewProjection, world: true );
+		Span<Vertex> corners = stackalloc Vertex[6];
+
+		foreach ( var renderer in scene.GetAllComponents<TextRenderer>() )
+		{
+			if ( !renderer.IsValid() || !renderer.Enabled ) continue;
+			if ( string.IsNullOrEmpty( renderer.TextScope.Text ) ) continue;
+
+			var text = RasteriseCached( renderer.TextScope );
+			if ( text.Texture == 0 ) continue;
+
+			var transform = renderer.WorldTransform;
+
+			//Which way the words face: their own rotation, the camera's, or the camera's with the vertical axis left alone.
+			var rotation = renderer.Billboard switch
+			{
+				TextRenderer.BillboardMode.Always => eyeView.Rotation,
+				TextRenderer.BillboardMode.YOnly => Rotation.LookAt(
+					( eyeView.Position - transform.Position ).WithY( 0 ).Normal * -1.0f, Vector3.Up ),
+				_ => transform.Rotation,
+			};
+
+			var scale = renderer.Scale * TextRenderer.PixelsToWorld * transform.Scale.x;
+
+			var width = text.Size.x * scale;
+			var height = text.Size.y * scale;
+
+			//The alignment moves the quad against the point rather than moving the point: the component's
+			//position is where the text is anchored, not where its top-left corner happens to land.
+			var offsetX = renderer.HorizontalAlignment switch
+			{
+				TextRenderer.HAlignment.Left => 0.0f,
+				TextRenderer.HAlignment.Right => -width,
+				_ => -width * 0.5f,
+			};
+
+			var offsetY = renderer.VerticalAlignment switch
+			{
+				TextRenderer.VAlignment.Top => 0.0f,
+				TextRenderer.VAlignment.Bottom => height,
+				_ => height * 0.5f,
+			};
+
+			//Right and up in the text's own frame. Up is the quad's, so the top of the picture - where v is zero - is the top of the words.
+			var right = rotation.Right;
+			var up = rotation.Up;
+
+			var origin = transform.Position + ( right * offsetX ) + ( up * offsetY );
+
+			var tint = Color32.White;
+
+			corners[0] = IconVertex( origin, 0, 0, tint );
+			corners[1] = IconVertex( origin + ( right * width ), 1, 0, tint );
+			corners[2] = IconVertex( origin - ( up * height ), 0, 1, tint );
+			corners[3] = IconVertex( origin - ( up * height ), 0, 1, tint );
+			corners[4] = IconVertex( origin + ( right * width ), 1, 0, tint );
+			corners[5] = IconVertex( origin + ( right * width ) - ( up * height ), 1, 1, tint );
+
+			CoreRenderDevice.DrawDynamic( Pick( billboardPipeline, billboardTwo ),
+				System.Runtime.InteropServices.MemoryMarshal.AsBytes( corners ),
+				corners.Length, 76, push, text.Texture );
+		}
+	}
+
+	private static Vertex IconVertex( Vector3 position, float u, float v, Color32 tint )
+		=> new()
+		{
+			Position = position,
+			Color = tint,
+			TexCoord0 = new Vector4( u, v, 0, 0 ),
+		};
+
+	//Runs hand-drawn scene objects first and collects their draws, isolating exceptions from game code
+	private static void RunOverrides( Scene scene, SceneWorld gizmoWorld, DebugDrawList gizmoDraws, CameraComponent camera,
+		Rect viewport, Frustum frustum, CameraView view, System.Numerics.Matrix4x4 viewProjection, bool eye )
+	{
+		CoreImmediate.Begin();
+
+		//The view being drawn, not the camera's: in a headset each eye is where the headset says, and what faces the viewer or pins itself to a point
+		//on the screen asks Graphics where that is. The projection goes with it, since an eye's field is off centre and no field of view describes it.
+		Graphics.BeginView( new Transform( view.Position, view.Rotation ),
+			camera.RenderFieldOfView( viewport.Height > 0 ? viewport.Width / viewport.Height : 0.0f ), viewport, frustum,
+			viewProjection );
+
+		try
+		{
+			RunOverrides( scene?.SceneWorld, frustum, eye );
+
+			//Editor furniture lives in the gizmo world; walked second so it lands on top, and not culled
+			RunOverrides( gizmoWorld );
+
+			//The models Gizmo.Draw drew - the view's gizmos' and the scene's own.
+			AddGizmoModels( gizmoDraws );
+			AddGizmoModels( scene?.GizmoDraws );
+		}
+		finally
+		{
+			Graphics.IgnoreDepth = false;
+
+			Graphics.EndView();
+			CoreImmediate.End();
+		}
+	}
+
+	//The models a gizmo instance drew: scene objects in the instance's own world, which nothing walks as a scene, so they are handed over
+	//as what they are - a model, standing here, this colour, in this material, lit with the world, in the pose its caller set.
+	private static void AddGizmoModels( DebugDrawList draws )
+	{
+		if ( draws is null ) return;
+
+		foreach ( var model in draws.Models )
+		{
+			if ( !model.IsValid() || !model.RenderingEnabled || model.Model is null ) continue;
+
+			var mesh = model.Model.BoneCount > 0 ? CoreResources.Mesh( model.Model ) : null;
+			var pose = mesh is { IsSkinned: true } ? CoreSceneRenderer.PoseBones( mesh, model, model.Transform ) : null;
+			if ( pose is not null && CoreSceneRenderer.AtBindPose( pose ) ) pose = null;
+
+			CoreImmediate.Add( new CoreImmediate.ModelBatch( model.Model, model.Transform, model.ColorTint, model.MaterialOverride, Pose: pose ) );
+		}
+	}
+
+	//Scratch copies of a world's objects, since drawing them may add to the world mid-walk
+	private static readonly List<SceneObject> overrideBuffer = new();
+	private static readonly List<SceneObject> dynamicBuffer = new();
+
+
+	private static List<SceneObject> SceneObjectsOf( Scene scene, List<SceneObject> into )
+		=> SceneObjectsOf( scene?.SceneWorld, into );
+
+	private static List<SceneObject> SceneObjectsOf( SceneWorld world, List<SceneObject> into )
+	{
+		into.Clear();
+
+		if ( world is null ) return into;
+
+		lock ( world.InternalSceneObjects )
+		{
+			into.AddRange( world.InternalSceneObjects );
+		}
+
+		return into;
+	}
+
+	//The ones of those that draw themselves, copied out the same way. The world keeps them apart, so this copies the few rather than the whole world - see
+	//SceneWorld.InternalHandDrawn. Copied all the same, because what these draw is game and tool code and it may add to the world while it is being walked.
+	private static List<SceneObject> HandDrawnOf( SceneWorld world, List<SceneObject> into )
+	{
+		into.Clear();
+
+		if ( world is null ) return into;
+
+		lock ( world.InternalSceneObjects )
+		{
+			into.AddRange( world.InternalHandDrawn );
+		}
+
+		InDrawOrder( into );
+
+		return into;
+	}
+
+	//Stable insertion sort by DrawOrder; List.Sort is unstable and would make overlapping batches flicker
+	private static void InDrawOrder( List<SceneObject> objects )
+	{
+		for ( var i = 1; i < objects.Count; i++ )
+		{
+			var one = objects[i];
+			var order = OrderOf( one );
+
+			var at = i;
+			while ( at > 0 && OrderOf( objects[at - 1] ) > order )
+			{
+				objects[at] = objects[at - 1];
+				at--;
+			}
+
+			objects[at] = one;
+		}
+
+		static int OrderOf( SceneObject of ) => of is SceneCustomObject custom ? custom.DrawOrder : 0;
+	}
+
+	//Runs every self-drawing object in a world, frustum-culled only when it has given bounds
+	private static void RunOverrides( SceneWorld world, Frustum? frustum = null, bool eye = false )
+	{
+		if ( world is null ) return;
+
+		foreach ( var found in HandDrawnOf( world, overrideBuffer ) )
+		{
+			if ( found is not SceneCustomObject custom ) continue;
+			if ( !custom.RenderingEnabled ) continue;
+
+			//Put at a pixel of the screen: a headset's eye has no screen, and a picture stuck to the eye at the same
+			//place in both reads as infinitely far off at the edge of the lens. See SceneCustomObject.ScreenAnchored.
+			if ( eye && custom.ScreenAnchored ) continue;
+
+			//Off screen is off the list, the same rule everything drawn from the queue gets. An overlay is exempt:
+			//it is written over the finished picture and where it stands in the world is not where it lands.
+			if ( frustum is { } view && custom.RenderLayer == SceneRenderLayer.Default &&
+				custom.BoundsWereGiven && !Sees( view, custom.Bounds ) )
+			{
+				continue;
+			}
+
+			//The layer the object sits on decides whether what it draws is part of the world or written over it.
+			Graphics.IgnoreDepth = custom.RenderLayer == SceneRenderLayer.OverlayWithoutDepth;
+
+			//And which layer its draw is, for an object that asks: it is called once a view, not once a layer, so it is told the one it is in.
+			Graphics.CurrentLayer = custom.Flags.IsTranslucent ? SceneLayerType.Translucent : SceneLayerType.Opaque;
+
+			//Where it stands, for what it draws as a world panel - and a clean slate of view attributes, so the combo one object sets on them
+			//is not read by the next. Their render context was made afresh for each object; this is the same thing for the one set we have.
+			Graphics.ObjectTransform = custom.Transform;
+			Graphics.Attributes.Clear();
+
+			custom.RenderInternal();
+		}
+
+		Graphics.ObjectTransform = Transform.Zero;
+		Graphics.CurrentLayer = SceneLayerType.Unknown;
+		Graphics.Attributes.Clear();
+	}
+
+	//Generous visibility test using the bounding sphere; only for objects that gave bounds
+	private static bool Sees( in Frustum view, in BBox bounds )
+	{
+		var size = bounds.Size;
+
+		if ( !float.IsFinite( size.x ) || !float.IsFinite( size.y ) || !float.IsFinite( size.z ) )
+			return true;
+
+		//The sphere around it: centre plus half the diagonal, which is the same generous shape the queue tests everything else by.
+		return view.IsInside( bounds.Center, size.Length * 0.5f, partially: true );
+	}
+
+	//Whether this view's instanced draws went into the world's pass, so the overlays do not draw them a second time.
+	private bool instancedInWorld;
+
+	//Replays the frame's instanced draws (sprites, tile maps, particles) once their picture is open
+	private void DrawInstanced( CoreRender.TargetKind? world = null )
+	{
+		var draws = CoreImmediate.Instanced;
+
+		for ( var i = 0; i < draws.Length; i++ )
+		{
+			var draw = draws[i];
+
+			var pipeline = world is null ? draw.Pipeline : Graphics.InstancedPipeline( draw.Kind, world );
+			if ( pipeline == 0 ) continue;
+
+			CoreRenderDevice.DrawObjectsIndexed( pipeline, draw.IndexBuffer,
+				draw.IndexCount, draw.InstanceCount, draw.WideIndices,
+				System.Runtime.InteropServices.MemoryMarshal.AsBytes( draw.Push.AsSpan() ),
+				0, draw.Buffers.AsSpan( 0, draw.BufferCount ) );
+		}
+
+		var runs = CoreImmediate.Blocks;
+
+		for ( var i = 0; i < runs.Length; i++ )
+		{
+			var run = runs[i];
+
+			var pipeline = world is null ? run.Pipeline : Graphics.InstancedPipeline( run.Kind, world );
+			if ( pipeline == 0 ) continue;
+
+			CoreRenderDevice.DrawBlockInstanced( pipeline, run.IndexBuffer, run.IndexCount,
+				run.InstanceCount, run.WideIndices, run.Block, run.BlockBytes,
+				System.Runtime.InteropServices.MemoryMarshal.AsBytes( run.Push.AsSpan() ), run.Texture );
+		}
+	}
+
+	//Draws the frame's immediate vertices unlit with gizmo or billboard pipelines, after tonemapping
+	private void DrawImmediate( System.Numerics.Matrix4x4 viewProjection, bool overlay )
+	{
+		if ( !overlay )
+		{
+			TakeGrabs();
+			if ( !instancedInWorld ) DrawInstanced();
+			instancedInWorld = false;
+		}
+
+		DrawBuffered( overlay );
+
+		var batches = CoreImmediate.BatchSpan;
+		if ( batches.Length == 0 ) return;
+
+		//One block for the loop, written again for each batch - the draw copies it.
+		Span<byte> push = stackalloc byte[96];
+
+		//For the batches in screen pixels rather than the world.
+		var (width, height) = size;
+		var ortho = width > 0 && height > 0 ? ScreenProjection( width, height ) : default;
+
+		//Consecutive batches with the same pipeline, transform, tint and projection merge into one draw
+		batchPipeline = 0;
+		batchCount = 0;
+		batchTransform = default;
+		batchTint = default;
+		batchScreen = false;
+
+		foreach ( var batch in batches )
+		{
+			if ( batch.IgnoreDepth != overlay ) continue;
+			if ( batch.Count <= 0 || batch.Vertices.Length < batch.Count ) continue;
+
+			//A screen batch only ever has the screen to be drawn on.
+			if ( batch.Screen && ortho == default ) continue;
+
+			var projection = batch.Screen ? ortho : viewProjection;
+
+			//Lines are drawn by a shader with no texture in it, so a material on one is a tint and nothing
+			//more. A picture the draw carried wins over the material's map: the text material has none.
+			var texture = batch.Lines ? 0
+				: batch.Picture is not null ? UploadUiTexture( batch.Picture )
+				: string.IsNullOrWhiteSpace( batch.Material ) ? 0
+				: CoreResources.Colour( batch.Material );
+
+			var vertices = batch.Vertices;
+
+			if ( texture != 0 )
+			{
+				var chosen = overlay ? Pick( screenPipeline, screenTwo ) : Pick( billboardPipeline, billboardTwo );
+				if ( chosen == 0 ) continue;
+
+				//The textured shader has no tint of its own, so the batch's goes into the colours - which are this frame's copy anyway.
+				if ( batch.Tint != Color.White )
+				{
+					//Into scratch rather than a copy: the batch's array is the pool's and is drawn again by the next view.
+					if ( tintedScratch.Length < batch.Count ) tintedScratch = new Vertex[batch.Count * 2];
+					System.Array.Copy( vertices, tintedScratch, batch.Count );
+					vertices = tintedScratch;
+
+					for ( var i = 0; i < batch.Count; i++ )
+					{
+						vertices[i].Color = (Color32)( (Color)vertices[i].Color * batch.Tint );
+					}
+				}
+
+				//In the order they were asked for, so a textured batch between two line batches still lands between them.
+				FlushDynamic();
+
+				CoreRenderDevice.DrawDynamic( chosen,
+					System.Runtime.InteropServices.MemoryMarshal.AsBytes( vertices.AsSpan( 0, batch.Count ) ),
+					batch.Count, 76,
+					//The textured shader is the billboard's, whose block is the matrix and the mode and no tint - see LinePush.
+					LinePush( push, projection, !batch.Screen, batch.Transform ),
+					texture );
+
+				continue;
+			}
+
+			var pipeline = batch.Lines
+				? ( overlay ? Pick( gizmoLinesOverlay, gizmoLinesOverlayTwo ) : Pick( gizmoLines, gizmoLinesTwo ) )
+				: ( overlay ? Pick( gizmoTrianglesOverlay, gizmoTrianglesOverlayTwo ) : Pick( gizmoTriangles, gizmoTrianglesTwo ) );
+
+			if ( pipeline == 0 ) continue;
+
+			//What the push block is made of, not the block: building one is a matrix multiply and these nearly all carry the same one.
+			var joins = pipeline == batchPipeline && batch.Transform == batchTransform &&
+				batch.Tint == batchTint && batch.Screen == batchScreen &&
+				batchCount + batch.Count <= MostBatchedVertices;
+
+			if ( !joins )
+			{
+				FlushDynamic();
+
+				batchPipeline = pipeline;
+				batchTransform = batch.Transform;
+				batchTint = batch.Tint;
+				batchScreen = batch.Screen;
+
+				DynamicPush( push, batchTransform, batchTint, projection, !batchScreen ).CopyTo( batchPush );
+			}
+
+			if ( batchScratch.Length < batchCount + batch.Count )
+				System.Array.Resize( ref batchScratch, Math.Max( batchCount + batch.Count, batchScratch.Length * 2 ) );
+
+			vertices.AsSpan( 0, batch.Count ).CopyTo( batchScratch.AsSpan( batchCount ) );
+			batchCount += batch.Count;
+		}
+
+		FlushDynamic();
+	}
+
+	//Takes the frame copies objects asked for (GrabFrameTexture): window picture, else world picture
+	private void TakeGrabs()
+	{
+		var grabs = CoreImmediate.Grabs;
+		if ( grabs.Count == 0 ) return;
+
+		var (width, height) = size;
+		var texture = CoreRenderDevice.CaptureBackdrop() ? CoreRenderDevice.BackdropTexture() : 0;
+
+		if ( texture == 0 && worldTarget == CoreRender.TargetKind.Scene )
+		{
+			texture = CoreRenderDevice.TargetTexture( viewport, CoreRender.TargetKind.Scene );
+
+			var world = CoreRenderDevice.WorldSize();
+
+			if ( world.x >= 1.0f && world.y >= 1.0f )
+			{
+				width = (int)world.x;
+				height = (int)world.y;
+			}
+		}
+
+		for ( var i = 0; i < grabs.Count; i++ ) grabs[i].Into.Point( texture, width, height );
+	}
+
+	//The draws out of a project's own buffers, onto the finished picture with the rest of the immediate draws - see CoreImmediate.BufferBatch.
+	private static void DrawBuffered( bool overlay )
+	{
+		var draws = CoreImmediate.Buffered;
+
+		for ( var i = 0; i < draws.Count; i++ )
+		{
+			var batch = draws[i];
+
+			if ( batch.IgnoreDepth != overlay ) continue;
+
+			var kind = batch.Kind with
+			{
+				Target = CoreRender.TargetKind.Screen,
+				Finishes = true,
+				ScreenChain = null,
+				NoDepth = batch.Kind.NoDepth || overlay,
+			};
+
+			var pipeline = CoreResources.Pipeline( kind );
+			if ( pipeline == 0 ) continue;
+
+			var draw = batch.Draw;
+			draw.Pipeline = pipeline;
+
+			CoreRenderDevice.DrawBuffers( draw, batch.Push,
+				batch.Buffers is null ? default : batch.Buffers.AsSpan( 0, batch.BufferCount ) );
+		}
+	}
+
+	private Vertex[] tintedScratch = System.Array.Empty<Vertex>();
+	private readonly Vertex[] iconCorners = new Vertex[6];
+
+	//Hand-drawn overlays merged once per frame and drawn per view; static as each eye has its own drawer
+	private sealed class DynamicRecord
+	{
+		internal readonly record struct Batch( ulong Pipeline, Transform Transform, Color Tint, int At, int Count );
+
+		internal Vertex[] Vertices = System.Array.Empty<Vertex>();
+		internal int Used;
+		internal readonly List<Batch> Batches = new();
+
+		//Which engine frame this was gathered in, or -1 for none.
+		internal long Frame = -1;
+
+		//How many hand-drawn objects the world held when it was. A render callback may put one there between the two
+		//eyes, and then this is not their frame's gather any more - cheaper to notice than to gather again and find out.
+		internal int Seen = -1;
+	}
+
+	//The two records, by whether their layer ignores depth.
+	private static readonly DynamicRecord[] dynamicRecords = [new(), new()];
+
+	//How many objects a world draws by hand, without copying the list.
+	private static int HandDrawnCount( SceneWorld world )
+	{
+		lock ( world.InternalSceneObjects )
+		{
+			return world.InternalHandDrawn.Count;
+		}
+	}
+
+	//Draws hand-drawn objects, merging consecutive ones with the same pipeline and push block
+	private void DrawDynamicObjects( Scene scene, System.Numerics.Matrix4x4 viewProjection, bool overlay )
+	{
+		var world = scene?.SceneWorld;
+		if ( world is null ) return;
+
+		var record = dynamicRecords[overlay ? 1 : 0];
+
+		var kept = SharingViews && record.Frame == EngineLoop.LoopFrames &&
+			record.Seen == HandDrawnCount( world );
+
+		if ( !kept ) GatherDynamicObjects( world, overlay, record );
+
+		IssueDynamicObjects( record, viewProjection );
+	}
+
+	//Every hand-drawn object of one layer, merged into runs that share a pipeline, a transform and a tint - see DynamicRecord.
+	private void GatherDynamicObjects( SceneWorld world, bool overlay, DynamicRecord record )
+	{
+		record.Batches.Clear();
+		record.Used = 0;
+
+		var pipeline = 0ul;
+		var transform = default( Transform );
+		var tint = default( Color );
+		var at = 0;
+
+		//Static, so it captures nothing: a local function that closes over these would allocate a
+		//display class every frame, which is the kind of allocation this path has just been cleared of.
+		static void Close( DynamicRecord into, ulong pipeline, Transform transform, Color tint, int at )
+		{
+			if ( into.Used > at && pipeline != 0 )
+				into.Batches.Add( new DynamicRecord.Batch( pipeline, transform, tint, at, into.Used - at ) );
+		}
+
+		var seen = 0;
+
+		foreach ( var found in HandDrawnOf( world, dynamicBuffer ) )
+		{
+			seen++;
+
+			if ( found is not SceneDynamicObject dynamic ) continue;
+			if ( !dynamic.RenderingEnabled || dynamic.Geometry.Count == 0 ) continue;
+
+			//What a shader would have drawn out of these vertices is not what the vertices are - the grid is
+			//four white quads until its shader turns them into lines. Left alone rather than drawn wrong.
+			if ( dynamic.ShaderDriven ) continue;
+
+			//Only the layer that says so ignores depth; everything else is part of the world and is hidden by it.
+			var ignoresDepth = dynamic.RenderLayer == SceneRenderLayer.OverlayWithoutDepth;
+			if ( ignoresDepth != overlay ) continue;
+
+			var lines = dynamic.Primitive is Graphics.PrimitiveType.Lines
+				or Graphics.PrimitiveType.LineStrip
+				or Graphics.PrimitiveType.LinesWithAdjacency
+				or Graphics.PrimitiveType.LineStripWithAdjacency;
+
+			var chosen = lines
+				? ( overlay ? Pick( gizmoLinesOverlay, gizmoLinesOverlayTwo ) : Pick( gizmoLines, gizmoLinesTwo ) )
+				: ( overlay ? Pick( gizmoTrianglesOverlay, gizmoTrianglesOverlayTwo ) : Pick( gizmoTriangles, gizmoTrianglesTwo ) );
+
+			if ( chosen == 0 ) continue;
+
+			var vertices = (ReadOnlySpan<Vertex>)System.Runtime.InteropServices.CollectionsMarshal.AsSpan( dynamic.Geometry );
+
+			//The line pipeline draws pairs, and a strip handed to it as it is came out as every other
+			//segment. See Graphics.DrawInternal, which spells out the immediate strips the same way.
+			if ( dynamic.Primitive is Graphics.PrimitiveType.LineStrip )
+			{
+				vertices = LinePairs( vertices );
+				if ( vertices.IsEmpty ) continue;
+			}
+
+			//Whether this one can join what is being gathered is decided on what the push block would be *made of*, not on the block: a thousand
+			//objects a frame nearly all carry the same identity transform and the same white tint, and the block itself is not built until the draw.
+			var joins = chosen == pipeline && dynamic.Transform == transform &&
+				dynamic.ColorTint == tint && record.Used - at + vertices.Length <= MostBatchedVertices;
+
+			if ( !joins )
+			{
+				Close( record, pipeline, transform, tint, at );
+
+				pipeline = chosen;
+				transform = dynamic.Transform;
+				tint = dynamic.ColorTint;
+				at = record.Used;
+			}
+
+			if ( record.Vertices.Length < record.Used + vertices.Length )
+			{
+				System.Array.Resize( ref record.Vertices,
+					Math.Max( record.Used + vertices.Length, Math.Max( record.Vertices.Length * 2, 256 ) ) );
+			}
+
+			vertices.CopyTo( record.Vertices.AsSpan( record.Used ) );
+			record.Used += vertices.Length;
+		}
+
+		Close( record, pipeline, transform, tint, at );
+
+		record.Seen = seen;
+		record.Frame = SharingViews ? EngineLoop.LoopFrames : -1;
+	}
+
+	//One view's draws out of a gathered record - only the push is its own.
+	private void IssueDynamicObjects( DynamicRecord record, System.Numerics.Matrix4x4 viewProjection )
+	{
+		if ( record.Batches.Count == 0 ) return;
+
+		Span<byte> push = stackalloc byte[96];
+
+		foreach ( var batch in System.Runtime.InteropServices.CollectionsMarshal.AsSpan( record.Batches ) )
+		{
+			CoreRenderDevice.ZoneBegin( "dynamic draw" );
+
+			CoreRenderDevice.DrawDynamic( batch.Pipeline,
+				System.Runtime.InteropServices.MemoryMarshal.AsBytes( record.Vertices.AsSpan( batch.At, batch.Count ) ),
+				batch.Count, 76, DynamicPush( push, batch.Transform, batch.Tint, viewProjection ) );
+
+			CoreRenderDevice.ZoneEnd();
+		}
+	}
+
+	//Draws the gathered batch as one draw, in its own profiler zone
+	private void FlushDynamic()
+	{
+		if ( batchCount == 0 || batchPipeline == 0 ) return;
+
+		CoreRenderDevice.ZoneBegin( "dynamic draw" );
+
+		CoreRenderDevice.DrawDynamic( batchPipeline,
+			System.Runtime.InteropServices.MemoryMarshal.AsBytes( batchScratch.AsSpan( 0, batchCount ) ),
+			batchCount, 76, batchPush );
+
+		CoreRenderDevice.ZoneEnd();
+
+		batchCount = 0;
+	}
+
+	//The most vertices one merged draw holds, so that a scene drawing a great many of them does not ask the device for one enormous copy.
+	private const int MostBatchedVertices = 64 * 1024;
+
+	private ulong batchPipeline;
+	private Transform batchTransform;
+	private Color batchTint;
+
+	//Whether what is being gathered is drawn in screen pixels - see DrawImmediate, which is the only thing that fills it.
+	private bool batchScreen;
+	private int batchCount;
+	private Vertex[] batchScratch = System.Array.Empty<Vertex>();
+	private readonly byte[] batchPush = new byte[96];
+
+	//A line strip as the pairs it joins, into an array kept for the purpose. The result is only good until the next call.
+	private ReadOnlySpan<Vertex> LinePairs( ReadOnlySpan<Vertex> strip )
+	{
+		if ( strip.Length < 2 ) return default;
+
+		var count = ( strip.Length - 1 ) * 2;
+		if ( stripScratch.Length < count ) stripScratch = new Vertex[count * 2];
+
+		for ( var i = 0; i < strip.Length - 1; i++ )
+		{
+			stripScratch[i * 2] = strip[i];
+			stripScratch[i * 2 + 1] = strip[i + 1];
+		}
+
+		return stripScratch.AsSpan( 0, count );
+	}
+
+	private Vertex[] stripScratch = System.Array.Empty<Vertex>();
+
+	//Whether this view is one of a headset's eyes, drawn beside the other in the same engine frame - see CorePortableSun,
+	//which shares its square by the same test, and CoreSceneRenderer.BuildFrame, which shares the scene's block.
+	private static bool SharingViews => CoreRender.SharingViews && Rinten.VR.VRSystem.IsRendering;
+
+	//Which engine frame the sky's table was last drawn in, or -1 for none.
+	private static long skyTableFrame = -1;
+
+	//Where a batch of vertices stands, and what colour it is multiplied by - the block both these and the
+	//gizmos push. Into eighty bytes of the caller's, which the draw copies as it records - see LinePush.
+	private Span<byte> DynamicPush( Span<byte> into, Transform transform, Color tint,
+		System.Numerics.Matrix4x4 viewProjection, bool world = true, Vector2 wide = default )
+	{
+		var placed = CoreSceneRenderer.WorldOf( transform );
+
+		//In a both-eyes pass push only the object matrix; the shader applies each eye's view
+		var eyes = world && ( BothEyes || ForceEyePush );
+		var matrix = eyes ? placed : placed * viewProjection;
+
+		System.Runtime.InteropServices.MemoryMarshal.Write( into, in matrix );
+
+		//The tint stays at sixty-four, where it has always been, and the mode goes after it - so a gizmo
+		//shader baked before this lane existed reads exactly what it read before. See g_mode in gizmo.slang.
+		System.Runtime.InteropServices.MemoryMarshal.Write( into[64..],
+			new System.Numerics.Vector4( tint.r, tint.g, tint.b, tint.a ) );
+		System.Runtime.InteropServices.MemoryMarshal.Write( into[80..],
+			new System.Numerics.Vector4( eyes ? 1.0f : 0.0f, wide.x > 0.0f ? 1.0f : 0.0f, wide.x, wide.y ) );
+
+		return into[..96];
+	}
+
+	/// <summary>Why the gizmos are not on the screen, in numbers. Everything this path can fail at fails quietly - a pipeline that never compiled, a frame nobody recorded - so there has to be somewhere to read it.</summary>
+	[ConCmd( "editor_gizmos_status" )]
+	public static void GizmoStatus()
+	{
+		//The hovering chain is measured where the instance actually is - see editor_input_status.
+		//It cannot be read from here: nothing is pushed while the drawing is done.
+
+		Log.Info( $"pipelines: lines {gizmoLines}, linesOverlay {gizmoLinesOverlay}, " +
+			$"triangles {gizmoTriangles}, trianglesOverlay {gizmoTrianglesOverlay}, screen {screenPipeline}" );
+
+		Log.Info( $"last frame: {lastGizmoBatches} shapes, {lastGizmoVertices} vertices, {lastGizmoDrawn} drawn" );
+
+		//Where the geometry actually landed. Everything above can look right while the vertices sit at the
+		//origin, or a million units away, or at no number at all - and all three look the same on screen: empty.
+		if ( lastGizmoBatches > 0 )
+		{
+			Log.Info( GizmoBounds
+				? $"gizmo bounds: {lastGizmoMin} .. {lastGizmoMax}, camera {lastCameraPosition}"
+				: $"gizmo bounds: not measured (editor_gizmo_bounds 1), camera {lastCameraPosition}" );
+		}
+
+		Log.Info( $"camera size {lastCameraSize}, fov {lastCameraFov}" );
+	}
+
+	private static int lastGizmoBatches;
+	private static int lastGizmoVertices;
+	private static int lastGizmoDrawn;
+
+	/// <summary>Whether the gizmo bounds are worked out for <c>editor_gizmo_status</c> to print - see MeasureGizmos.</summary>
+	[ConVar( "editor_gizmo_bounds", ConVarFlags.Protected,
+		Help = "Work out the world bounds of the frame's gizmo geometry, for editor_gizmo_status; a transform and two compares for every gizmo vertex in the frame" )]
+	private static bool GizmoBounds { get; set; }
+
+	private static Vector3 lastGizmoMin;
+	private static Vector3 lastGizmoMax;
+	private static Vector3 lastCameraPosition;
+	private static Vector2 lastCameraSize;
+	private static float lastCameraFov;
+
+	//What the gizmo frame held, for editor_gizmos_status .
+	private static void MeasureGizmos( DebugDrawList list )
+	{
+		lastGizmoBatches = list?.Shapes.Count ?? 0;
+		lastGizmoVertices = 0;
+		lastGizmoDrawn = 0;
+
+		if ( list is null ) return;
+
+		foreach ( var shape in list.Shapes ) lastGizmoVertices += shape.Count;
+
+		//A transform and two compares for every vertex of every gizmo in the frame - the grid alone is thousands
+		//- and nothing reads it but the console command that prints it. Off unless somebody has asked for it.
+		if ( !GizmoBounds ) return;
+
+		lastGizmoMin = float.MaxValue;
+		lastGizmoMax = float.MinValue;
+
+		foreach ( var shape in list.Shapes )
+		{
+			foreach ( var vertex in shape.Span )
+			{
+				var at = shape.Transform.PointToWorld( vertex.Position );
+
+				lastGizmoMin = Vector3.Min( lastGizmoMin, at );
+				lastGizmoMax = Vector3.Max( lastGizmoMax, at );
+			}
+		}
+	}
+
+	//One owner's debug drawing that lives in the world - a gizmo instance's or a scene's overlay - either the part that respects depth or the part drawn
+	//over everything. Lines and triangles, spheres, sprites, and the labels that stand in the world. What is flat on the screen is DrawDebugScreen.
+	private void DrawDebug( DebugDrawList list, CameraComponent camera,
+		System.Numerics.Matrix4x4 viewProjection, bool overlay )
+	{
+		if ( list is null || list.IsEmpty ) return;
+
+		DrawShapes( list.Shapes, viewProjection, overlay );
+		DrawRings( list.Rings, viewProjection, overlay );
+		DrawSprites( list.Sprites, camera, viewProjection, overlay );
+		DrawWorldLabels( list.Labels, viewProjection, overlay );
+	}
+
+	//Draws a pass's shapes in request order, one draw per run of same-styled shapes
+	private void DrawShapes( List<DebugDrawList.Shape> shapes, System.Numerics.Matrix4x4 viewProjection, bool overlay )
+	{
+		if ( shapes.Count == 0 ) return;
+
+		Span<byte> push = stackalloc byte[96];
+
+		var items = System.Runtime.InteropServices.CollectionsMarshal.AsSpan( shapes );
+		var at = 0;
+
+		while ( at < items.Length )
+		{
+			ref readonly var first = ref items[at];
+
+			if ( first.IgnoreDepth != overlay || first.Count == 0 )
+			{
+				at++;
+				continue;
+			}
+
+			//How far the run goes, and how many vertices it holds.
+			var end = at + 1;
+			var total = first.Count;
+			var runs = 1;
+
+			for ( var next = at + 1; next < items.Length; next++ )
+			{
+				if ( items[next].IgnoreDepth != overlay ) continue;
+				if ( !items[next].DrawnLike( first ) ) break;
+
+				total += items[next].Count;
+				runs++;
+				end = next + 1;
+			}
+
+			ReadOnlySpan<Vertex> vertices;
+
+			if ( runs == 1 )
+			{
+				vertices = first.Span;
+			}
+			else
+			{
+				if ( shapeScratch.Length < total )
+					shapeScratch = new Vertex[Math.Max( total, shapeScratch.Length * 2 )];
+
+				var written = 0;
+
+				for ( var k = at; k < end; k++ )
+				{
+					if ( items[k].IgnoreDepth != overlay ) continue;
+
+					items[k].Span.CopyTo( shapeScratch.AsSpan( written ) );
+					written += items[k].Count;
+				}
+
+				vertices = shapeScratch.AsSpan( 0, written );
+			}
+
+			DrawShape( first, vertices, viewProjection, overlay, push );
+
+			at = end;
+		}
+	}
+
+	//Where runs of shapes are laid end to end - grown and kept.
+	private Vertex[] shapeScratch = System.Array.Empty<Vertex>();
+
+	private void DrawShape( in DebugDrawList.Shape shape, ReadOnlySpan<Vertex> vertices,
+		System.Numerics.Matrix4x4 viewProjection, bool overlay, Span<byte> push )
+	{
+		if ( shape.Lines && shape.Thickness > 1.0f )
+		{
+			DrawWideLines( vertices, shape.Transform, shape.Thickness, viewProjection, overlay, push );
+			return;
+		}
+
+		var chosen = shape.Lines
+			? ( overlay ? Pick( gizmoLinesOverlay, gizmoLinesOverlayTwo ) : Pick( gizmoLines, gizmoLinesTwo ) )
+			: 0ul;
+
+		if ( !shape.Lines )
+		{
+			if ( shape.CullBackfaces ) chosen = CulledTriangles( overlay );
+
+			if ( chosen == 0 )
+				chosen = overlay ? Pick( gizmoTrianglesOverlay, gizmoTrianglesOverlayTwo ) : Pick( gizmoTriangles, gizmoTrianglesTwo );
+		}
+
+		if ( chosen == 0 ) return;
+
+		lastGizmoDrawn++;
+
+		CoreRenderDevice.DrawDynamic( chosen,
+			System.Runtime.InteropServices.MemoryMarshal.AsBytes( vertices ),
+			vertices.Length, 76, DynamicPush( push, shape.Transform, Color.White, viewProjection ) );
+	}
+
+	//Lines thicker than a pixel as two-triangle strips expanded in the vertex stage, constant pixel width
+	private void DrawWideLines( ReadOnlySpan<Vertex> lines, in Transform transform, float thickness,
+		System.Numerics.Matrix4x4 viewProjection, bool overlay, Span<byte> push )
+	{
+		var (width, height) = size;
+		if ( width <= 0 || height <= 0 ) return;
+
+		var chosen = overlay
+			? Pick( gizmoTrianglesOverlay, gizmoTrianglesOverlayTwo )
+			: Pick( gizmoTriangles, gizmoTrianglesTwo );
+
+		if ( chosen == 0 ) return;
+
+		var segments = lines.Length / 2;
+		if ( segments == 0 ) return;
+
+		if ( wideScratch is null || wideScratch.Length < segments * 6 )
+			wideScratch = new Vertex[Math.Max( segments * 6, ( wideScratch?.Length ?? 0 ) * 2 )];
+
+		var into = wideScratch.AsSpan( 0, segments * 6 );
+
+		for ( int i = 0; i < segments; i++ )
+		{
+			var a = lines[i * 2];
+			var b = lines[i * 2 + 1];
+
+			//x: which side of the line, y: +1 at the start and -1 at the end, so the shader always turns the same way across it; z: the width in pixels.
+			var startLeft = Corner( a, b.Position, 1, 1, thickness );
+			var startRight = Corner( a, b.Position, -1, 1, thickness );
+			var endLeft = Corner( b, a.Position, 1, -1, thickness );
+			var endRight = Corner( b, a.Position, -1, -1, thickness );
+
+			var at = i * 6;
+			into[at + 0] = startLeft;
+			into[at + 1] = startRight;
+			into[at + 2] = endLeft;
+			into[at + 3] = endLeft;
+			into[at + 4] = startRight;
+			into[at + 5] = endRight;
+		}
+
+		lastGizmoDrawn++;
+
+		CoreRenderDevice.DrawDynamic( chosen,
+			System.Runtime.InteropServices.MemoryMarshal.AsBytes( into ),
+			into.Length, 76, DynamicPush( push, transform, Color.White, viewProjection,
+				wide: new Vector2( width, height ) ) );
+
+		static Vertex Corner( in Vertex self, Vector3 other, float side, float end, float thickness )
+		{
+			var corner = self;
+			corner.TexCoord0 = new Vector4( other, 0.0f );
+			corner.TexCoord1 = new Vector4( side, end, thickness, 0.0f );
+			return corner;
+		}
+	}
+
+	//Where DrawWideLines builds its strips - grown and kept.
+	private static Vertex[] wideScratch;
+
+	//The overlay's spheres, whose outline is a ring square to the eye - so they are built here, for this view, into world-space lines.
+	private void DrawRings( List<DebugDrawList.Ring> rings, System.Numerics.Matrix4x4 viewProjection, bool overlay )
+	{
+		if ( rings.Count == 0 ) return;
+
+		var sink = new ScratchSink( ringScratch );
+
+		foreach ( var ring in rings )
+		{
+			if ( ring.IgnoreDepth != overlay ) continue;
+
+			//In the ring's own space: its centre where the transform puts it, its radius grown with the scale.
+			sink.Color = ring.Color;
+			DebugShapes.SphereRings( ref sink, ring.Transform.PointToWorld( ring.Center ),
+				ring.Radius * ring.Transform.UniformScale, ring.Transform.Rotation, eyeView.Position );
+		}
+
+		if ( ringScratch.Count == 0 ) return;
+
+		var chosen = overlay ? Pick( gizmoLinesOverlay, gizmoLinesOverlayTwo ) : Pick( gizmoLines, gizmoLinesTwo );
+
+		if ( chosen != 0 )
+		{
+			CoreRenderDevice.DrawDynamic( chosen,
+				System.Runtime.InteropServices.MemoryMarshal.AsBytes( System.Runtime.InteropServices.CollectionsMarshal.AsSpan( ringScratch ) ),
+				ringScratch.Count, 76, DynamicPush( stackalloc byte[96], Transform.Zero, Color.White, viewProjection ) );
+		}
+
+		ringScratch.Clear();
+	}
+
+	//Where a view's spheres are built - kept between views.
+	private readonly List<Vertex> ringScratch = new();
+
+	//Builds shapes into a list of vertices, in one colour at a time.
+	private struct ScratchSink : IDebugShapeSink
+	{
+		private readonly List<Vertex> into;
+		public Color32 Color;
+
+		public ScratchSink( List<Vertex> into )
+		{
+			this.into = into;
+			Color = Color32.White;
+		}
+
+		public void Line( in Vector3 a, in Vector3 b )
+		{
+			into.Add( new Vertex( a, Color ) );
+			into.Add( new Vertex( b, Color ) );
+		}
+
+		public void Triangle( in Vector3 a, in Vector3 b, in Vector3 c )
+		{
+			into.Add( new Vertex( a, Color ) );
+			into.Add( new Vertex( b, Color ) );
+			into.Add( new Vertex( c, Color ) );
+		}
+	}
+
+	//Back-face-culled gizmo triangles, made on first use; 0 in a stereo pass with no two-view build
+	private ulong CulledTriangles( bool overlay )
+	{
+		if ( !culledMade )
+		{
+			culledMade = true;
+
+			Compile( EngineShaders.Gizmo, ( vs, ps ) =>
+			{
+				gizmoTrianglesCulled = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: true, CoreRender.Topology.Triangles, blend: true, cullBack: true );
+				gizmoTrianglesCulledOverlay = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: false, CoreRender.Topology.Triangles, blend: true, cullBack: true );
+			} );
+
+			CompileStereo( EngineShaders.Gizmo, null, ( vs, ps ) =>
+			{
+				gizmoTrianglesCulledTwo = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: true, CoreRender.Topology.Triangles, blend: true, cullBack: true );
+				gizmoTrianglesCulledOverlayTwo = CoreRenderDevice.CreatePipeline( vs, ps,
+					CoreRender.VertexLayoutKind.Engine, depthTest: false, CoreRender.Topology.Triangles, blend: true, cullBack: true );
+			} );
+		}
+
+		var one = overlay ? gizmoTrianglesCulledOverlay : gizmoTrianglesCulled;
+		var two = overlay ? gizmoTrianglesCulledOverlayTwo : gizmoTrianglesCulledTwo;
+
+		if ( BothEyes && two == 0 ) return 0;
+
+		return Pick( one, two );
+	}
+
+	private static bool culledMade;
+	private static ulong gizmoTrianglesCulled;
+	private static ulong gizmoTrianglesCulledOverlay;
+	private static ulong gizmoTrianglesCulledTwo;
+	private static ulong gizmoTrianglesCulledOverlayTwo;
+
+	//Camera projection, Y flipped for Vulkan.
+	internal static System.Numerics.Matrix4x4 ProjectionMatrix( bool orthographic, float fovDegrees,
+		float orthoHeight, float aspect, float near, float far )
+	{
+		System.Numerics.Matrix4x4 projection;
+
+		if ( orthographic )
+		{
+			var height = System.MathF.Max( 0.001f, orthoHeight );
+			var width = height * System.MathF.Max( 0.001f, aspect );
+			projection = System.Numerics.Matrix4x4.CreateOrthographic( width, height, near, far );
+		}
+		else
+		{
+			var horizontal = System.Math.Clamp( fovDegrees, 1.0f, 179.0f ) * ( System.MathF.PI / 180.0f );
+			var vertical = 2.0f * System.MathF.Atan( System.MathF.Tan( horizontal * 0.5f ) / System.MathF.Max( 0.001f, aspect ) );
+			projection = System.Numerics.Matrix4x4.CreatePerspectiveFieldOfView( vertical, aspect, near, far );
+		}
+
+		projection.M22 = -projection.M22;
+		return projection;
+	}
+
+	//-eyepush: overlays always read the view from the frame block, to test that path on a desktop
+	private static bool ForceEyePush => forceEyePush ??= Rinten.Utility.CommandLine.HasSwitch( "-eyepush" );
+
+	private static bool? forceEyePush;
+
+	//Line push block (one matrix) written into the caller's stackalloc span to avoid per-pass garbage
+	private Span<byte> LinePush( Span<byte> into, System.Numerics.Matrix4x4 viewProjection, bool world = false,
+		Transform? standing = null )
+	{
+		//In a both-eyes pass leave the view out; the vertex stage reads each eye's from the frame block
+		var eyes = world && ( BothEyes || ForceEyePush );
+
+		var matrix = standing is { } where
+			? ( eyes ? CoreSceneRenderer.WorldOf( where ) : CoreSceneRenderer.WorldOf( where ) * viewProjection )
+			: ( eyes ? System.Numerics.Matrix4x4.Identity : viewProjection );
+
+		System.Runtime.InteropServices.MemoryMarshal.Write( into, in matrix );
+		System.Runtime.InteropServices.MemoryMarshal.Write( into[64..],
+			new System.Numerics.Vector4( eyes ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f ) );
+
+		return into[..80];
+	}
+
+	//Ground grid at the editor spacing, centred under the camera, cell doubled as the camera pulls away
+	private void DrawGrid( CameraComponent camera, System.Numerics.Matrix4x4 viewProjection )
+	{
+		if ( linePipeline == 0 ) return;
+
+		//Grid spacing from this viewport's gizmo settings, not Gizmo.Settings (may be unset during a draw)
+		var settings = GizmoSource?.Invoke()?.Settings ?? Gizmo.Settings;
+
+		var spacing = settings?.GridSpacing ?? 1.0f;
+		if ( spacing <= 0.0001f ) spacing = 1.0f;
+
+		var eye = camera.IsValid() ? camera.WorldPosition : Vector3.Zero;
+
+		//How much world is on screen. For a flat camera that is the height it is set to; otherwise it is
+		//how far the eye is from the plane the grid lies on, which is what decides how big a cell comes out.
+		var onScreen = camera.IsValid() && camera.Orthographic
+			? System.MathF.Max( camera.OrthographicHeight, 0.01f )
+			: System.MathF.Max( System.MathF.Abs( eye.y ), 0.01f );
+
+		//Up in doubles until a cell is a hundredth of what is on screen. Below that the lines are closer together than
+		//they are thick and the grid reads as a grey wash - which is what a centimetre grid seen from across a level did.
+		var cell = spacing;
+		while ( cell < onScreen * 0.01f ) cell *= 2.0f;
+
+		//Cells only in orthographic views; perspective gets just the two axes, the grid goes on surfaces
+		var cells = camera.IsValid() && camera.Orthographic;
+
+		//Snapped to the major lines, so the grid does not crawl under a camera that is moving: the
+		//lines stay on their own multiples of the cell and only the patch they are cut from moves.
+		var block = cell * 10.0f;
+		var centreX = System.MathF.Round( eye.x / block ) * block;
+		var centreZ = System.MathF.Round( eye.z / block ) * block;
+
+		if ( grid is null || gridCells != cells || !gridSpacing.AlmostEqual( cell ) ||
+			!gridCentreX.AlmostEqual( centreX ) || !gridCentreZ.AlmostEqual( centreZ ) )
+		{
+			grid = BuildGrid( cell, centreX, centreZ, cells );
+			gridSpacing = cell;
+			gridCentreX = centreX;
+			gridCentreZ = centreZ;
+			gridCells = cells;
+		}
+
+		CoreRenderDevice.DrawDynamic( linePipeline,
+			System.Runtime.InteropServices.MemoryMarshal.AsBytes( grid.AsSpan() ),
+			grid.Length, 16, LinePush( stackalloc byte[80], viewProjection, world: true ) );
+	}
+
+
+	//Grid cut into editable mesh faces: their queued triangles redrawn with a per-pixel grid shader
+	private void DrawSurfaceGrid( System.Numerics.Matrix4x4 viewProjection,
+		System.ReadOnlySpan<System.Numerics.Vector4> planes )
+	{
+		if ( surfaceGridPipeline == 0 ) return;
+		if ( !( SurfaceGridSource?.Invoke() ?? true ) ) return;
+
+		//The viewport's own settings, for the same reason the ground grid asks for them there:
+		//Gizmo.Settings is whichever instance is current, and during a draw there need not be one.
+		var settings = GizmoSource?.Invoke()?.Settings ?? Gizmo.Settings;
+
+		var cell = settings?.GridSpacing ?? 1.0f;
+		if ( cell <= 0.0001f ) cell = 1.0f;
+
+		Span<byte> push = stackalloc byte[128];
+
+		var queue = CollectionsMarshal.AsSpan( opaque );
+
+		for ( var i = 0; i < queue.Length; i++ )
+		{
+			ref readonly var queued = ref queue[i];
+
+			if ( !queued.EditableMesh || queued.ShadowOnly ) continue;
+
+			//Its own vertices, in the layout this pipeline was baked for. A mesh being posed or morphed or read out of a buffer is none
+			//of those things, and an editable mesh is never any of them anyway - this is what keeps that true rather than assuming it.
+			if ( queued.Skinned || queued.Morphs is not null ) continue;
+
+			var mesh = queued.Mesh;
+			if ( mesh is null || mesh.Pulled || mesh.Vertices == 0 || mesh.Indices == 0 ) continue;
+			if ( queued.Part.IndexCount <= 0 ) continue;
+
+			if ( !planes.IsEmpty && queued.Radius > 0.0f &&
+				!CoreSceneRenderer.SphereVisible( planes, queued.Center, Reach( in queued ) ) ) continue;
+
+			CoreRenderDevice.DrawIndexed( surfaceGridPipeline, mesh.Vertices, mesh.Indices,
+				queued.Part.IndexCount,
+				SurfaceGridPush( push, viewProjection, in queued.World, cell ),
+				queued.Part.FirstIndex, queued.Part.FirstVertex );
+		}
+	}
+
+	//Surface grid push block (128 bytes); world matrix as three columns to save 16 bytes
+	private static Span<byte> SurfaceGridPush( Span<byte> into,
+		System.Numerics.Matrix4x4 viewProjection, in System.Numerics.Matrix4x4 world, float cell )
+	{
+		MemoryMarshal.Write( into, in viewProjection );
+
+		var x = new System.Numerics.Vector4( world.M11, world.M21, world.M31, world.M41 );
+		var y = new System.Numerics.Vector4( world.M12, world.M22, world.M32, world.M42 );
+		var z = new System.Numerics.Vector4( world.M13, world.M23, world.M33, world.M43 );
+
+		MemoryMarshal.Write( into[64..], in x );
+		MemoryMarshal.Write( into[80..], in y );
+		MemoryMarshal.Write( into[96..], in z );
+
+		MemoryMarshal.Write( into[112..], in cell );
+		MemoryMarshal.Write( into[116..], in SurfaceGridMajorEvery );
+		MemoryMarshal.Write( into[120..], in SurfaceGridOpacity );
+		MemoryMarshal.Write( into[124..], in SurfaceGridBias );
+
+		return into[..128];
+	}
+
+	//How many cells to a stronger line - ten, as the ground grid had.
+	private static readonly float SurfaceGridMajorEvery = 10.0f;
+
+	//How strongly the grid is laid over the surface.
+	private static readonly float SurfaceGridOpacity = 1.0f;
+
+	//Clip-depth nudge so the grid wins against its surface without showing through walls
+	private static readonly float SurfaceGridBias = 1e-6f;
+
+
+	//Ground grid lines around a centre: fixed count, every tenth stronger, edge faded, axes in colour
+	private static LineVertex[] BuildGrid( float cell, float centreX, float centreZ, bool cells )
+	{
+		const int extent = 120;
+
+		var lines = new System.Collections.Generic.List<LineVertex>( cells ? ( extent * 2 + 1 ) * 4 + 4 : 4 );
+
+		var far = extent * cell;
+
+		//Which multiple of the cell the centre sits on, so that every tenth line being a major counts from the
+		//origin of the world rather than from the patch - otherwise the strong lines move about as the camera does.
+		var stepX = (int)System.MathF.Round( centreX / cell );
+		var stepZ = (int)System.MathF.Round( centreZ / cell );
+
+		void Row( int i, bool alongX )
+		{
+			var step = ( alongX ? stepX : stepZ ) + i;
+
+			//The axes of the world are drawn separately, on top.
+			if ( step == 0 ) return;
+
+			var strength = (byte)( step % 10 == 0 ? 96 : 40 );
+
+			//Fade towards the edge so the grid ends rather than stopping.
+			var edge = 1.0f - System.MathF.Abs( i ) / (float)( extent + 1 );
+			var alpha = (byte)( strength * System.MathF.Min( 1.0f, edge * 3.0f ) );
+
+			var colour = new Color32( 140, 145, 155, alpha );
+
+			if ( alongX )
+			{
+				var at = centreX + ( i * cell );
+				lines.Add( new LineVertex( new Vector3( at, 0, centreZ - far ), colour ) );
+				lines.Add( new LineVertex( new Vector3( at, 0, centreZ + far ), colour ) );
+			}
+			else
+			{
+				var at = centreZ + ( i * cell );
+				lines.Add( new LineVertex( new Vector3( centreX - far, 0, at ), colour ) );
+				lines.Add( new LineVertex( new Vector3( centreX + far, 0, at ), colour ) );
+			}
+		}
+
+		if ( cells )
+		{
+			for ( var i = -extent; i <= extent; i++ )
+			{
+				Row( i, alongX: true );
+				Row( i, alongX: false );
+			}
+		}
+
+		//The axes, only where the patch covers them; X red and Z blue, opaque
+		if ( System.MathF.Abs( centreZ ) <= far )
+		{
+			lines.Add( new LineVertex( new Vector3( centreX - far, 0, 0 ), AxisX ) );
+			lines.Add( new LineVertex( new Vector3( centreX + far, 0, 0 ), AxisX ) );
+		}
+
+		if ( System.MathF.Abs( centreX ) <= far )
+		{
+			lines.Add( new LineVertex( new Vector3( 0, 0, centreZ - far ), AxisZ ) );
+			lines.Add( new LineVertex( new Vector3( 0, 0, centreZ + far ), AxisZ ) );
+		}
+
+		return lines.ToArray();
+	}
+
+	private void DrawSelection( System.Numerics.Matrix4x4 viewProjection )
+	{
+		if ( overlayPipeline == 0 ) return;
+
+		var selected = SelectionSource?.Invoke();
+		if ( selected is null ) return;
+
+		var lines = new System.Collections.Generic.List<LineVertex>();
+		var colour = new Color32( 255, 170, 60, 220 );
+
+		foreach ( var gameObject in selected )
+		{
+			if ( !gameObject.IsValid() ) continue;
+
+			var bounds = gameObject.GetBounds();
+			if ( bounds.Size.Length <= 0.0001f ) continue;
+
+			AddBox( lines, bounds, colour );
+		}
+
+		if ( lines.Count == 0 ) return;
+
+		CoreRenderDevice.DrawDynamic( overlayPipeline,
+			System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+				System.Runtime.InteropServices.CollectionsMarshal.AsSpan( lines ) ),
+			lines.Count, 16, LinePush( stackalloc byte[80], viewProjection, world: true ) );
+	}
+
+	//The twelve edges of a box.
+	private static void AddBox( System.Collections.Generic.List<LineVertex> lines, BBox box, Color32 colour )
+	{
+		var a = box.Mins;
+		var b = box.Maxs;
+
+		Span<Vector3> corners = stackalloc Vector3[8]
+		{
+			new( a.x, a.y, a.z ), new( b.x, a.y, a.z ), new( b.x, b.y, a.z ), new( a.x, b.y, a.z ),
+			new( a.x, a.y, b.z ), new( b.x, a.y, b.z ), new( b.x, b.y, b.z ), new( a.x, b.y, b.z ),
+		};
+
+		Span<(int, int)> edges = stackalloc (int, int)[12]
+		{
+			( 0, 1 ), ( 1, 2 ), ( 2, 3 ), ( 3, 0 ),
+			( 4, 5 ), ( 5, 6 ), ( 6, 7 ), ( 7, 4 ),
+			( 0, 4 ), ( 1, 5 ), ( 2, 6 ), ( 3, 7 ),
+		};
+
+		foreach ( var (from, to) in edges )
+		{
+			lines.Add( new LineVertex( corners[from], colour ) );
+			lines.Add( new LineVertex( corners[to], colour ) );
+		}
+	}
+}

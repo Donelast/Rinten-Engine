@@ -1,0 +1,52 @@
+GradientControl.control.no-background
+{
+	flex-grow: 1;
+	min-width: 0;
+	min-height: $control-row-height;
+	> .preview
+	{
+		flex-grow: 1;
+		min-height: $control-row-height;
+		padding: 3px;
+		cursor: pointer;
+		border-radius: $control-radius;
+		border: 1px solid $border;
+		background-color: transparent;
+		overflow: hidden;
+		position: relative;
+
+		//Several differing values: no checkerboard, a flat backing instead of a gradient.
+		&.multiple
+		{
+			background-color: $control-background;
+
+			> .checker
+			{
+				display: none;
+			}
+		}
+		> .checker,
+		> .fill
+		{
+			position: absolute;
+			left: 3px;
+			top: 3px;
+			right: 3px;
+			bottom: 3px;
+			border-radius: 2px;
+			pointer-events: none;
+		}
+		> .fill
+		{
+			object-fit: fill;
+		}
+
+		> .checker
+		{
+			background-image: url( tools/checker.png );
+			background-repeat: repeat;
+			image-rendering: point;
+			background-size: 16px 16px;
+		}
+	}
+}

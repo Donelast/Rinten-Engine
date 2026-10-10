@@ -1,0 +1,66 @@
+.model-materials
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 6px;
+
+	> .heading { color: $text-control; }
+
+	> .note
+	{
+		white-space: pre-wrap;
+		color: rgba( $text-control, 0.7 );
+
+		&.faint { color: rgba( $text-control, 0.55 ); }
+	}
+}
+
+.material-row
+{
+	flex-direction: row;
+	flex-shrink: 0;
+	gap: 8px;
+	margin: 2px 0;
+
+	> .column
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+		gap: 2px;
+
+		> .name { color: $text-control; }
+	}
+}
+
+.material-thumb
+{
+	position: relative;
+	width: 40px;
+	height: 40px;
+	min-width: 40px;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	border-radius: 3px;
+	background-color: rgba( $surface-background, 0.35 );
+
+	> .thumb
+	{
+		position: absolute;
+		left: 2px;
+		top: 2px;
+		right: 2px;
+		bottom: 2px;
+
+		&.hidden { display: none; }
+	}
+
+	> .blank
+	{
+		font-size: 18px;
+		color: rgba( $text-control, 0.35 );
+
+		&.hidden { display: none; }
+	}
+}

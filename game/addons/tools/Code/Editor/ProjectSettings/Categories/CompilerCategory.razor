@@ -1,0 +1,61 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Compiler Setup" ), Icon( "code" )]
+@using Editor.ProjectSettingsUI
+@using Editor.ProjectSettingPages.Categories.Settings
+@inherits ProjectSettingsCategoryPanel
+
+<root class="project-settings-category">
+	<div class="body" @ref="Body">
+		<div @ref="compilerHost"></div>
+
+		<SettingsCalloutPanel Warning="@true" Html="@ReleaseWarningHtml" />
+
+		<div @ref="releaseHost"></div>
+	</div>
+</root>
+
+@code
+{
+	const string ReleaseWarningHtml =
+		"This only matters while you play in the editor. A standalone build is <b>always compiled in release mode</b>." +
+		"<p>Notable changes when compiling in release mode:</p> " +
+		"<ul style=\"list-indent: 0; margin-left: 10px;\" >" +
+		"<li>Release Mode enables all optimizations, debugging experience might be degraded." +
+		"<li>Sequence points may be optimized away. As a result it might not be possible to place or hit a breakpoint." +
+		"<li>User-defined locals might be optimized away. They might not be available while debugging." +
+		"<li>The `DEBUG` define constant will always be off." +
+		"</ul>";
+
+	CompilerCategorySettings settings;
+	Panel compilerHost;
+	Panel releaseHost;
+
+	protected override void OnInit( Project project )
+	{
+		settings = new CompilerCategorySettings();
+		settings.Load( project );
+
+		var so = settings.GetSerialized();
+		var sheet = compilerHost.AddChild<Editor.Inspectors.ControlSheet>();
+		AddControlRows( sheet, so,
+			nameof( CompilerCategorySettings.DefineConstants ),
+			nameof( CompilerCategorySettings.ProjectFilename ),
+			nameof( CompilerCategorySettings.Nullables ),
+			nameof( CompilerCategorySettings.RootNamespace ),
+			nameof( CompilerCategorySettings.NoWarn ),
+			nameof( CompilerCategorySettings.WarningsAsErrors ),
+			nameof( CompilerCategorySettings.Unsafe ) );
+		ListenForChanges( so );
+
+		var releaseSheet = releaseHost.AddChild<Editor.Inspectors.ControlSheet>();
+		releaseSheet.Target = new List<SerializedProperty> { so.GetProperty( nameof( CompilerCategorySettings.ReleaseMode ) ) };
+		releaseSheet.Rebuild();
+	}
+
+	public override void OnSave()
+	{
+		settings.Apply( Project );
+		EditorUtility.Projects.GenerateSolution();
+		base.OnSave();
+	}
+}

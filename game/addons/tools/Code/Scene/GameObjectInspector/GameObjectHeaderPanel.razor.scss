@@ -1,0 +1,55 @@
+﻿//The object's own card: its switch, name and flags over its network mode and tags. The card
+//itself is .inspector-head in design.scss, which a material's file and shader wear too.
+
+.gameobject-header > .top-row,
+.gameobject-header > .bottom-row
+{
+	flex-direction: row;
+	align-items: center;
+	font-family: $font;
+	gap: $gap-items;
+	pointer-events: all;
+}
+
+.gameobject-header > .top-row > .stringcontrol,
+.gameobject-header > .top-row > stringcontrol
+{
+	flex-grow: 1;
+	min-width: 0;
+}
+
+.gameobject-header > .top-row > .bool-field
+{
+	flex-direction: row;
+	align-items: center;
+	gap: $gap-items;
+	flex-shrink: 0;
+
+	> .label
+	{
+		font-size: $type-body;
+		color: $ink-dim;
+		white-space: nowrap;
+		height: 100%;
+		align-items: center;
+	}
+}
+
+.gameobject-header > .bottom-row > .tagsetcontrol
+{
+	flex-grow: 1;
+	min-width: 0;
+}
+
+.gameobject-flags,
+.network-mode
+{
+	flex-shrink: 0;
+}
+
+.gameobject-flags > .toolbarbutton,
+.network-mode > .toolbarbutton
+{
+	min-width: $row;
+	min-height: $row;
+}

@@ -1,0 +1,137 @@
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Rinten.UI
+@namespace Editor
+@inherits Panel
+
+<root class="viewport-toolbar">
+
+	@foreach ( var toolbarSection in Sections )
+	{
+		<div class="section @toolbarSection.Class">
+
+			@foreach ( var group in toolbarSection.Groups.Where( x => x.Visible ) )
+			{
+				if ( group.Divider )
+				{
+					<div class="divider"></div>
+				}
+				else
+				{
+					<div class="@GroupClass( group )">
+
+						@foreach ( var item in group.Items )
+						{
+							if ( item.GizmoSettingsMenu )
+							{
+								<GizmoSettingsButton />
+							}
+							else if ( item.NetworkSettingsMenu )
+							{
+								<NetworkSettingsButton />
+							}
+							else if ( item.ViewSettingsMenu )
+							{
+								<ViewSettingsButton SceneView="@Tools.SceneView" />
+							}
+							else if ( item.ResolutionMenu )
+							{
+								<ResolutionModePanel SceneView="@Tools.SceneView" />
+							}
+							else if ( item.SnapStep is { } snapStep )
+							{
+								<SnapStepControl Kind="@snapStep" ToolTip="@item.ToolTip" />
+							}
+							else if ( item.Panel is not null )
+							{
+								<PanelSlot Content="@item.Panel" />
+							}
+							else if ( item.Text is not null )
+							{
+								<ToolbarReadout Text="@item.Text" />
+							}
+							else
+							{
+								<ToolbarButton class="@item.Class"
+											   Icon="@item.Icon?.Invoke()"
+											   ToolTip="@item.ToolTip"
+											   Active="@(item.IsActive?.Invoke() ?? false)"
+											   Disabled="@(!item.Enabled)"
+											   Tint="@((Color?)item.Color)"
+											   OnPressed="@item.Action" />
+							}
+						}
+
+					</div>
+				}
+			}
+
+		</div>
+	}
+
+</root>
+
+@code
+{
+	public ViewportToolsPanel Tools { get; set; }
+
+	private IEnumerable<(string Class, List<ViewportToolsPanel.Group> Groups)> Sections
+	{
+		get
+		{
+			if ( Tools is null ) yield break;
+
+			yield return ("left", Tools.Left);
+			yield return ("center", Tools.Center);
+			yield return ("right", Tools.Right);
+		}
+	}
+
+	private static string GroupClass( ViewportToolsPanel.Group group )
+	{
+		return group.Plain ? "group plain" : "group";
+	}
+
+	protected override int BuildHash()
+	{
+		var hash = new HashCode();
+
+		//The three sections' lists in turn rather than through Sections, which is an iterator - an object on every ask, and the tick asks every frame.
+		if ( Tools is not null )
+		{
+			AddSection( ref hash, Tools.Left );
+			AddSection( ref hash, Tools.Center );
+			AddSection( ref hash, Tools.Right );
+		}
+
+		return hash.ToHashCode();
+	}
+
+	private static void AddSection( ref HashCode hash, List<ViewportToolsPanel.Group> groups )
+	{
+		foreach ( var group in groups )
+		{
+			hash.Add( group.Visible );
+			hash.Add( group.Divider );
+			hash.Add( group.Plain );
+
+			foreach ( var item in group.Items )
+			{
+				hash.Add( item.Icon?.Invoke() );
+				hash.Add( item.ToolTip );
+				hash.Add( item.Class );
+				hash.Add( item.Enabled );
+				hash.Add( item.IsActive?.Invoke() ?? false );
+				hash.Add( item.Color );
+				hash.Add( item.Panel );
+				hash.Add( item.GizmoSettingsMenu );
+				hash.Add( item.NetworkSettingsMenu );
+				hash.Add( item.ViewSettingsMenu );
+				hash.Add( item.ResolutionMenu );
+				hash.Add( item.SnapStep );
+				hash.Add( item.Text is not null );
+			}
+		}
+	}
+}

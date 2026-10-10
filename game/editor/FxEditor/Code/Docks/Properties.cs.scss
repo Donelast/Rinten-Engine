@@ -1,0 +1,54 @@
+//What is selected, and everything editable about it: a name and a line saying what it is, then the sheet.
+
+.particle-properties
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+
+	> .header
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		padding: 8px 10px;
+		background-color: $header-background;
+		border-bottom: 1px solid $separator-color;
+
+		> .title
+		{
+			font-family: $font-family;
+			font-size: $type-default;
+			font-weight: bold;
+			color: $text;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+		}
+
+		> .subtitle
+		{
+			font-family: $font-family;
+			font-size: $type-micro;
+			color: rgba( $text, 0.4 );
+			white-space: pre-wrap;
+		}
+	}
+
+	> .scroll
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		overflow-y: scroll;
+	}
+}
+
+//Standing in the inspector's card for what is picked: the card's bar says what it is, so no
+//header of its own, and the card - not this - is as tall as the rows and scrolls with the page.
+.particle-properties.compact
+{
+	height: auto;
+
+	> .header { display: none; }
+
+	> .scroll { overflow-y: visible; }
+}

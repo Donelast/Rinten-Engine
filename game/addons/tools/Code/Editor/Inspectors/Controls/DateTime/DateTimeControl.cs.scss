@@ -1,0 +1,28 @@
+@import "../ControlHandle.scss";
+
+.datetime-control.control
+{
+	@include control-shell;
+	@include control-prefix;
+	cursor: pointer;
+
+	> .field
+	{
+		flex-grow: 1;
+		min-width: 0;
+		min-height: $control-row-height;
+		padding: $control-text-padding;
+		align-items: center;
+
+		> .value
+		{
+			flex-grow: 1;
+			min-width: 0;
+		}
+	}
+
+	&.readonly
+	{
+		cursor: default;
+	}
+}

@@ -1,0 +1,60 @@
+//A frame as one row: its picture, then the file and its buttons over the cell's four numbers. The buttons are design.scss's .toolbarbutton.
+SpriteFrameControl.control.no-background
+{
+	flex-direction: row;
+	align-items: center;
+	flex-grow: 1;
+	min-width: 0;
+	min-height: $control-row-height;
+	padding: 2px 0;
+	gap: 6px;
+
+	//Pixel art at the size it is shown, not smoothed into a blur.
+	> .thumb
+	{
+		flex-shrink: 0;
+		width: 44px;
+		height: 44px;
+		border-radius: 3px;
+		background-color: rgba( $control-background-light, 0.4 );
+		object-fit: contain;
+		image-rendering: pixelated;
+	}
+
+	> .body
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+		gap: 2px;
+
+		> .top
+		{
+			flex-direction: row;
+			align-items: center;
+			min-width: 0;
+
+			> .file
+			{
+				flex-grow: 1;
+				min-width: 0;
+				color: rgba( $text-control, 0.7 );
+				font-size: $control-text-size-small;
+				@include one-line;
+			}
+		}
+
+		> .region
+		{
+			flex-grow: 1;
+			min-width: 0;
+		}
+	}
+
+	//Nothing to edit. Without this the row is empty, and an empty row in a list is a row of no height at all - the frame simply is not there to look at.
+	> .note
+	{
+		color: $text-light;
+		font-size: $control-text-size;
+	}
+}

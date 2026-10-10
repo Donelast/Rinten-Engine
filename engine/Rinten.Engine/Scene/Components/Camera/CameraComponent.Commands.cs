@@ -1,0 +1,109 @@
+﻿using Rinten.Rendering;
+using Rinten.Utility;
+
+namespace Rinten;
+
+public sealed partial class CameraComponent : Component, Component.ExecuteInEditor
+{
+	readonly record struct CommandListEntry( int Priority, CommandList List ) : IComparable<CommandListEntry>
+	{
+		public int CompareTo( CommandListEntry other ) => Priority.CompareTo( other.Priority );
+	}
+	Dictionary<Stage, List<CommandListEntry>> commandlists = new();
+
+	/// <summary>Add a command list to the render</summary>
+	public void AddCommandList( CommandList buffer, Stage stage, int order = 0 )
+	{
+		if ( !commandlists.TryGetValue( stage, out var list ) )
+		{
+			list = new List<CommandListEntry>();
+			commandlists[stage] = list;
+		}
+
+		list.Add( new CommandListEntry( order, buffer ) );
+	}
+
+	//Number of lists on a stage with work this frame; empty ones (like an unused HUD) don't count
+	internal int CommandListCount( Stage stage )
+	{
+		if ( !commandlists.TryGetValue( stage, out var list ) ) return 0;
+
+		var count = 0;
+
+		foreach ( var entry in list )
+		{
+			if ( entry.List is null || entry.List.IsEmpty ) continue;
+			if ( entry.List.Flags.Contains( CommandList.Flag.PostProcess ) && !EnablePostProcessing ) continue;
+
+			count++;
+		}
+
+		return count;
+	}
+
+	//The lists hung on a stage, for the drawer to run in order with the post-processing's - see
+	//CoreSceneDrawer.RunLists. A list flagged as post-processing is left out where the camera has it off.
+	internal void CommandListsAt( Stage stage, List<(int Order, int At, CommandList List)> into )
+	{
+		if ( !commandlists.TryGetValue( stage, out var list ) ) return;
+
+		foreach ( var entry in list )
+		{
+			if ( entry.List is null ) continue;
+			if ( entry.List.Flags.Contains( CommandList.Flag.PostProcess ) && !EnablePostProcessing ) continue;
+
+			into.Add( ( entry.Priority, into.Count, entry.List ) );
+		}
+	}
+
+	public void RemoveCommandList( CommandList buffer, Stage stage )
+	{
+		if ( !commandlists.TryGetValue( stage, out var list ) )
+			return;
+
+		list.RemoveAll( x => x.List == buffer );
+	}
+
+	/// <summary>Remove an entry</summary>
+	public void RemoveCommandList( CommandList buffer )
+	{
+		foreach ( var list in commandlists.Values )
+		{
+			list.RemoveAll( x => x.List == buffer );
+		}
+	}
+
+	/// <summary>Remove all entries in this stage</summary>
+	public void ClearCommandLists( Stage stage )
+	{
+		commandlists.Remove( stage );
+	}
+
+	/// <summary>Remove all entries in this stage</summary>
+	public void ClearCommandLists()
+	{
+		commandlists.Clear();
+	}
+
+	static Superluminal _executeCommandList = new Superluminal( "ExecuteCommandList", Color.Cyan );
+
+	//Called during the render pipeline on a worker thread.
+	private void ExecuteCommandLists( Stage stage, SceneCamera currentCamera )
+	{
+		if ( commandlists.TryGetValue( stage, out var list ) )
+		{
+			list.Sort();
+
+			foreach ( var entry in list )
+			{
+				using ( _executeCommandList.Start( entry.List.DebugName ) )
+				{
+					if ( entry.List.Flags.Contains( CommandList.Flag.PostProcess ) && !currentCamera.EnablePostProcessing )
+						continue;
+
+					entry.List.ExecuteOnRenderThread();
+				}
+			}
+		}
+	}
+}

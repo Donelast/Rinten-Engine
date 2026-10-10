@@ -1,0 +1,25 @@
+@namespace Editor.ProjectSettingsUI
+@attribute [StyleSheet( "ProjectSettingsBannerPanel.razor.scss" )]
+@inherits Panel
+
+<root class="project-banner" onclick="@PickThumb">
+	<ProjectThumbPanel Project="@Project" />
+	<div class="info">
+		<div class="title">@Project?.Config?.Title</div>
+		<div class="ident">@Project?.Config?.FullIdent</div>
+	</div>
+</root>
+
+@code
+{
+	public Project Project { get; set; }
+	public Action OnChanged { get; set; }
+
+	void PickThumb()
+	{
+		if ( Project is null ) return;
+		if ( !ProjectThumb.Pick( Project ) ) return;
+		OnChanged?.Invoke();
+		StateHasChanged();
+	}
+}

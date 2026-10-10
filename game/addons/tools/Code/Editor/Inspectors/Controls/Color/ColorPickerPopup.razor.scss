@@ -1,0 +1,11 @@
+//The colour picker's popup - see ColorPickerPopup.razor. The picker inside sizes itself, so nothing here says how big it is.
+ColorPickerPopup.popup-panel.color-picker-popup
+{
+	flex-direction: column;
+	pointer-events: all;
+
+	> .picker
+	{
+		position: relative;
+	}
+}

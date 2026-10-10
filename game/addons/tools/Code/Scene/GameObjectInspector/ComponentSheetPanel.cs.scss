@@ -1,0 +1,16 @@
+//A component is a card - see .inspector-card in design.scss, which a material's features
+//wear too. What is here is only a component's: where one carried by its header would land.
+ComponentSheetPanel.drop-top::before,
+ComponentSheetPanel.drop-bottom::after
+{
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background-color: $accent;
+	z-index: 10;
+}
+
+ComponentSheetPanel.drop-top::before { top: -1px; }
+ComponentSheetPanel.drop-bottom::after { bottom: -1px; }

@@ -1,0 +1,8 @@
+﻿//The asset browser's row is the editor's one tree row - see TreeRowPanel.cs.scss.
+//What is here is only its own: the file's picture in the glyph's place.
+.asset-tree-row > .icon-slot > .picture
+{
+	width: 16px;
+	height: 16px;
+	border-radius: 2px;
+}

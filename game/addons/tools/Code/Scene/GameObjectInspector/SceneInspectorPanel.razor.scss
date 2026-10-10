@@ -1,0 +1,57 @@
+SceneInspectorPanel,
+.scene-inspector
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+}
+
+SceneInspectorPanel > .scroll,
+.scene-inspector > .scroll
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+	overflow: scroll;
+	gap: $gap-section;
+	padding-bottom: $gap-section;
+	align-items: stretch;
+}
+
+SceneInspectorPanel > .scroll > *,
+.scene-inspector > .scroll > *
+{
+	flex-shrink: 0;
+}
+
+//The first card: the scene's name beside its glyph, its settings under it. The
+//rows bring their own side room, so the card gives its sides only to the name.
+.scene-inspector .scene-header
+{
+	padding-left: 0px;
+	padding-right: 0px;
+
+	> .top-row
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: $gap-label;
+		padding: 0px $pad-card;
+
+		> .icon
+		{
+			font-size: 20px;
+			color: $ink-dim;
+			flex-shrink: 0;
+		}
+
+		> .stringcontrol,
+		> stringcontrol
+		{
+			flex-grow: 1;
+			min-width: 0;
+		}
+	}
+
+	> .fields:empty { display: none; }
+}

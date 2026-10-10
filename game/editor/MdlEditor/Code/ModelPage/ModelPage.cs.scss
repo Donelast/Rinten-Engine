@@ -1,0 +1,30 @@
+//The model half's document: the viewport fills it, and the layer over the picture carries the placement tools.
+
+.model-stage
+{
+	flex-direction: column;
+	flex-grow: 1;
+	width: 100%;
+	height: 100%;
+
+	//Smaller than this and there is nothing to see in the picture.
+	min-width: 80px;
+	min-height: 80px;
+}
+
+//The layer over the viewport. It fills the frame the picture is drawn in - it is
+//a child of that frame - and what is on it places itself against these corners.
+.viewport-overlays
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+
+	//Over the picture and over whatever the viewport has along its own bottom.
+	z-index: 10;
+
+	//Deaf on its own account: a click that misses an overlay is a click in the 3D view. Each overlay turns the pointer back on for itself.
+	pointer-events: none;
+}

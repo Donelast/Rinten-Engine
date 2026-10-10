@@ -1,0 +1,32 @@
+//The clip page: the transport along the bottom of the picture, and what the page says when there is nothing to play.
+
+//Under the viewport, in the column the preview lays out. Gone entirely while there is a clip - .hidden.
+.clip-hint
+{
+	flex-shrink: 0;
+	padding: 8px;
+	text-align: center;
+	white-space: pre-wrap;
+	color: rgba( $text-control, 0.55 );
+}
+
+//Taller than a dock's toolbar, because the strip in the middle of it is a picture with a playhead running the whole height rather than a row of glyphs.
+.transport > .clip-transport
+{
+	height: 38px;
+	padding: 0 6px;
+	gap: 4px;
+
+	//Elapsed on the left of the strip, the clip's length on the right, each turned to face it so the digits sit against the timeline.
+	> .time
+	{
+		width: 68px;
+		flex-shrink: 0;
+		margin: 0 5px;
+		white-space: nowrap;
+		color: rgba( $text-control, 0.65 );
+
+		&.start { text-align: right; }
+		&.end { text-align: left; }
+	}
+}

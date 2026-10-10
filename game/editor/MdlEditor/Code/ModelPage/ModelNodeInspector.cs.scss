@@ -1,0 +1,82 @@
+//Shaped like the main editor's inspector - see GameObjectInspectorPanel.razor.scss. One scroll, children a hairline apart, no plate between them.
+
+.model-inspector
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+
+	> .scroll
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		overflow: scroll;
+		gap: 1px;
+		align-items: stretch;
+
+		> * { flex-shrink: 0; }
+	}
+
+	//The band saying what is selected. The same one a component sheet wears.
+	.heading
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		padding: 4px 6px;
+		background-color: $surface-background;
+		border-top: 1px solid $edge;
+		border-bottom: 1px solid $edge;
+
+		> .title
+		{
+			flex-grow: 1;
+			min-width: 0;
+			font-size: $type-body;
+			font-weight: 600;
+			color: $ink;
+		}
+	}
+
+	//Don't grow the sheet: the body below it must sit right under the rows
+	> .scroll > .controlsheet
+	{
+		flex-grow: 0;
+		flex-shrink: 0;
+
+		//Its own body with it: a scroll inside a parent that is only as tall as its
+		//content measures as nothing at all. The scroll here is the dock's, one level up.
+		> .body
+		{
+			flex-grow: 0;
+			overflow: visible;
+		}
+	}
+
+	//Whatever a handler puts beside the properties.
+	> .scroll > .body
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		gap: 4px;
+		padding: 6px;
+	}
+
+	//A column in the model page rather than a dock: no heading, and it gives its height to whatever is under it rather than filling one.
+	&.compact
+	{
+		height: auto;
+
+		> .scroll { overflow: visible; }
+	}
+}
+
+//A line of explanation under a sheet, wherever one is put.
+.model-inspector .note,
+.note
+{
+	white-space: pre-wrap;
+	color: rgba( $text-control, 0.7 );
+}

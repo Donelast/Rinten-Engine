@@ -1,0 +1,107 @@
+﻿ControlSheetRow,
+.controlsheetrow
+{
+	flex-direction: row;
+	align-items: flex-start;
+	flex-shrink: 0;
+	min-height: $row;
+
+	//Between a name and its field: enough to tell them apart, and no more - at eight it was
+	//a column of nothing in every row, and the first thing a narrow inspector ran out of.
+	gap: $gap-label;
+	padding: 0px $pad-card;
+	pointer-events: all;
+	font-family: $font;
+}
+
+ControlSheetRow.hidden,
+.controlsheetrow.hidden
+{
+	display: none;
+}
+
+//Name column: same share in every row so fields align; 2/5 of the row, max 132px, tooltip has all
+ControlSheetRow > .left,
+.controlsheetrow > .left
+{
+	flex-grow: 0;
+	flex-shrink: 1;
+	width: 40%;
+	max-width: 132px;
+	min-width: 40px;
+
+	//The row starts its children at the top - a control that is several rows tall has to keep its name beside the first of them - so the name is nudged down
+	//by hand to sit level with the field. Tuned against the row's height: it came down by one when the row did, and it has to move again if the row does.
+	padding-top: 4px;
+}
+
+//And the name is cut rather than allowed to do the pushing. The whole of it is
+//in the tooltip, which is where a name too long to show has always been read.
+ControlSheetRow > .left > .title,
+.controlsheetrow > .left > .title
+{
+	font-size: 12px;
+	color: $ink-dim;
+
+	//The min-width the mixin brings is the half that makes the rest work: a flex child will not go below the
+	//width of its own text unless it is told to, so without it the column could not shrink however willing it was.
+	@include one-line;
+
+	&:hover {
+		color: $ink;
+	}
+}
+
+//Basis 0 and grow, so a wide control can't steal width from the name column
+ControlSheetRow > .right,
+.controlsheetrow > .right
+{
+	flex-direction: column;
+	flex-grow: 1;
+	flex-basis: 0px;
+	min-width: 0;
+	align-items: stretch;
+	pointer-events: all;
+}
+
+ControlSheetRow > .right > *,
+.controlsheetrow > .right > *
+{
+	flex-grow: 1;
+	min-width: 0;
+	min-height: $row;
+}
+
+ControlSheetRow > .right > .textentry,
+.controlsheetrow > .right > .textentry
+{
+	background-color: $sunken;
+	border: 1px solid $edge;
+	border-radius: $radius-2;
+	padding: 2px 6px;
+}
+
+//Too-narrow rows stack the name above the field; see WidthTiers for the class
+ControlSheetRow.wide,
+.controlsheetrow.wide,
+ControlSheetRow.under-180,
+.controlsheetrow.under-180
+{
+	flex-direction: column;
+	align-items: stretch;
+	gap: 4px;
+
+	> .left
+	{
+		min-width: 0;
+		max-width: 100%;
+		padding-top: 0;
+	}
+
+	> .right
+	{
+		//A wide row is a column, where a basis of nothing is a height of nothing: the field goes back to being as tall as it is.
+		flex-basis: auto;
+		width: 100%;
+	}
+}

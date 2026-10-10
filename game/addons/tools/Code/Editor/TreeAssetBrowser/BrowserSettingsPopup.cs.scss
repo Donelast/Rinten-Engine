@@ -1,0 +1,61 @@
+BrowserSettingsPopup,
+.browser-settings-popup {
+	width: 280px;
+	min-width: 280px;
+
+	> .body {
+		flex-direction: column;
+		flex-shrink: 0;
+		padding: 8px;
+		pointer-events: all;
+		gap: 4px;
+
+		> .heading {
+			flex-shrink: 0;
+			padding: 4px 8px 2px;
+			color: $text-light;
+			font-size: 12px;
+			font-weight: 600;
+			pointer-events: none;
+		}
+
+		> .menu-row {
+			flex-direction: row;
+			align-items: center;
+			column-gap: 8px;
+			flex-shrink: 0;
+			min-height: $control-row-height;
+			padding: 0 8px;
+			border-radius: $radius-2;
+			pointer-events: all;
+			cursor: pointer;
+
+			//Not .label, which the tick has too - see ViewportToolPopup.scss.
+			> .caption {
+				flex-grow: 1;
+				color: $text-control;
+				font-size: $type-body;
+				@include one-line;
+				pointer-events: none;
+			}
+
+			> .check {
+				flex: 0 0 16px;
+				width: 16px;
+				height: 16px;
+				min-width: 16px;
+				max-width: 16px;
+				aspect-ratio: 1;
+				font-size: $type-default;
+				color: $primary;
+				align-items: center;
+				justify-content: center;
+				pointer-events: none;
+			}
+
+			&:hover {
+				background-color: $veil-hover;
+			}
+		}
+	}
+}

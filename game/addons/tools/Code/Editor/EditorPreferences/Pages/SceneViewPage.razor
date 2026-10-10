@@ -1,0 +1,65 @@
+@namespace Editor.Preferences
+@attribute [Title( "Scene View" ), Icon( "videocam" ), Order( 3 )]
+@attribute [Description( "The viewport camera, how it is moved, and the handles drawn over the scene." )]
+@inherits PreferencesPage
+
+<root class="preferences-page">
+	<div class="body" @ref="Body">
+		<label class="section-header">Camera</label>
+		<div @ref="cameraHost"></div>
+
+		<label class="section-header">Movement</label>
+		<div @ref="movementHost"></div>
+
+		<label class="section-header">Cursor</label>
+		<div @ref="cursorHost"></div>
+
+		<label class="section-header">Editing</label>
+		<div @ref="editingHost"></div>
+
+		<label class="section-header">Gizmo Handles</label>
+		<div @ref="gizmoHost"></div>
+	</div>
+</root>
+
+@code
+{
+	Panel cameraHost;
+	Panel movementHost;
+	Panel cursorHost;
+	Panel editingHost;
+	Panel gizmoHost;
+
+	protected override void OnBuild()
+	{
+		var camera = AddSheet( cameraHost );
+		camera.AddProperty( () => EditorPreferences.CameraFieldOfView );
+		camera.AddProperty( () => EditorPreferences.CameraBackgroundColor );
+		camera.AddProperty( () => EditorPreferences.CameraZNear );
+		camera.AddProperty( () => EditorPreferences.CameraZFar );
+
+		var movement = AddSheet( movementHost );
+		movement.AddProperty( () => EditorPreferences.CameraSpeed );
+		movement.AddProperty( () => EditorPreferences.CameraSensitivity );
+		movement.AddProperty( () => EditorPreferences.CameraInvertPan );
+		movement.AddProperty( () => EditorPreferences.InvertOrbitZoom );
+		movement.AddProperty( () => EditorPreferences.OrbitZoomSpeed );
+
+		var cursor = AddSheet( cursorHost );
+		cursor.AddProperty( () => EditorPreferences.HideRotateCursor );
+		cursor.AddProperty( () => EditorPreferences.HidePanCursor );
+		cursor.AddProperty( () => EditorPreferences.HideOrbitCursor );
+
+		var editing = AddSheet( editingHost );
+		editing.AddProperty( () => EditorPreferences.CreateObjectsAtOrigin );
+		editing.AddProperty( () => EditorPreferences.BoundsPlacement );
+		editing.AddProperty( () => EditorPreferences.PasteAtCursor );
+		editing.AddProperty( () => EditorPreferences.PlaceModelsAsProp );
+
+		var gizmo = AddSheet( gizmoHost );
+		gizmo.AddProperty( () => EditorPreferences.GizmoScale );
+		gizmo.AddProperty( () => EditorPreferences.GizmoRenderDistance );
+		gizmo.AddProperty( () => EditorPreferences.GizmoDepthTest );
+		gizmo.AddProperty( () => EditorPreferences.WorldSpaceGizmos );
+	}
+}

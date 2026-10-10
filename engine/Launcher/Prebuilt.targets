@@ -1,0 +1,14 @@
+<Project>
+	<!-- Imported after the C# targets in a release: the host is prebuilt/$(TargetFileName), nothing is compiled -->
+	<ItemGroup>
+		<Compile Remove="@(Compile)" />
+		<Reference Include="$(MSBuildProjectDirectory)/prebuilt/*.dll" Exclude="$(MSBuildProjectDirectory)/prebuilt/$(TargetFileName)" Private="true" />
+	</ItemGroup>
+
+	<!-- References to the engine's own bin/managed copies, which the release packager left out of prebuilt/ -->
+	<Import Project="$(MSBuildProjectDirectory)/prebuilt/Shared.props" Condition="Exists('$(MSBuildProjectDirectory)/prebuilt/Shared.props')" />
+
+	<Target Name="CoreCompile" Inputs="$(MSBuildProjectDirectory)/prebuilt/$(TargetFileName)" Outputs="@(IntermediateAssembly)">
+		<Copy SourceFiles="$(MSBuildProjectDirectory)/prebuilt/$(TargetFileName)" DestinationFiles="@(IntermediateAssembly)" />
+	</Target>
+</Project>

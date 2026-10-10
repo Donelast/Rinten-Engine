@@ -1,0 +1,16 @@
+//The node inspector: one sheet of rows per object being edited.
+
+.action-properties
+{
+	flex-direction: column;
+	flex-grow: 1;
+	background-color: $panel-background;
+
+	> .content
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		align-items: stretch;
+		overflow-y: scroll;
+	}
+}

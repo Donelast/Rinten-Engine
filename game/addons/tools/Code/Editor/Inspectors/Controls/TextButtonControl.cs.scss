@@ -1,0 +1,47 @@
+//A text entry with a button at the right. A class, not a type name: subclasses are named differently.
+.control.text-and-button
+{
+	flex-direction: row;
+	align-items: center;
+	flex-grow: 1;
+	min-width: 0;
+	gap: 2px;
+
+	> textentry
+	{
+		position: relative;
+		flex-grow: 1;
+		min-width: 0;
+		min-height: $control-row-height;
+		padding: $control-text-padding;
+		background-color: $control-background;
+		border: $control-border;
+		border-radius: $control-radius;
+		color: $text-control;
+
+		&.multiple > .content-label,
+		&.multiple > .label
+		{
+			color: $multiple-values;
+		}
+
+		> .content-label,
+		> .label
+		{
+			color: inherit;
+			pointer-events: none;
+		}
+	}
+
+	> .action
+	{
+		flex-shrink: 0;
+		width: $control-row-height;
+		height: $control-row-height;
+	}
+
+	&.readonly > .action
+	{
+		pointer-events: none;
+	}
+}

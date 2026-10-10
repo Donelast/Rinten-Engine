@@ -1,0 +1,123 @@
+@using System
+@using System.Collections.Generic
+@using Rinten.UI
+@namespace Editor.MdlEditor
+@attribute [StyleSheet( "ModelHierarchy.razor.scss" )]
+@inherits Panel
+
+@* The compiled model's skeleton, a row a bone - the window's Hierarchy dock, a tab
+   beside the inspector. A bone picked here is lit in the picture and is what the
+   next thing added hangs from; a bone clicked in the picture is picked here. *@
+
+<root class="model-hierarchy">
+	<div class="scroll">
+		<div class="rows">
+			@if ( note is not null )
+			{
+				<label class="note">@note</label>
+			}
+			else
+			{
+				<label class="heading">@Heading</label>
+				@foreach ( var item in items )
+				{
+					<div class="hierarchy-row @(IsSelected( item ) ? "selected" : null)" style="@Indent( item )" onclick="@(() => Select( item ))">
+						<i class="icon">@KindIcon( item.Kind )</i>
+						<label class="name">@item.Name</label>
+					</div>
+				}
+			}
+		</div>
+	</div>
+</root>
+
+@code
+{
+	private readonly List<ModelHierarchyItem> items = new();
+	private string note;
+	private int version;
+
+	//Internal, as the item is: markup makes a public class, and a public member of an internal type is not something it may have.
+
+	//The bone picked, for whatever is being added next.
+	internal ModelHierarchyItem Selected { get; private set; }
+
+	//Told each time a row is picked.
+	internal Action<ModelHierarchyItem> ItemClicked { get; set; }
+
+	private string Heading => $"Skeleton  ·  {items.Count}";
+
+	internal void Rebuild( Asset asset, Model model )
+	{
+		items.Clear();
+		Selected = null;
+		note = null;
+
+		if ( model is null || model.IsError )
+		{
+			note = asset is null
+				? "Nothing is open."
+				: "This model doesn't load - it has never compiled, or what it compiled to isn't there.";
+		}
+		else
+		{
+			AddSkeleton( model );
+		}
+
+		version++;
+		StateHasChanged();
+	}
+
+	internal bool IsSelected( ModelHierarchyItem item )
+		=> item is not null && Selected is not null
+			&& item.Kind == Selected.Kind
+			&& string.Equals( item.Name, Selected.Name, StringComparison.Ordinal )
+			&& string.Equals( item.Group, Selected.Group, StringComparison.Ordinal );
+
+	//Picks a bone by name, as a click on its row does - or nothing, for a click on no bone.
+	internal void SelectBone( string name )
+	{
+		var item = string.IsNullOrEmpty( name )
+			? null
+			: items.Find( x => x.Kind == ModelHierarchyKind.Bone && x.Name == name );
+
+		if ( item == Selected ) return;
+
+		Select( item );
+	}
+
+	internal void Select( ModelHierarchyItem item )
+	{
+		Selected = item;
+
+		version++;
+		StateHasChanged();
+
+		ItemClicked?.Invoke( item );
+	}
+
+	private void AddSkeleton( Model model )
+	{
+		if ( model.Bones?.AllBones is not { } bones ) return;
+
+		foreach ( var bone in bones )
+		{
+			var depth = 0;
+			for ( var parent = bone.Parent; parent is not null; parent = parent.Parent )
+				depth++;
+
+			items.Add( new ModelHierarchyItem { Kind = ModelHierarchyKind.Bone, Name = bone.Name, Depth = depth } );
+		}
+	}
+
+	//Its depth in the skeleton, which only the list knows.
+	private static string Indent( ModelHierarchyItem item ) => $"padding-left: {8 + item.Depth * 12}px;";
+
+	private static string KindIcon( ModelHierarchyKind kind ) => kind switch
+	{
+		ModelHierarchyKind.Bone => "share",
+		_ => "circle"
+	};
+
+	protected override int BuildHash() => version;
+}

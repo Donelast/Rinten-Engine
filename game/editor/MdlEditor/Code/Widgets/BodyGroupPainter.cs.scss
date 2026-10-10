@@ -1,0 +1,170 @@
+﻿//A row per mesh, a column per choice. The columns are cells of a flex row that share what is left after
+//the name, so no width has to be worked out by hand and a click on a cell is a click on that cell.
+
+.body-group
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 4px;
+
+	> .well
+	{
+		flex-direction: column;
+		min-height: 200px;
+		max-height: 420px;
+		overflow-y: scroll;
+		overflow-x: hidden;
+		border-radius: $control-radius;
+		background-color: $list-background;
+
+		> .rows
+		{
+			flex-direction: column;
+			flex-shrink: 0;
+			width: 100%;
+			gap: 1px;
+			padding: 2px 0 4px 0;
+		}
+	}
+
+	> .summary
+	{
+		font-size: $type-small;
+		color: $text-control;
+	}
+
+	.note
+	{
+		white-space: pre-wrap;
+		margin: 6px;
+		font-size: $type-small;
+		color: $text-control;
+	}
+}
+
+//The name half and the columns, on both the header and every row. Kept the same here so the two line up without either measuring the other.
+.choice-header,
+.mesh-row
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+
+	> .name
+	{
+		width: 42%;
+		min-width: 80px;
+		flex-shrink: 0;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	> .cells
+	{
+		flex-direction: row;
+		flex-grow: 1;
+		min-width: 0;
+		gap: 2px;
+
+		> .cell
+		{
+			flex-grow: 1;
+			flex-basis: 0;
+			min-width: 0;
+		}
+	}
+}
+
+.choice-header
+{
+	height: $row-height;
+	padding: 0 4px;
+
+	> .name
+	{
+		font-size: $type-micro;
+		font-weight: 500;
+		color: rgba( $text-control, 0.6 );
+	}
+
+	> .cells > .cell
+	{
+		align-items: center;
+		justify-content: center;
+		height: 100%;
+		margin: 3px 0;
+		border-radius: 2px;
+		font-size: $type-micro;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		background-color: rgba( $control-background, 0.6 );
+		color: rgba( $text, 0.9 );
+
+		&.first { font-weight: 600; }
+
+		&.lit
+		{
+			font-weight: 600;
+			background-color: rgba( $primary, 0.22 );
+		}
+
+		//Nothing in it, so the choice hides the part rather than swapping it.
+		&.hides { color: rgba( $text-control, 0.55 ); }
+	}
+}
+
+.mesh-row
+{
+	gap: 3px;
+	height: $row-height - 2px;
+	padding: 0 4px;
+	border-radius: $control-radius;
+	cursor: pointer;
+	pointer-events: all;
+
+	&:hover { background-color: rgba( $primary, 0.1 ); }
+
+	> .mark
+	{
+		width: 15px;
+		font-size: $type-small;
+		text-align: center;
+		flex-shrink: 0;
+		color: rgba( $text-control, 0.7 );
+	}
+
+	> .name
+	{
+		font-size: $type-micro;
+		color: rgba( $text-control, 0.7 );
+	}
+
+	> .cells > .cell
+	{
+		height: 100%;
+		margin: 3px 0;
+		border-radius: 2px;
+		background-color: rgba( $control-background, 0.5 );
+		pointer-events: all;
+
+		&.lit { background-color: rgba( $control-background, 0.9 ); }
+
+		//Drawn by this choice. Amber where the same mesh is in more than one of them, since the group then cannot swap it.
+		&.on { background-color: rgba( $green, 0.65 ); }
+		&.on.lit { background-color: rgba( $green, 0.9 ); }
+		&.on.clash { background-color: rgba( $yellow, 0.65 ); }
+		&.on.clash.lit { background-color: rgba( $yellow, 0.9 ); }
+	}
+
+	&.claimed > .name
+	{
+		font-weight: 600;
+		color: $text;
+	}
+
+	&.missing
+	{
+		> .mark,
+		> .name { color: rgba( $red, 0.85 ); }
+	}
+}

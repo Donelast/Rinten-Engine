@@ -1,0 +1,191 @@
+@using System
+@using Rinten.UI
+@namespace Editor.Inspectors
+@inherits BaseControl
+@attribute [CustomEditor( typeof(float), WithAllAttributes = [ typeof(RangeAttribute) ] )]
+@attribute [CustomEditor( typeof(float), WithAllAttributes = [ typeof(MinMaxAttribute) ] )]
+
+@* A ranged float the way the old tool GUI drew one: the value in a box and the
+   slider beside it. The slider itself - groove, grip, ruler, drag, Ctrl to snap
+   to the ticks - is Editor.SliderTrack, the one every slider in the editor is;
+   this is only the box in front of it. It has no plate of its own: it stands
+   straight on the panel it is in. *@
+
+<root class="@((ShowTextEntry ? "has-text-entry " : "") + (ShowScale ? "has-scale" : ""))">
+    @if ( ShowTextEntry )
+    {
+        <div class="entry">
+            <TextEntry @ref="TextEntryPanel" Value:bind="@EntryText" Numeric="@true" NumberFormat="@NumberFormat" OnTextEdited="@OnEntryTextEdited" Disabled="@IsReadOnly" />
+        </div>
+    }
+
+    <SliderTrack @ref="Track" Min="@Min" Max="@Max" Step="@Step" Value="@Value" ShowScale="@ShowScale" ReadOnly="@IsReadOnly"
+                 OnValueChanged="@OnTrackValue" OnEditStarted="@OnTrackEditStarted" OnEditFinished="@OnTrackEditFinished" />
+</root>
+
+@code
+{
+    public override bool SupportsMultiEdit => true;
+
+	[Parameter] public Action<float> OnValueChanged { get; set; }
+
+	//The right side of the slider.
+    [Parameter] public float Max { get; set; } = 100;
+
+
+	//The left side of the slider.
+    [Parameter] public float Min { get; set; } = 0;
+
+	//If set to 1, value will be rounded to 1's If set to 10, value will be rounded to 10's If set to 0.1, value will be rounded to 0.1's
+    [Parameter] public float Step { get; set; } = 0.001f;
+
+	//Whether the value is shown in a box beside the slider, to be typed into.
+    [Parameter] public bool ShowTextEntry { get; set; } = false;
+
+	//Whether a typed value is held inside Min and Max, rather than only the drag.
+    [Parameter] public bool Clamped { get; set; } = false;
+
+	//How to display numbers in this control
+    [Parameter] public string NumberFormat { get; set; } = "0.###";
+
+	//The ruler under the slider. Off where there is no height for it - a toolbar ( .toolbar-slider takes it away too), or a slider sharing a row.
+    [Parameter] public bool ShowScale { get; set; } = true;
+
+
+	float _value;
+
+    [Parameter]
+	public float Value
+	{
+		get => Property?.As.Float ?? _value;
+
+		set
+		{
+			if ( IsReadOnly )
+				return;
+
+			if ( Clamped )
+				value = MathX.Clamp( value, Min, Max );
+
+			if (Property is not null)
+			{
+				Property.As.Float = value;
+				StateHasChanged();
+				return;
+			}
+
+			value = MathX.Clamp( value, Min, Max );
+
+			if (_value == value)
+				return;
+
+			_value = value;
+			StateHasChanged();
+		}
+	}
+
+	SliderTrack Track { get; set; }
+	TextEntry TextEntryPanel { get; set; }
+
+	string EntryText
+	{
+		get
+		{
+			//The bind reads this on every poll (every ui_bind_poll frames in the editor); the number is formatted only when it moved.
+			var value = Value;
+
+			if ( entryText is null || value != entryTextFor )
+			{
+				entryTextFor = value;
+				entryText = value.ToString( NumberFormat );
+			}
+
+			return entryText;
+		}
+		set
+		{
+			if ( float.TryParse( value, out var floatValue ) )
+				Value = floatValue;
+		}
+	}
+
+	string entryText;
+	float entryTextFor;
+
+	void OnEntryTextEdited( string text )
+	{
+		if ( float.TryParse( text, out var floatValue ) )
+			Value = floatValue;
+	}
+
+	public SliderControl()
+	{
+		ShowBackground = false;
+	}
+
+	public SliderControl(float min, float max, float step = 1.0f) : this()
+	{
+		Min = min;
+		Max = max;
+		Step = step;
+	}
+
+	public override void Rebuild()
+	{
+		if ( Property is null ) return;
+
+		ShowTextEntry = true;
+
+		if ( Property.TryGetAttribute<RangeAttribute>( out var rangeAttribute ) )
+		{
+			Min = rangeAttribute.Min;
+			Max = rangeAttribute.Max;
+			Clamped = rangeAttribute.Clamped;
+		}
+		else if ( Property.TryGetAttribute<MinMaxAttribute>( out var minMax ) )
+		{
+			//[MinMax] is the bounds and nothing else, so the value stays inside them.
+			Min = minMax.MinValue;
+			Max = minMax.MaxValue;
+			Clamped = true;
+		}
+
+		if ( Property.TryGetAttribute<StepAttribute>( out var stepAttribute ) )
+		{
+			Step = stepAttribute.Step;
+		}
+
+		//The entry, the ruler's ends and the presets button all came in above.
+		StateHasChanged();
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+		if ( firstTime ) Rebuild();
+	}
+
+	//Whether somebody has hold of the grip right now. Public because a slider showing something that moves on its own - a playhead -
+	//has to stop writing the value while it is being dragged, or the two fight each frame and the grip will not follow the pointer.
+	public bool IsDragging => Track?.IsDragging ?? false;
+
+	void OnTrackEditStarted()
+	{
+		TextEntryPanel?.Blur();
+		Property?.Parent?.NoteStartEdit( Property );
+	}
+
+	void OnTrackEditFinished() => Property?.Parent?.NoteFinishEdit( Property );
+
+	void OnTrackValue( float value )
+	{
+		Value = value;
+		OnValueChanged?.Invoke( Value );
+	}
+
+    protected override void OnMiddleClick( MousePanelEvent e )
+    {
+        base.OnMiddleClick( e );
+        e.StopPropagation();
+    }
+}

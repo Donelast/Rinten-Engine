@@ -1,0 +1,39 @@
+@namespace Editor.TreeBrowser
+@using Rinten.UI
+@attribute [StyleSheet( "AssetFilterGroupRow.razor.scss" )]
+@inherits Panel
+
+<root class="asset-filter-group @SelectionClass" onclick="@Open">
+	<div class="anchor left" @ref="leftAnchor"></div>
+	<div class="anchor right" @ref="rightAnchor"></div>
+	<span class="name">@Group.Name</span>
+	<i>chevron_right</i>
+</root>
+
+@code
+{
+	public AssetFilterPopup Owner { get; set; }
+	public AssetTypeFilter.Group Group { get; set; }
+	public AssetTypeFilter Filter { get; set; }
+
+	Panel leftAnchor;
+	Panel rightAnchor;
+
+	//A zero-size corner, so a child popup opens level with this row's top edge.
+	public Panel LeftAnchor => leftAnchor;
+	public Panel RightAnchor => rightAnchor;
+
+	int Chosen => Filter?.CountIn( Group ) ?? 0;
+
+	//None of the category, some of it, or all of it.
+	string SelectionClass => Chosen switch
+	{
+		0 => null,
+		var n when n == Group.Entries.Count => "full",
+		_ => "partial"
+	};
+
+	void Open() => Owner?.ShowTypes( this, Group );
+
+	protected override int BuildHash() => HashCode.Combine( Group.Name, Group.Entries.Count, Chosen );
+}

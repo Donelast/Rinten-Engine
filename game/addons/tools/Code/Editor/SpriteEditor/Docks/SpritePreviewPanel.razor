@@ -1,0 +1,67 @@
+@namespace Editor.SpriteEditor
+@using System
+@using Rinten.UI
+@attribute [StyleSheet( "SpritePreviewPanel.razor.scss" )]
+@inherits EditorPanel
+
+@* The picture: the preview scene drawn straight into the dock, and over it a bar
+   with how the picture is drawn - pixels or smoothed. That is this view's, not the
+   sprite's: the sprite's is its renderer's Texture Filter in the scene. *@
+
+<root class="sprite-preview">
+	<div class="bar">
+		<ToolbarButton Icon="@( Pixels ? "grid_on" : "blur_on" )"
+			ToolTip="@( Pixels ? "Drawn as pixels - click to smooth" : "Drawn smoothed - click for pixels" )"
+			OnPressed="@ToggleFilter" />
+	</div>
+
+	<SceneRenderingPanel @ref="_view" class="view" />
+</root>
+
+@code
+{
+	public SpritePreviewScene PreviewScene { get; set; }
+	public SpritePlayback Playback { get; set; }
+	public IAnimationSelection Selection { get; set; }
+
+	SceneRenderingPanel _view;
+	bool _wired;
+
+	bool Pixels => PreviewScene?.Filter == Rinten.Rendering.FilterMode.Point;
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( _wired || PreviewScene is null || !_view.IsValid() ) return;
+		_wired = true;
+
+		_view.Scene = PreviewScene.Scene;
+		_view.Camera = PreviewScene.Camera;
+		_view.OnPreFrame += PreFrame;
+	}
+
+	public override void OnDeleted()
+	{
+		base.OnDeleted();
+
+		if ( _wired && _view.IsValid() ) _view.OnPreFrame -= PreFrame;
+	}
+
+	void PreFrame()
+	{
+		var origin = Selection?.Selected?.Origin ?? new Vector2( 0.5f, 0.5f );
+
+		PreviewScene.Frame( origin );
+		Playback?.Update();
+	}
+
+	void ToggleFilter()
+	{
+		PreviewScene.FilterLevel = Pixels ? 2 : 0;
+		EditorCookie.Set( TextureFilterLevels.Cookie, PreviewScene.FilterLevel );
+		StateHasChanged();
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Pixels );
+}

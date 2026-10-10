@@ -1,0 +1,26 @@
+AssetBrowserPanel,
+.asset-browser-panel {
+	flex-direction: row;
+	flex-grow: 1;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+	padding: 4px;
+	overflow: hidden;
+	color: $ink-dim;
+}
+AssetBrowserPanel > .tree {
+	flex-grow: 1;
+	min-width: 0;
+	min-height: 0;
+}
+
+AssetBrowserPanel > .chrome {
+	flex-direction: column;
+	flex-shrink: 0;
+	width: $row;
+}
+
+AssetBrowserPanel > .chrome:empty {
+	display: none;
+}

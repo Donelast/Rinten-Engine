@@ -1,0 +1,222 @@
+﻿//A tile is placed in the grid by code, which writes left and top; the size comes from the mode.
+IconGridItemPanel,
+.icon-grid-item {
+	flex-direction: column;
+	align-items: center;
+	flex-shrink: 0;
+	position: absolute;
+	padding: 4px;
+	gap: 2px;
+	border-radius: 4px;
+	cursor: pointer;
+	pointer-events: all;
+
+	&:hover:not(:focus) {
+		background-color: $slab;
+
+		> .title {
+			color: $ink;
+		}
+	}
+
+	&:focus {
+		background-color: $list-row-selected;
+		box-shadow: inset 0 0 0 2px $accent;
+
+		> .title {
+			color: $ink;
+		}
+	}
+
+	//The tile size per mode - the same numbers GridMetrics lays the grid out with.
+	&.small {
+		width: 56px;
+		max-width: 56px;
+		height: 72px;
+		max-height: 72px;
+	}
+
+	&.medium {
+		width: 88px;
+		max-width: 88px;
+		height: 104px;
+		max-height: 104px;
+	}
+
+	&.large {
+		width: 136px;
+		max-width: 136px;
+		height: 152px;
+		max-height: 152px;
+	}
+
+	&.list {
+		flex-direction: row;
+		align-items: center;
+		width: 100%;
+		min-height: $row;
+		height: $row;
+		max-height: $row;
+		max-width: unset;
+		gap: 8px;
+		padding: 2px 4px;
+	}
+
+	> .icon-host {
+		width: 32px;
+		height: 32px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		position: relative;
+		pointer-events: none;
+
+		> .icon {
+			font-size: 28px;
+			color: $ink;
+
+			&.folder {
+				color: $yellow;
+			}
+
+			&.hidden {
+				display: none;
+			}
+		}
+
+		> .thumb {
+			width: 32px;
+			height: 32px;
+
+			&.hidden {
+				display: none;
+			}
+		}
+
+		//Type badge in the corner; sized per mode, growing slower than the picture it marks
+		> .badge {
+			position: absolute;
+			right: 0;
+			bottom: 0;
+			width: 14px;
+			height: 14px;
+
+			&.hidden {
+				display: none;
+			}
+		}
+	}
+
+	//The picture is a preview of something the engine loads, not of the file it was built from - see MarkEngineAsset.
+	&.engine-asset > .icon-host > .thumb {
+		border: 2px solid rgba( $green, 0.9 );
+	}
+
+	&.small > .icon-host {
+		width: 32px;
+		height: 32px;
+
+		> .icon {
+			font-size: $type-title;
+		}
+
+		> .thumb {
+			width: 32px;
+			height: 32px;
+		}
+	}
+
+	&.medium > .icon-host {
+		width: 64px;
+		height: 64px;
+
+		> .icon {
+			font-size: 40px;
+		}
+
+		> .thumb {
+			width: 64px;
+			height: 64px;
+		}
+
+		> .badge {
+			width: 22px;
+			height: 22px;
+		}
+	}
+
+	&.large > .icon-host {
+		width: 112px;
+		height: 112px;
+
+		> .icon {
+			font-size: 64px;
+		}
+
+		> .thumb {
+			width: 112px;
+			height: 112px;
+		}
+
+		> .badge {
+			width: 30px;
+			height: 30px;
+		}
+	}
+
+	&.list > .icon-host {
+		width: 20px;
+		height: 20px;
+
+		> .icon {
+			font-size: 18px;
+		}
+
+		> .thumb {
+			width: 20px;
+			height: 20px;
+		}
+
+		> .badge {
+			width: 12px;
+			height: 12px;
+		}
+	}
+
+	> .title {
+		flex-grow: 1;
+		width: 100%;
+		font-size: $type-small;
+		color: $ink-dim;
+		text-align: center;
+		@include one-line;
+		pointer-events: none;
+	}
+
+	&.list > .title {
+		text-align: left;
+		flex-grow: 1;
+	}
+
+	> .extension {
+		flex-shrink: 0;
+		width: 100%;
+		font-size: $type-micro;
+		color: $ink-faint;
+		text-align: center;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		pointer-events: none;
+
+		&.hidden {
+			display: none;
+		}
+	}
+
+	&.list > .extension {
+		width: auto;
+		font-size: $type-small;
+		text-align: left;
+	}
+}

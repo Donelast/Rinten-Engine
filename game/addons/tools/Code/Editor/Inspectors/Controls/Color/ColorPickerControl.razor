@@ -1,0 +1,233 @@
+@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using Rinten.UI
+@namespace Editor.Inspectors
+@inherits BaseControl
+
+@* The colour picker: the square, its sliders, a line a colour can be typed or
+   pasted into in whatever form it came in, and the colours kept for later.
+   What it looks like is in ColorPickerControl.razor.scss; what is here is what
+   it does. *@
+
+<root class="color-picker">
+	<ColorSvArea class="sv" Property="@Property" ReadOnly="@IsReadOnly" OnDragStarted="@Started" OnDragFinished="@Finished" />
+
+	<div class="sliders">
+		<ColorTrack Channel="@ColorTrack.Channels.Hue" Property="@Property" ReadOnly="@IsReadOnly" OnDragStarted="@Started" OnDragFinished="@Finished" />
+		<ColorTrack Channel="@ColorTrack.Channels.Alpha" Property="@Property" ReadOnly="@IsReadOnly" OnDragStarted="@Started" OnDragFinished="@Finished" />
+		<ColorTrack Channel="@ColorTrack.Channels.Range" Property="@Property" ReadOnly="@IsReadOnly" OnDragStarted="@Started" OnDragFinished="@Finished" />
+	</div>
+
+	<div class="footer">
+		<div class="eyedropper" tooltip="Pick a colour off the screen" onmousedown="@OnEyedropper">
+			<label class="material-icon">colorize</label>
+		</div>
+		<div class="code hex @(_hexBad ? "bad" : null)" tooltip="#RGB, #RRGGBB, #RRGGBBAA, 0xRRGGBB or rgb( ... ) - typed or pasted">
+			<TextEntry Value="@HexText" OnTextEdited="@OnHexEdited" Placeholder="#RRGGBB" />
+		</div>
+		<div class="code rgba @(_rgbaBad ? "bad" : null)" tooltip="Red, green, blue and alpha as numbers - one is full">
+			<TextEntry Value="@RgbaText" OnTextEdited="@OnRgbaEdited" />
+		</div>
+	</div>
+
+	<ColorPalettePanel class="palette" Property="@Property" OnPicked="@Finished" />
+</root>
+
+@code
+{
+	//Told when an edit is over: a drag let go of, a kept colour taken, one picked off the screen. Not on every colour a drag passes through.
+	public Action OnEditingFinished { get; set; }
+
+	//Told when a drag starts, so whoever writes the colour down can hold the write until it finishes.
+	public Action OnEditingStarted { get; set; }
+
+	readonly ColorSampler _sampler = new();
+
+	//Whether what is in each line reads as a colour, for the line to say so.
+	bool _hexBad;
+	bool _rgbaBad;
+
+	public override bool SupportsMultiEdit => true;
+
+	bool HasAlpha => Property is not null && ColorPropertyHelper.HasAlpha( Property );
+
+	public ColorPickerControl()
+	{
+		ShowBackground = false;
+		MultipleRows = true;
+
+		_sampler.OnPicked = OnSampled;
+		_sampler.OnCancelled = ShowAgain;
+	}
+
+	//The picker keeps hue, saturation and value itself while it is open, so a grey does not forget
+	//which hue it had and a handle does not jump when a colour is turned into numbers and back.
+	public override void Rebuild()
+	{
+		if ( Property is not null ) ColorPropertyHelper.BeginPicker( Property );
+	}
+
+	protected override int BuildHash() => Property is null ? 0 : HashCode.Combine( Property,
+		ColorPropertyHelper.GetColor( Property ), ColorPropertyHelper.GetHue( Property ), _hexBad, _rgbaBad );
+
+	void Started() => OnEditingStarted?.Invoke();
+
+	void Finished() => OnEditingFinished?.Invoke();
+
+	//The colour as a code: without its HDR range - the range has a slider of its own - and with alpha only where the colour has one.
+	string HexText
+	{
+		get
+		{
+			if ( Property is null ) return "";
+
+			var colour = ColorPropertyHelper.GetRgbWithoutRange( Property );
+
+			return colour.WithAlpha( HasAlpha ? ColorPropertyHelper.GetAlpha( Property ) : 1f ).Hex;
+		}
+	}
+
+	//The colour as numbers, the range included. Invariant, so a comma is only ever a separator.
+	string RgbaText
+	{
+		get
+		{
+			if ( Property is null ) return "";
+
+			var c = ColorPropertyHelper.GetColor( Property );
+
+			return HasAlpha
+				? string.Create( CultureInfo.InvariantCulture, $"{c.r:0.###}, {c.g:0.###}, {c.b:0.###}, {c.a:0.###}" )
+				: string.Create( CultureInfo.InvariantCulture, $"{c.r:0.###}, {c.g:0.###}, {c.b:0.###}" );
+		}
+	}
+
+	//Every change to the line, a paste included, and taken the moment it reads as a colour - the
+	//field itself is not overwritten while it has focus, so what is being typed is left alone.
+	void OnHexEdited( string text )
+	{
+		if ( Property is null ) return;
+
+		var parsed = ParseCode( text, out var saysAlpha );
+
+		_hexBad = parsed is null && !string.IsNullOrWhiteSpace( text );
+
+		if ( parsed is not { } colour ) return;
+
+		//The code is the colour without its range, which is what the line shows, so the range the
+		//colour already had stays. A code that says nothing about alpha leaves the alpha where it was.
+		var range = ColorPropertyHelper.GetRange( Property );
+		var alpha = !HasAlpha ? 1f : saysAlpha ? colour.a : ColorPropertyHelper.GetAlpha( Property );
+
+		ColorPropertyHelper.ImportPickerColor( Property,
+			new Color( colour.r * range, colour.g * range, colour.b * range, alpha ) );
+	}
+
+	void OnRgbaEdited( string text )
+	{
+		if ( Property is null ) return;
+
+		var parsed = ParseNumbers( text, out var saysAlpha );
+
+		_rgbaBad = parsed is null && !string.IsNullOrWhiteSpace( text );
+
+		if ( parsed is not { } colour ) return;
+
+		var alpha = !HasAlpha ? 1f : saysAlpha ? colour.a : ColorPropertyHelper.GetAlpha( Property );
+
+		ColorPropertyHelper.ImportPickerColor( Property, colour.WithAlpha( alpha ) );
+	}
+
+	//A colour in any of the shapes it gets pasted in: #RRGGBB, the same without the hash, 0xRRGGBB out of code, the short #RGB, any of
+	//those with alpha on the end, in quotes or with a semicolon after it - and rgb( ), rgba( ) or anything else a stylesheet would take.
+	static Color? ParseCode( string text, out bool saysAlpha )
+	{
+		saysAlpha = false;
+
+		if ( string.IsNullOrWhiteSpace( text ) ) return null;
+
+		var code = text.Trim().Trim( '"', '\'', ';', ',' ).Trim();
+
+		if ( code.StartsWith( "0x", StringComparison.OrdinalIgnoreCase ) ) code = code[2..];
+		if ( code.StartsWith( '#' ) ) code = code[1..];
+
+		if ( ( code.Length is 3 or 4 or 6 or 8 ) && code.All( Uri.IsHexDigit ) )
+		{
+			saysAlpha = code.Length is 4 or 8;
+			return Color.Parse( "#" + code );
+		}
+
+		//Not hex, so a stylesheet's colour - which says its own alpha where it has one.
+		var styled = text.Trim().Trim( ';' ).Trim();
+		var parsed = Color.Parse( styled );
+
+		saysAlpha = parsed is not null && ( styled.StartsWith( "rgba", StringComparison.OrdinalIgnoreCase ) ||
+			styled.StartsWith( "hsla", StringComparison.OrdinalIgnoreCase ) );
+
+		return parsed;
+	}
+
+	//Three or four numbers - red, green, blue and perhaps alpha, one being full and above one being HDR -
+	//however they are separated. Anything else is handed to ParseCode, so a code pasted here works as well.
+	static Color? ParseNumbers( string text, out bool saysAlpha )
+	{
+		saysAlpha = false;
+
+		if ( string.IsNullOrWhiteSpace( text ) ) return null;
+
+		var parts = text.Split( new[] { ',', ' ', ';', '\t' }, StringSplitOptions.RemoveEmptyEntries );
+		var numbers = new List<float>( 4 );
+
+		foreach ( var part in parts )
+		{
+			if ( !float.TryParse( part, NumberStyles.Float, CultureInfo.InvariantCulture, out var number ) )
+				return ParseCode( text, out saysAlpha );
+
+			numbers.Add( number );
+		}
+
+		if ( numbers.Count is not ( 3 or 4 ) ) return null;
+
+		saysAlpha = numbers.Count == 4;
+
+		return new Color( numbers[0], numbers[1], numbers[2], saysAlpha ? numbers[3] : 1f );
+	}
+
+	BasePopup HostPopup => AncestorsAndSelf.OfType<BasePopup>().FirstOrDefault();
+
+	//Off the screen: the popup gets out of the way of what is being looked at, and is kept while it is
+	//out of the way - the click that samples is a click outside it, which would otherwise close it.
+	void OnEyedropper( PanelEvent e )
+	{
+		e.StopPropagation();
+
+		if ( IsReadOnly || Property is null ) return;
+
+		if ( HostPopup is { } popup )
+		{
+			popup.StayOpen = true;
+			popup.SetClass( "hidden", true );
+		}
+
+		_sampler.Show();
+	}
+
+	void OnSampled( Color colour )
+	{
+		if ( Property is not null )
+			ColorPropertyHelper.ImportPickerColor( Property, HasAlpha ? colour : colour.WithAlpha( 1 ) );
+
+		ShowAgain();
+		Finished();
+	}
+
+	void ShowAgain()
+	{
+		if ( HostPopup is not { } popup || !popup.IsValid() ) return;
+
+		popup.StayOpen = false;
+		popup.SetClass( "hidden", false );
+	}
+}

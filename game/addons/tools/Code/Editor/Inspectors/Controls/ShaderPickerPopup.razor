@@ -1,0 +1,176 @@
+@namespace Editor.Inspectors
+@using Rinten.UI
+@using System
+@using System.Collections.Generic
+@using System.Linq
+
+@attribute [StyleSheet( "ShaderPickerPopup.razor.scss" )]
+
+@inherits Popup
+
+<root class="shader-picker">
+	@if ( Searchable )
+	{
+		<TextEntry @ref="Search" class="search" Placeholder="Search shaders..." OnTextEdited="@OnSearch" />
+	}
+
+	<div class="list">
+		@if ( Rows.Count == 0 )
+		{
+			<span class="empty">Nothing here matches.</span>
+		}
+
+		@foreach ( var row in Rows )
+		{
+			@if ( row.Heading is not null )
+			{
+				<span class="heading">@row.Heading</span>
+			}
+
+			<div class="row @(Chosen( row ) ? "active" : null)" onclick="@( () => Pick( row.Path ) )">
+				<i class="kind">@row.Icon</i>
+
+				<div class="words">
+					<div class="head">
+						<span class="title">@row.Title</span>
+						<span class="path">@row.Path</span>
+					</div>
+
+					@if ( !string.IsNullOrWhiteSpace( row.Summary ) )
+					{
+						<span class="summary">@row.Summary</span>
+					}
+				</div>
+
+				@if ( Chosen( row ) )
+				{
+					<i class="tick">check</i>
+				}
+			</div>
+		}
+	</div>
+</root>
+
+@code
+{
+	//How many shaders it takes before the list is worth searching rather than reading. A project with six shaders in it gets a box that is
+	//only ever in the way; one with sixty is a list nobody scrolls. The number is where reading down stops being the faster of the two.
+	const int SearchAbove = 8;
+
+	//One line of the list: a shader to pick, under a heading where it starts a group.
+	public readonly record struct Row( string Heading, string Icon, string Title, string Path, string Summary );
+
+	//What the material names now, so the row it is on can say so.
+	public string Value { get; set; }
+
+	Action<string> _chosen;
+
+	TextEntry Search { get; set; }
+
+	string _filter;
+
+	//Everything offered, read once when the list opened.
+	IReadOnlyList<MaterialDefinition.ShaderChoice> _all = [];
+
+	List<Row> Rows = [];
+
+	bool Searchable => _all.Count > SearchAbove;
+
+	//Opens the list under the field that asked for it. The shaders are read here rather than in the constructor because reading them walks
+	//every mounted folder for *.shader - a thing to do when somebody opens a list, and not a thing to do while a sheet is being built.
+	public static ShaderPickerPopup Open( Panel anchor, string value, Action<string> chosen )
+	{
+		if ( anchor is null || !anchor.IsValid() ) return null;
+
+		var popup = new ShaderPickerPopup
+		{
+			Value = value ?? "",
+			_chosen = chosen,
+			_all = MaterialDefinition.Shaders()
+		};
+
+		popup.SetPositioning( anchor, PositionMode.BelowStretch, 2 );
+		popup.AnchorPanel = anchor;
+		popup.CloseWhenParentIsHidden = true;
+		popup.AddClass( "editor-popup" );
+		popup.Populate();
+		popup.SyncAnchor();
+
+		return popup;
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( firstTime ) Search?.Focus();
+	}
+
+	void OnSearch( string text )
+	{
+		_filter = text;
+
+		Populate();
+		StateHasChanged();
+	}
+
+	//Rows: surfaces, then post-process shaders under their own heading, then any unknown current one
+	void Populate()
+	{
+		Rows = [];
+
+		var post = false;
+
+		foreach ( var shader in _all )
+		{
+			if ( !Matches( shader ) ) continue;
+
+			string heading = null;
+
+			if ( shader.Post && !post )
+			{
+				heading = "Post process";
+				post = true;
+			}
+
+			Rows.Add( new Row( heading, shader.Post ? "filter_drama" : "category",
+				shader.Title, shader.Path, shader.Summary ) );
+		}
+
+		Kept();
+	}
+
+	//Offer back a shader the material names but the list lacks, so opening the list doesn't lose it
+	void Kept()
+	{
+		if ( string.IsNullOrWhiteSpace( Value ) ) return;
+		if ( _all.Any( x => Same( x.Path, Value ) ) ) return;
+		if ( !string.IsNullOrWhiteSpace( _filter ) && !Contains( Value ) ) return;
+
+		Rows.Add( new Row( "Not offered here", "help", MaterialDefinition.ShaderTitle( Value ), Value,
+			"Kept because it is what this material says." ) );
+	}
+
+	bool Matches( MaterialDefinition.ShaderChoice shader )
+	{
+		if ( string.IsNullOrWhiteSpace( _filter ) ) return true;
+
+		return Contains( shader.Title ) || Contains( shader.Path ) || Contains( shader.Summary );
+	}
+
+	bool Contains( string text )
+		=> text?.Contains( _filter, StringComparison.OrdinalIgnoreCase ) ?? false;
+
+	bool Chosen( Row row ) => Same( row.Path, Value );
+
+	static bool Same( string a, string b ) => string.Equals( a, b, StringComparison.OrdinalIgnoreCase );
+
+	void Pick( string path )
+	{
+		_chosen?.Invoke( path );
+
+		Delete();
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Rows.Count, Value, _filter );
+}

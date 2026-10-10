@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- Fixture assembly for Rinten.Test.Unit's hotload tests: the "after" version of TestClass.cs that hotload transforms into. Not a test suite. -->
+
+	<PropertyGroup>
+		<VersionPrefix>1.0.1</VersionPrefix>
+		<IsTestProject>false</IsTestProject>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<AssemblyName>Rinten.Test.After</AssemblyName>
+		<PackageId>Rinten.Test.After</PackageId>
+		<LangVersion>preview</LangVersion>
+		<UseNETCoreGenerator>true</UseNETCoreGenerator>
+		<RootNamespace>Rinten.TestAssembly</RootNamespace>
+		<DefineConstants>TRACE;TEST_AFTER</DefineConstants>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\Rinten.Engine\Rinten.Engine.csproj" />
+		<ProjectReference Include="..\..\..\Rinten.Hotload\Rinten.Hotload.csproj" />
+		<ProjectReference Include="..\..\..\Rinten.Reflection\Rinten.Reflection.csproj" />
+	</ItemGroup>
+
+</Project>

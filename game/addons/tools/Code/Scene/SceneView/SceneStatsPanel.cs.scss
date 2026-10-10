@@ -1,0 +1,40 @@
+//What the editor is costing, read off the corner of a viewport.
+.scene-stats
+{
+	flex-direction: column;
+	width: 152px;
+	flex-shrink: 0;
+	padding: 6px;
+	border-radius: 6px;
+	background-color: $glass;
+	pointer-events: none;
+
+	&.hidden
+	{
+		display: none;
+	}
+
+	> .row
+	{
+		flex-direction: row;
+		align-items: center;
+		height: 15px;
+		flex-shrink: 0;
+
+		//Monospaced, so a number changing doesn't shuffle the ones beside it
+		font-family: $font-mono;
+		font-size: $type-small;
+		font-weight: 500;
+
+		> .name
+		{
+			flex-grow: 1;
+			color: $ink-faint;
+		}
+
+		> .value
+		{
+			text-align: right;
+		}
+	}
+}

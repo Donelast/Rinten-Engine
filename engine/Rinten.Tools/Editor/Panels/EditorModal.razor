@@ -1,0 +1,287 @@
+@namespace Editor
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Rinten.UI
+
+@inherits Panel
+
+@* One modal for the whole editor: a question, a notice, a name to type in.
+
+   It is a panel on the window's overlay rather than a second native window -
+   so it covers the editor and nothing else, it is written here rather than in
+   a paint method, and every one of them measures itself the same way. What
+   used to open a window of its own goes through this: Dialog.AskConfirm,
+   Dialog.AskString, PopupWindow, EditorUtility.DisplayDialog, and the box the
+   asset browser names things in. *@
+
+<root class="editor-modal scrim">
+	<div class="card">
+		@if ( HasBadge )
+		{
+			<div class="head">
+				<div @ref="Badge" class="badge">
+					@if ( Picture is null )
+					{
+						<i>@Icon</i>
+					}
+				</div>
+				<div class="title">@Title</div>
+			</div>
+		}
+		else
+		{
+			<div class="title">@Title</div>
+		}
+
+		@if ( !string.IsNullOrWhiteSpace( Message ) )
+		{
+			<div class="message">@Message</div>
+		}
+
+		@if ( WantsText )
+		{
+			<TextField @ref="Field" class="field" />
+		}
+
+		<div class="actions">
+			@if ( !string.IsNullOrWhiteSpace( CancelText ) )
+			{
+				<div class="btn" onclick="@Dismiss">@CancelText</div>
+			}
+
+			@foreach ( var choice in Choices )
+			{
+				<div class="btn @Look( choice ) @( Refused( choice ) ? "is-disabled" : null )"
+					onclick="@( () => Pick( choice ) )">@choice.Text</div>
+			}
+		</div>
+	</div>
+</root>
+
+@code
+{
+	//One of the answers, and what saying it does.
+	public sealed record Choice( string Text, Action Run, bool Destructive = false, bool NeedsText = false );
+
+	//A question answered yes or no.
+	public static EditorModal Confirm( Panel from, string title, string message, Action onConfirm,
+		string confirm = "Yes", string cancel = "No", bool destructive = false )
+	{
+		var modal = new EditorModal { Title = title, Message = message, CancelText = cancel };
+		modal.Choices.Add( new Choice( confirm, onConfirm, destructive ) );
+
+		return Open( from, modal );
+	}
+
+	//Something to be read and dismissed - one button, and no question in it.
+	public static EditorModal Notice( Panel from, string title, string message, string okay = "OK" )
+	{
+		var modal = new EditorModal { Title = title, Message = message, CancelText = null };
+		modal.Choices.Add( new Choice( okay, null ) );
+
+		return Open( from, modal );
+	}
+
+	//A line of text: a name for something, and what to do with it. The icon - or the thing's own picture, which wins over it - is drawn beside the title.
+	public static EditorModal Prompt( Panel from, string title, string question, Action<string> onSubmit,
+		string okay = "Okay", string cancel = "Cancel", string initial = "", int minLength = 0,
+		Action onCancel = null, string icon = null, Pixmap image = null )
+	{
+		var modal = new EditorModal
+		{
+			Title = title,
+			Message = question,
+			CancelText = cancel,
+			WantsText = true,
+			Text = initial ?? "",
+			MinLength = minLength,
+			OnDismissed = onCancel,
+			Icon = icon,
+			Picture = image?.picture?.ToTexture( mips: false ),
+		};
+
+		modal.Choices.Add( new Choice( okay, () => onSubmit?.Invoke( modal.Text ), NeedsText: true ) );
+
+		return Open( from, modal );
+	}
+
+	//The general shape: a question with as many answers as it takes, and a way out. What PopupWindow was for.
+	public static EditorModal Choose( Panel from, string title, string message, string cancel,
+		IEnumerable<Choice> choices )
+	{
+		var modal = new EditorModal { Title = title, Message = message, CancelText = cancel };
+
+		foreach ( var choice in choices ?? Enumerable.Empty<Choice>() )
+			modal.Choices.Add( choice );
+
+		return Open( from, modal );
+	}
+
+	//Puts it on a window's overlay. The window the panel given is in, or - for the callers that
+	//have no panel to hand, which is most of the old dialog API - the one the pointer is in.
+	static EditorModal Open( Panel from, EditorModal modal )
+	{
+		var layer = ( from is null ? null : EditorOverlay.For( from ) ) ?? EditorOverlay.ForActiveWindow();
+
+		if ( layer is null )
+		{
+			Log.Warning( $"{modal.Title}: no window to ask in." );
+			return null;
+		}
+
+		return layer.AddChild( modal );
+	}
+
+	//What is being asked, in one line.
+	public string Title { get; set; } = "";
+
+	//The rest of it - what will happen, and to what.
+	public string Message { get; set; } = "";
+
+	//A material icon beside the title. It is there for the questions asked from a menu - once the
+	//menu has closed, thirty entries lead to the same card, and this is what says which one it was.
+	public string Icon { get; set; }
+
+	//The thing's own picture, drawn where the icon would be.
+	public Texture Picture { get; set; }
+
+	bool HasBadge => Picture is not null || !string.IsNullOrWhiteSpace( Icon );
+
+	Panel Badge { get; set; }
+
+	//The way out. Nothing at all for a notice, which has only its one button.
+	public string CancelText { get; set; } = "Cancel";
+
+	//Whether there is a line to type in.
+	public bool WantsText { get; set; }
+
+	//What is in it.
+	public string Text { get; set; } = "";
+
+	//How much of it there has to be before the answer is allowed.
+	public int MinLength { get; set; }
+
+	//Told when the question is left unanswered.
+	public Action OnDismissed { get; set; }
+
+	//The answers, in the order they are offered - the way out is drawn before them.
+	public List<Choice> Choices { get; } = new();
+
+	TextField Field { get; set; }
+
+	bool wired;
+
+	public EditorModal()
+	{
+		//Out of the assembly, not by [StyleSheet]: that looks the name up in the mounted game filesystem, which has
+		//no editor sheets in it - the card was drawn unstyled, with "File not found" in the log. See EditorStyles.
+		EditorStyles.Apply( this, "EditorModal.razor.scss" );
+
+		//So escape reaches it even when there is no field to type in.
+		AcceptsFocus = true;
+	}
+
+	//Whether an answer cannot be given yet, because the field is short of what it asks for.
+	bool Refused( Choice choice )
+		=> choice.NeedsText && ( string.IsNullOrWhiteSpace( Text ) || Text.Trim().Length < MinLength );
+
+	string Look( Choice choice ) => choice.Destructive ? "bad" : "good";
+
+	void Pick( Choice choice )
+	{
+		if ( Refused( choice ) ) return;
+
+		Close();
+		choice.Run?.Invoke();
+	}
+
+	//Leaves without answering.
+	void Dismiss()
+	{
+		Close();
+		OnDismissed?.Invoke();
+	}
+
+	//Takes the question away.
+	public void Close() => Delete();
+
+	//Clicking beside the card is the same as leaving.
+	protected override void OnClick( MousePanelEvent e )
+	{
+		base.OnClick( e );
+
+		if ( e.Target != this ) return;
+
+		Dismiss();
+		e.StopPropagation();
+	}
+
+	public override void OnButtonTyped( ButtonEvent e )
+	{
+		base.OnButtonTyped( e );
+
+		if ( !e.Pressed ) return;
+
+		switch ( e.Button )
+		{
+			case "escape":
+				Dismiss();
+				break;
+
+			case "enter":
+			case "pad_enter":
+				Accept();
+				break;
+		}
+	}
+
+	//The answer return gives: the last one offered, which is the one on the right.
+	void Accept()
+	{
+		if ( Choices.LastOrDefault() is { } choice )
+			Pick( choice );
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( Badge.IsValid() )
+			Badge.Style.BackgroundImage = Picture;
+
+		if ( !WantsText || !Field.IsValid() )
+		{
+			//Nothing to type into, so the keys are the modal's own - see OnButtonTyped, which is where escape and return are answered.
+			if ( firstTime ) Focus();
+			return;
+		}
+
+		if ( wired ) return;
+
+		wired = true;
+
+		Field.Value = Text;
+		Field.ValueChanged = value =>
+		{
+			Text = value ?? "";
+
+			//The answer is allowed or refused by what is in the field, so the buttons are drawn again as it is typed.
+			StateHasChanged();
+		};
+
+		Field.Submitted = _ => Accept();
+		Field.ButtonTyped = e =>
+		{
+			if ( e.Pressed && e.Button == "escape" ) Dismiss();
+		};
+
+		Field.Focus();
+		Field.SelectAll();
+	}
+
+	//Everything the card shows is set after it is made, and the buttons turn on what has been typed - so the markup is built again when any of it moves.
+	protected override int BuildHash()
+		=> HashCode.Combine( Title, Message, CancelText, WantsText, Text, Choices.Count,
+			Choices.Any( Refused ), HashCode.Combine( Icon, Picture ) );
+}

@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- Integration tests: boots the full native engine via TestAppSystem (see Assembly.cs). Needs RINTEN_ENGINE. -->
+
+	<ItemGroup>
+		<Using Include="Microsoft.AspNetCore.Components" />
+		<Using Include="Microsoft.AspNetCore.Components.Rendering" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Facepunch.ActionGraphs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Rinten.Bind\Rinten.Bind.csproj" />
+		<ProjectReference Include="..\..\Rinten.Generator\Rinten.Generator.csproj" />
+		<ProjectReference Include="..\..\Rinten.System\Rinten.System.csproj" />
+		<ProjectReference Include="..\..\Rinten.Engine\Rinten.Engine.csproj" />
+		<ProjectReference Include="..\..\Rinten.Tools\Rinten.Tools.csproj" />
+		<ProjectReference Include="..\..\Rinten.AppSystem\Rinten.AppSystem.csproj" />
+		<ProjectReference Include="..\..\Porting\Rinten.Porting\Rinten.Porting.csproj" />
+		<ProjectReference Include="..\..\Porting\Rinten.Porting.SBox\Rinten.Porting.SBox.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="MovieMaker\TestData\RawRotation.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="MovieMaker\TestData\RawTransform.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- A Hammer map, written as bytes rather than kept as a file, so that both
+		     tiers test the porter against the layout Hammer actually saves. -->
+		<Compile Include="..\Fixtures\HammerMap.cs" Link="Fixtures\HammerMap.cs" />
+	</ItemGroup>
+
+</Project>

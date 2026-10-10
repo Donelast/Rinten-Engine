@@ -1,0 +1,112 @@
+@using System
+@using Rinten.UI
+@using Editor.SpriteEditor
+@namespace Editor.Inspectors
+@inherits BaseControl
+@attribute [CustomEditor( typeof( Sprite.Frame ) )]
+@attribute [StyleSheet( "SpriteFrameControl.razor.scss" )]
+
+@* A frame of a sprite animation, as a row: what it looks like, the file it is cut
+   from, which cell of that file it is, and the two ways of changing that by hand -
+   pick the cell on the sheet, or use another picture.
+
+   It was the frame's texture control, which for a picture generated from a file
+   is every setting of the generator - padding, rotation, tint, blur, brightness -
+   laid down a list row, with the region squeezed in beside them. The generator's
+   settings are still there, on the texture, in the frame editor (double-click a
+   frame on the timeline). A frame's broadcast messages are edited there too. *@
+
+<root>
+	@if ( Frame is null )
+	{
+		<label class="note">No frame</label>
+	}
+	else
+	{
+		<Image class="thumb" Texture="@Frame.ToTexture()" />
+
+		<div class="body">
+			<div class="top">
+				<label class="file" tooltip="@( FilePath ?? "" )">@FileText</label>
+				<ToolbarButton Icon="grid_on" ToolTip="Pick the cell of the sheet this frame is" Disabled="@( IsReadOnly || FilePath is null )" OnPressed="@PickCell" />
+				<ToolbarButton Icon="image" ToolTip="Use another picture" Disabled="@IsReadOnly" OnPressed="@PickPicture" />
+			</div>
+
+			@if ( RegionProperty is not null )
+			{
+				<RectControl class="region" Property="@RegionProperty" ReadOnly="@IsReadOnly" />
+			}
+		</div>
+	}
+</root>
+
+@code
+{
+	SerializedObject _frame;
+
+	SerializedProperty RegionProperty => _frame?.GetProperty( nameof( Sprite.Frame.Region ) );
+
+	public SpriteFrameControl()
+	{
+		ShowBackground = false;
+
+		//Taller than a row - the picture beside two lines - so a list gives it the height it takes instead of laying the next frame over it.
+		MultipleRows = true;
+	}
+
+	Sprite.Frame Frame => Property?.GetValue<Sprite.Frame>( null );
+
+	string FilePath => FrameSources.ImagePath( Frame?.Texture );
+
+	string FileText
+	{
+		get
+		{
+			var name = FilePath is { } path ? System.IO.Path.GetFileName( path ) : "(no file)";
+			return Frame?.Region is { Width: > 0, Height: > 0 } ? name : $"{name} - all of it";
+		}
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Frame, Frame?.Texture, Frame?.Region, IsReadOnly );
+
+	public override void Rebuild()
+	{
+		_frame = null;
+
+		if ( Property is not null && !Property.TryGetAsObject( out _frame ) )
+		{
+			//Somewhere to have the properties on, where the list holds no frame yet.
+			Property.SetValue( new Sprite.Frame() );
+			Property.TryGetAsObject( out _frame );
+		}
+
+		StateHasChanged();
+	}
+
+	protected override void OnReadOnlyChanged() => Rebuild();
+
+	void PickCell()
+	{
+		if ( IsReadOnly || Frame is not { } frame ) return;
+
+		FrameSources.PickCell( frame, Rinten.Rendering.FilterMode.Point, region => Set( nameof( Sprite.Frame.Region ), region ) );
+	}
+
+	void PickPicture()
+	{
+		if ( IsReadOnly ) return;
+
+		FrameSources.PickImage( Rinten.Internal.GlobalToolsNamespace.EditorWindow, "Picture for this frame", texture =>
+		{
+			Set( nameof( Sprite.Frame.Texture ), texture );
+			Set( nameof( Sprite.Frame.Region ), default( RectInt ) );
+		} );
+	}
+
+	//Through the frame's own properties, so the edit is heard - and undone - like any other.
+	void Set<T>( string name, T value )
+	{
+		_frame?.GetProperty( name )?.SetValue( value );
+		StateHasChanged();
+	}
+}

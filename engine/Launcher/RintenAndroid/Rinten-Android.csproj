@@ -1,0 +1,85 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0-android</TargetFramework>
+		<SupportedOSPlatformVersion>28</SupportedOSPlatformVersion>
+		<OutputType>Exe</OutputType>
+		<Nullable>disable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<LangVersion>latest</LangVersion>
+		<AssemblyName>Rinten-Android</AssemblyName>
+		<RootNamespace>Rinten.Android</RootNamespace>
+		<ApplicationId>com.rinten.game</ApplicationId>
+		<ApplicationVersion>1</ApplicationVersion>
+		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+		<AndroidPackageFormat>apk</AndroidPackageFormat>
+		<!-- What is written under the icon, and which way up the game is held. The export passes the project's title and the build page's orientation as
+		     properties of their own: the placeholders are a list, and a ';' handed in on the command line starts another property rather than another pair. -->
+		<RintenLabel Condition="'$(RintenLabel)' == ''">Rinten</RintenLabel>
+		<RintenOrientation Condition="'$(RintenOrientation)' == ''">sensorLandscape</RintenOrientation>
+		<AndroidManifestPlaceholders>app_label=$(RintenLabel);screen_orientation=$(RintenOrientation)</AndroidManifestPlaceholders>
+		<NoWarn>1701;1702;1591</NoWarn>
+	</PropertyGroup>
+
+	<!-- The engine finds its types by reflection, so nothing may be trimmed away. -->
+	<PropertyGroup>
+		<AndroidLinkMode>None</AndroidLinkMode>
+		<PublishTrimmed>false</PublishTrimmed>
+		<!-- A Release build turns this on by itself, and the compiler it turns on only runs over a trimmed assembly set
+		     - which this is not, and cannot be. Without it off, every Release build stops at XA1030 before it starts. -->
+		<RunAOTCompilation>false</RunAOTCompilation>
+	</PropertyGroup>
+
+	<!-- Where the core's Android build put itself, and what the export wrote. -->
+	<PropertyGroup>
+		<RintenBin Condition="'$(RintenBin)' == ''">$(MSBuildThisFileDirectory)../../../game/bin/android-arm64/</RintenBin>
+		<RintenPayloadZip Condition="'$(RintenPayloadZip)' == ''">$(MSBuildThisFileDirectory)payload.zip</RintenPayloadZip>
+	</PropertyGroup>
+
+	<!-- A release has no sources: prebuilt/ holds this host compiled and the assemblies it was compiled against -->
+	<PropertyGroup>
+		<RintenPrebuilt Condition="Exists('$(MSBuildThisFileDirectory)prebuilt/Rinten-Android.dll')">true</RintenPrebuilt>
+		<CustomAfterMicrosoftCSharpTargets Condition="'$(RintenPrebuilt)' == 'true'">$(MSBuildThisFileDirectory)../Prebuilt.targets</CustomAfterMicrosoftCSharpTargets>
+		<ProduceReferenceAssembly Condition="'$(RintenPrebuilt)' == 'true'">false</ProduceReferenceAssembly>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(RintenPrebuilt)' != 'true'">
+		<ProjectReference Include="..\..\Rinten.AppSystem\Rinten.AppSystem.csproj" />
+		<ProjectReference Include="..\..\Rinten.Engine\Rinten.Engine.csproj" />
+		<ProjectReference Include="..\..\Rinten.System\Rinten.System.csproj" />
+	</ItemGroup>
+
+	<!-- The core, under the name Android loads libraries by. It is copied rather than
+	     referenced in place because the name in the package is the name of the file. -->
+	<Target Name="RintenCopyCore" BeforeTargets="_ResolveAssemblies;BeforeBuild"
+		Condition="Exists('$(RintenBin)rintencore.so')">
+		<Copy SourceFiles="$(RintenBin)rintencore.so"
+			DestinationFiles="$(IntermediateOutputPath)native/arm64-v8a/librintencore.so"
+			SkipUnchangedFiles="true" />
+	</Target>
+
+	<ItemGroup>
+		<AndroidNativeLibrary Include="$(IntermediateOutputPath)native/arm64-v8a/librintencore.so" Abi="arm64-v8a" />
+	</ItemGroup>
+
+	<!-- The OpenXR loader, which a headset's runtime is found through - see CoreXr, and engine/natives.json,
+	     which fetches it. In every package: a phone never opens it, and it is a megabyte and a half. -->
+	<ItemGroup Condition="Exists('$(RintenBin)libopenxr_loader.so')">
+		<AndroidNativeLibrary Include="$(RintenBin)libopenxr_loader.so" Abi="arm64-v8a" />
+	</ItemGroup>
+
+	<!-- A game played in a headset gets the manifest a headset launches immersive apps by -
+	     see Properties/AndroidManifest.Vr.xml. The export says so for a project that is VR. -->
+	<PropertyGroup Condition="'$(RintenVr)' == 'true'">
+		<AndroidManifest>Properties/AndroidManifest.Vr.xml</AndroidManifest>
+	</PropertyGroup>
+
+	<!-- The whole game as one asset. Thousands of loose ones is a packaging step that takes minutes and a
+	     first frame that opens every one of them; a zip is opened once, into the folder the app can read. -->
+	<ItemGroup Condition="Exists('$(RintenPayloadZip)')">
+		<AndroidAsset Include="$(RintenPayloadZip)" Link="payload.zip" />
+	</ItemGroup>
+
+</Project>

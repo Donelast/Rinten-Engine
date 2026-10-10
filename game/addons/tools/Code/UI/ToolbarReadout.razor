@@ -1,0 +1,21 @@
+@using System
+@using Rinten.UI
+@namespace Editor
+@inherits Panel
+
+@* A number a toolbar keeps an eye on - a frame time, a resolution, a count.
+   Its own panel rather than a line in whatever bar it sits in, because it
+   changes every frame and the bar around it does not: this way the frame time
+   ticking over rebuilds one label instead of the whole toolbar.
+
+   Dressed by assets/styles/design.scss, under .toolbarreadout. *@
+
+<root class="toolbarreadout">@Text?.Invoke()</root>
+
+@code
+{
+	//What it says, asked for again whenever it might have changed.
+	public Func<string> Text { get; set; }
+
+	protected override int BuildHash() => HashCode.Combine( Text?.Invoke() );
+}

@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Common properties -->
+  <PropertyGroup>
+    <!-- Release unless asked, for the reason engine/Tests/Directory.Build.props gives at length: these projects
+         reference Rinten.Engine, which writes to the folder the editor runs from whatever configuration it is built in. -->
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+
+    <!-- SolutionDir is not defined when building projects explicitly -->
+    <SolutionDir Condition=" '$(SolutionDir)' == '' ">$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildProjectDirectory), MySolution.sln))\</SolutionDir>
+    <!-- Output paths -->
+    <BaseIntermediateOutputPath>$(SolutionDir)bin\obj\$(Configuration)\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <IntermediateOutputPath>$(SolutionDir)bin\obj\$(Configuration)\$(MSBuildProjectName)\</IntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(IntermediateOutputPath)\</MSBuildProjectExtensionsPath>
+  </PropertyGroup>
+  <!-- A publish for another platform compiles into a folder of its own. The apphost is written into the intermediate folder under one name whatever the platform, and is not written again when it is already there - so a
+       launcher published for linux-arm64 after the host's own build picked up the host's x86-64 apphost and shipped it beside an arm64 runtime. The restore's files stay where they were: one restore serves every platform. -->
+  <PropertyGroup Condition=" '$(RuntimeIdentifier)' != '' ">
+    <IntermediateOutputPath>$(SolutionDir)bin\obj\$(Configuration)\$(MSBuildProjectName)\$(RuntimeIdentifier)\</IntermediateOutputPath>
+  </PropertyGroup>
+</Project>

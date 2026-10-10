@@ -1,0 +1,31 @@
+//The swatch that stands in an inspector row. Its checkerboard and gradient are inset by 3px so the control's border reads as a frame around them.
+GradientSwatchFill
+{
+	position: relative;
+	overflow: hidden;
+
+	&.multiple { background-color: $control-background; }
+	&.multiple > .checker { display: none; }
+
+	> .checker,
+	> .fill
+	{
+		position: absolute;
+		left: 3px;
+		top: 3px;
+		right: 3px;
+		bottom: 3px;
+		pointer-events: none;
+	}
+
+	> .checker
+	{
+		background-image: url( tools/checker.png );
+		background-repeat: repeat;
+		image-rendering: point;
+		background-size: 16px 16px;
+	}
+
+	//One pixel tall, so it is stretched rather than drawn at its own size.
+	> .fill { object-fit: fill; }
+}

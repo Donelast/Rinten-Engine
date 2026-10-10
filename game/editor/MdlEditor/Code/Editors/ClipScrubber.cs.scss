@@ -1,0 +1,13 @@
+//The strip the timeline is drawn on: a sunken well, the same one the slider this replaces painted behind
+//itself. Everything inside it - the track, the frames, the playhead - is the picture, and lives in the paint.
+
+.clip-scrubber
+{
+	flex-grow: 1;
+	min-width: 0;
+	height: 24px;
+	border-radius: 3px;
+	background-color: $control-background;
+	cursor: pointer;
+	pointer-events: all;
+}

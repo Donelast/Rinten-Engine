@@ -1,0 +1,46 @@
+//The model's parts: the bar - add, unfold, fold, the graph - over the editor's one tree in a frame.
+//The bar, the frame and the gap between are design.scss's .tree-dock; the rows are TreeRowPanel's.
+
+.model-outliner
+{
+	width: 100%;
+	height: 100%;
+
+	> .parts
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+	}
+
+	//In the inspector, in the asset's first card: the bar lies flat on the card, and the tree is as tall as the parts are.
+	&.compact
+	{
+		height: auto;
+		gap: 0px;
+
+		> .dock-bar
+		{
+			margin-right: 0px;
+			background-color: transparent;
+			border-width: 0px;
+			border-bottom: 1px solid $sunken;
+		}
+
+		//About twelve rows (22px and a pixel apart), then it scrolls, so the node's card under it stays in reach of the row that was clicked.
+		> .parts
+		{
+			flex-grow: 0;
+
+			> .tree-panel { max-height: 280px; }
+		}
+	}
+
+	.note
+	{
+		white-space: pre-wrap;
+		margin: 6px 4px;
+		font-size: $type-small;
+		color: rgba( $text-control, 0.5 );
+	}
+}

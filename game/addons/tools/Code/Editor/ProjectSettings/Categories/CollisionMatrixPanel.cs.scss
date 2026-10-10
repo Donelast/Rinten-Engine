@@ -1,0 +1,172 @@
+.collision-matrix
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	align-self: flex-start;
+	width: auto;
+	max-width: 100%;
+	gap: 8px;
+
+	> .grid
+	{
+		flex-direction: column;
+		align-self: flex-start;
+		width: auto;
+		gap: 2px;
+	}
+
+	.matrix-row
+	{
+		flex-direction: row;
+		flex-grow: 0;
+		align-items: center;
+		width: auto;
+		gap: 2px;
+	}
+
+	.matrix-header-row
+	{
+		align-items: flex-end;
+		height: 48px;
+	}
+
+	.matrix-corner
+	{
+		width: 60px;
+		flex-shrink: 0;
+	}
+
+	.matrix-label
+	{
+		width: 60px;
+		flex-shrink: 0;
+		font-size: $type-small;
+		opacity: 0.7;
+		text-align: right;
+		padding-right: 4px;
+		color: $text;
+		pointer-events: all;
+
+		&.highlighted
+		{
+			opacity: 1;
+			color: white;
+		}
+	}
+
+	.matrix-col-label
+	{
+		width: 24px;
+		height: 48px;
+		flex-shrink: 0;
+		overflow: visible;
+		justify-content: center;
+		align-items: flex-end;
+		pointer-events: all;
+
+		> Label
+		{
+			font-size: $type-micro;
+			opacity: 0.5;
+			white-space: nowrap;
+			transform: rotate( -45deg );
+			transform-origin: center bottom;
+			color: $text;
+		}
+
+		&.highlighted > Label
+		{
+			opacity: 1;
+			color: white;
+		}
+	}
+
+	.matrix-spacer
+	{
+		width: 8px;
+		flex-shrink: 0;
+	}
+
+	.matrix-gap
+	{
+		width: 24px;
+		height: 24px;
+		flex-shrink: 0;
+	}
+
+	.matrix-cell
+	{
+		width: 24px;
+		height: 24px;
+		flex-shrink: 0;
+		border-radius: 2px;
+		border: 1px solid rgba( $text, 0.1 );
+		justify-content: center;
+		align-items: center;
+		pointer-events: all;
+		cursor: pointer;
+
+		> .matrix-cell-icon
+		{
+			font-size: $type-default;
+			pointer-events: none;
+		}
+
+		&.unset
+		{
+			background-color: rgba( $text, 0.05 );
+		}
+
+		&.ignore
+		{
+			background-color: rgba( $red, 0.35 );
+
+			> .matrix-cell-icon
+			{
+				color: $red;
+			}
+		}
+
+		&.trigger
+		{
+			background-color: rgba( $yellow, 0.35 );
+
+			> .matrix-cell-icon
+			{
+				color: $yellow;
+			}
+		}
+
+		&.collide
+		{
+			background-color: rgba( $green, 0.35 );
+
+			> .matrix-cell-icon
+			{
+				color: $green;
+			}
+		}
+	}
+
+	.matrix-add
+	{
+		width: 22px;
+		height: 22px;
+		flex-shrink: 0;
+		border-radius: 2px;
+		border: 1px dashed rgba( $text, 0.2 );
+		justify-content: center;
+		align-items: center;
+		pointer-events: all;
+		cursor: pointer;
+	}
+
+	> .matrix-tooltip
+	{
+		font-size: $type-small;
+		opacity: 0.6;
+		text-align: center;
+		min-height: 16px;
+		color: $text;
+	}
+}

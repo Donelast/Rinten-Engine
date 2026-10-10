@@ -1,0 +1,959 @@
+﻿
+using HalfEdgeMesh;
+using System.Text.Json.Nodes;
+
+namespace Editor.MeshEditor;
+
+partial class ObjectSelection
+{
+	public override Panel CreateToolSidebarPanel()
+	{
+		return new ObjectSelectionPanel( GetSerializedSelection(), this );
+	}
+
+	public class ObjectSelectionPanel : ToolSettingsPanel
+	{
+		readonly MeshComponent[] _meshes;
+		readonly ModelRenderer[] _modelRenderers;
+		readonly GameObject[] _gos;
+		readonly ObjectSelection _tool;
+
+		public ObjectSelectionPanel( SerializedObject so, ObjectSelection tool )
+		{
+			_tool = tool;
+
+			AddTitle( "Object Mode", "layers" );
+
+			_meshes = so.Targets.OfType<GameObject>()
+				.Select( x => x.GetComponent<MeshComponent>() )
+				.Where( x => x.IsValid() )
+				.ToArray();
+
+			_modelRenderers = so.Targets.OfType<GameObject>()
+				.Select( x => x.GetComponent<ModelRenderer>() )
+				.Where( x => x.IsValid() && x.Model.IsValid() && x.Model.HasRenderMeshes() )
+				.ToArray();
+
+			_gos = so.Targets.OfType<GameObject>()
+				.ToArray();
+
+			//The selection is taken when the panel is built, and the panel is built again when it changes
+			//- see RebuildSidebarOnSelectionChange - so these ask the same arrays the actions work on.
+			{
+				var group = AddGroup( "Operations" );
+
+				{
+					var grid = AddButtons( group );
+
+					AddButton( grid, "Set Origin To Pivot", "gps_fixed", "mesh.set-origin-to-pivot", SetOriginToPivot, HasObjects );
+					AddButton( grid, "Center Origin", "filter_center_focus", "mesh.center-origin", CenterOrigin, HasMeshes );
+					AddButton( grid, "Merge Meshes", "merge", "mesh.merge-meshes", MergeMeshes, HasSeveralMeshes );
+					AddButton( grid, "Merge Meshes By Edge", "join_full", null, MergeMeshesByEdge, HasSeveralMeshes );
+					AddButton( grid, "Separate Mesh Components", "call_split", "mesh.separate-components", SeparateComponents, HasMeshes );
+				}
+
+				{
+					var grid = AddButtons( group );
+
+					AddButton( grid, "Flip Faces", "flip", "mesh.flip-all-mesh-faces", FlipMesh, HasMeshes );
+					AddButton( grid, "Remove Bad Geometry", "delete_sweep", "mesh.remove-bad-geometry", RemoveBadGeometry, HasMeshes );
+					AddButton( grid, "Bake Scale", "fit_screen", null, BakeScale, HasMeshes );
+					AddButton( grid, "Convert To Mesh", "category", "mesh.convert-model-to-mesh", ConvertModelsToMeshes, () => _modelRenderers.Length > 0 );
+					AddButton( grid, "Save To Model", "save", null, SaveToModel, HasMeshes );
+					AddButton( grid, "Export FBX", "file_download", null, ExportFbx, HasMeshes );
+				}
+			}
+
+			this.AddPivotButtons( _tool, _gos.Length > 0 );
+
+			{
+				var grid = AddButtons( AddGroup( "Tools" ) );
+
+				AddButton( grid, "Clipping Tool", "content_cut", "mesh.open-clipping-tool", OpenClippingTool, HasMeshes );
+				AddButton( grid, "Mirror Tool", "compare", "mesh.mirror-tool", OpenMirrorTool, HasObjects );
+				AddButton( grid, "Boolean Tool", "difference", "mesh.boolean-tool", OpenBooleanTool, () => _meshes.Length == 2 );
+			}
+
+			AddStretch();
+
+			AddSheet( AddGroup( "Visualization" ).Content )
+				.AddPropertyRow( tool.GetSerialized().GetProperty( nameof( ShowSelectionBounds ) ) );
+		}
+
+		//Whether anything is picked, for the buttons that only need that.
+		bool HasObjects() => _gos.Length > 0;
+
+		bool HasMeshes() => _meshes.Length > 0;
+
+		bool HasSeveralMeshes() => _meshes.Length > 1;
+
+		[Shortcut( "mesh.separate-components", "ALT+N", typeof( SceneViewPanel ) )]
+		void SeparateComponents()
+		{
+			if ( _meshes.Length == 0 ) return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			var options = new GameObject.SerializeOptions();
+
+			using ( SceneEditorSession.Active.UndoScope( "Separate Mesh Components" )
+				.WithComponentChanges( _meshes )
+				.WithGameObjectCreations()
+				.WithGameObjectDestructions( _meshes.Select( x => x.GameObject ) )
+				.Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				var newSelection = new List<GameObject>();
+
+				foreach ( var meshComponent in _meshes )
+				{
+					var mesh = meshComponent.Mesh;
+					if ( mesh is null ) continue;
+
+					var allFaces = mesh.FaceHandles.ToList();
+					mesh.FindFaceIslands( allFaces, out var islands );
+
+					if ( islands.Count <= 1 )
+					{
+						newSelection.Add( meshComponent.GameObject );
+						continue;
+					}
+
+					foreach ( var island in islands )
+					{
+						var go = new GameObject( meshComponent.GameObject.Name );
+						go.WorldTransform = meshComponent.WorldTransform;
+						go.IsStatic = meshComponent.GameObject.IsStatic;
+						go.MakeNameUnique();
+
+						meshComponent.GameObject.AddSibling( go, false );
+
+						var newMeshComponent = go.Components.Create<MeshComponent>( true );
+						var json = meshComponent.Serialize( options );
+						SceneUtility.MakeIdGuidsUnique( json as JsonObject );
+
+						newMeshComponent.DeserializeImmediately( json as JsonObject );
+
+						var newMesh = newMeshComponent.Mesh;
+						var islandIndices = new HashSet<int>( island.Select( f => f.Index ) );
+
+						var facesToRemove = newMesh.FaceHandles
+							.Where( f => !islandIndices.Contains( f.Index ) )
+							.ToArray();
+
+						newMesh.RemoveFaces( facesToRemove );
+
+						var bounds = newMesh.CalculateBounds( go.WorldTransform );
+						var center = bounds.Center;
+						var localCenter = go.WorldTransform.PointToLocal( center );
+
+						newMesh.ApplyTransform( new Transform( -localCenter ) );
+						go.WorldPosition = center;
+
+						newMeshComponent.RebuildMesh();
+
+						newSelection.Add( go );
+					}
+
+					meshComponent.GameObject.Destroy();
+				}
+
+				if ( newSelection.Count > 0 )
+				{
+					foreach ( var go in newSelection )
+						selection.Add( go );
+				}
+			}
+		}
+
+		[Shortcut( "mesh.mirror-tool", "SHIFT+F", typeof( SceneViewPanel ) )]
+		void OpenMirrorTool()
+		{
+			var tool = new MirrorTool( nameof( ObjectSelection ) );
+			tool.Manager = _tool.Tool.Manager;
+			_tool.Tool.CurrentTool = tool;
+		}
+
+		[Shortcut( "mesh.boolean-tool", "", typeof( SceneViewPanel ) )]
+		void OpenBooleanTool()
+		{
+			var tool = new BooleanTool( nameof( ObjectSelection ) );
+			tool.Manager = _tool.Tool.Manager;
+			_tool.Tool.CurrentTool = tool;
+		}
+
+		[Shortcut( "mesh.open-clipping-tool", "SHIFT+X", typeof( SceneViewPanel ) )]
+		void OpenClippingTool()
+		{
+			var tool = new ClipTool();
+			tool.Manager = _tool.Tool.Manager;
+			_tool.Tool.CurrentTool = tool;
+		}
+
+		[Shortcut( "mesh.set-origin-to-pivot", "Ctrl+D", typeof( SceneViewPanel ) )]
+		public void SetOriginToPivot()
+		{
+			using var scope = SceneEditorSession.Scope();
+
+			var boundsObjects = _gos
+				.Where( x => x.IsValid() && x.GetComponent<MeshComponent>() is null )
+				.ToArray();
+
+			using ( SceneEditorSession.Active.UndoScope( "Set Origin To Pivot" )
+				.WithGameObjectChanges( _meshes.Select( x => x.GameObject ).Concat( boundsObjects ), GameObjectUndoFlags.Properties )
+				.WithComponentChanges( _meshes.Cast<Component>().Concat( boundsObjects.SelectMany( x => x.Components.GetAll() ) ) )
+				.Push() )
+			{
+				foreach ( var mesh in _meshes )
+				{
+					SetMeshOrigin( mesh, _tool.Pivot.Position );
+				}
+
+				foreach ( var go in boundsObjects )
+				{
+					SetObjectOrigin( go, _tool.Pivot.Position );
+				}
+			}
+		}
+
+		[Shortcut( "mesh.center-origin", "End", typeof( SceneViewPanel ) )]
+		public void CenterOrigin()
+		{
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Center Origin" )
+				.WithGameObjectChanges( _meshes.Select( x => x.GameObject ), GameObjectUndoFlags.Properties )
+				.WithComponentChanges( _meshes )
+				.Push() )
+			{
+				foreach ( var mesh in _meshes )
+				{
+					CenterMeshOrigin( mesh );
+				}
+			}
+
+			_tool.Pivot.Reset();
+		}
+
+		[Shortcut( "mesh.bake-scale", "", typeof( SceneViewPanel ) )]
+		public void BakeScale()
+		{
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Bake Scale" )
+				.WithGameObjectChanges( _meshes.Select( x => x.GameObject ), GameObjectUndoFlags.Properties )
+				.WithComponentChanges( _meshes )
+				.Push() )
+			{
+				foreach ( var mesh in _meshes )
+				{
+					BakeScale( mesh );
+				}
+			}
+		}
+
+		[Shortcut( "mesh.flip-all-mesh-faces", "F", typeof( SceneViewPanel ) )]
+		public void FlipMesh()
+		{
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Flip Mesh" )
+				.WithComponentChanges( _meshes )
+				.Push() )
+			{
+				foreach ( var mesh in _meshes )
+				{
+					mesh.Mesh.FlipAllFaces();
+				}
+			}
+		}
+
+		[Shortcut( "mesh.flip-horizontal", "CTRL+L", typeof( SceneViewPanel ) )]
+		public void FlipHorizontal() => Flip( true );
+
+		//Not CTRL+I: that is mesh.invert-selection (SelectionTool) in the same view.
+		[Shortcut( "mesh.flip-vertical", "CTRL+SHIFT+L", typeof( SceneViewPanel ) )]
+		public void FlipVertical() => Flip( false );
+
+		//Mirror the selected meshes in place, about the pivot. Like the mirror tool, but on a fixed axis and without leaving a copy behind.
+		void Flip( bool horizontal )
+		{
+			if ( _meshes.Length == 0 ) return;
+
+			var pivot = _tool.Pivot.Position;
+
+			var axis = FlipAxis( horizontal, pivot );
+			if ( !axis.HasValue ) return;
+
+			_tool._transformKind = TextureLockTransform.Move;
+			var lockTexture = _tool.ShouldLockTexture();
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( horizontal ? "Flip Horizontal" : "Flip Vertical" )
+				.WithComponentChanges( _meshes )
+				.Push() )
+			{
+				foreach ( var component in _meshes )
+				{
+					MirrorMesh( component, pivot, axis.Value, lockTexture );
+				}
+			}
+		}
+
+		//Horizontal and vertical are relative to how the selection looks from where the camera is, we build a view
+		//basis from the camera to the pivot and take whichever world axis is closest to the screen's right or up.
+		static Vector3? FlipAxis( bool horizontal, Vector3 pivot )
+		{
+			var viewport = SceneViewPanel.Current?.LastSelectedViewport;
+			if ( !viewport.IsValid() ) return null;
+
+			var gizmo = viewport.GizmoInstance;
+			if ( gizmo is null ) return null;
+
+			using var gizmoScope = gizmo.Push();
+
+			var forward = (pivot - Gizmo.Camera.Position).Normal;
+
+			var rotation = MathF.Abs( forward.Dot( Vector3.Up ) ) > 0.99f || forward.IsNearlyZero()
+				? Gizmo.Camera.Rotation
+				: Rotation.LookAt( forward, Vector3.Up );
+
+			return NearestAxis( horizontal ? rotation.Right : rotation.Up );
+		}
+
+		static Vector3 NearestAxis( Vector3 direction )
+		{
+			var abs = direction.Abs();
+
+			//The world's own three, not Forward and Left - those are -z and -x here.
+			if ( abs.x >= abs.y && abs.x >= abs.z ) return new Vector3( 1.0f, 0.0f, 0.0f );
+			if ( abs.y >= abs.z ) return new Vector3( 0.0f, 1.0f, 0.0f );
+
+			return new Vector3( 0.0f, 0.0f, 1.0f );
+		}
+
+		static void MirrorMesh( MeshComponent component, Vector3 pivot, Vector3 axis, bool lockTexture )
+		{
+			var mesh = component.Mesh;
+			if ( mesh is null ) return;
+
+			var transform = component.WorldTransform;
+			var normal = transform.NormalToLocal( axis ).Normal;
+			var origin = transform.PointToLocal( pivot );
+
+			foreach ( var handle in mesh.VertexHandles )
+			{
+				var position = mesh.GetVertexPosition( handle );
+				var distance = Vector3.Dot( position - origin, normal );
+
+				mesh.SetVertexPosition( handle, position - normal * distance * 2.0f );
+			}
+
+			var painted = CaptureVertexPaint( mesh );
+			mesh.FlipAllFaces();
+			RestoreVertexPaint( mesh, painted );
+
+			if ( lockTexture )
+			{
+				MirrorTextureAxes( mesh, axis.Normal, Vector3.Dot( axis.Normal, pivot ) );
+			}
+			else
+			{
+				mesh.ComputeFaceTextureCoordinatesFromParameters();
+			}
+
+			component.RebuildMesh();
+		}
+
+		static Dictionary<(FaceHandle, VertexHandle), (Color32 Color, Color32 Blend)> CaptureVertexPaint( PolygonMesh mesh )
+		{
+			var painted = new Dictionary<(FaceHandle, VertexHandle), (Color32, Color32)>();
+
+			foreach ( var face in mesh.FaceHandles )
+			{
+				if ( !mesh.GetFaceVerticesConnectedToFace( face, out var corners ) )
+					continue;
+
+				foreach ( var corner in corners )
+				{
+					var vertex = mesh.GetVertexConnectedToFaceVertex( corner );
+					painted[(face, vertex)] = (mesh.GetVertexColor( corner ), mesh.GetVertexBlend( corner ));
+				}
+			}
+
+			return painted;
+		}
+
+		static void RestoreVertexPaint( PolygonMesh mesh, Dictionary<(FaceHandle, VertexHandle), (Color32 Color, Color32 Blend)> painted )
+		{
+			foreach ( var face in mesh.FaceHandles )
+			{
+				if ( !mesh.GetFaceVerticesConnectedToFace( face, out var corners ) )
+					continue;
+
+				foreach ( var corner in corners )
+				{
+					var vertex = mesh.GetVertexConnectedToFaceVertex( corner );
+
+					if ( !painted.TryGetValue( (face, vertex), out var paint ) )
+						continue;
+
+					mesh.SetVertexColor( corner, paint.Color );
+					mesh.SetVertexBlend( corner, paint.Blend );
+				}
+			}
+		}
+
+		static void MirrorTextureAxes( PolygonMesh mesh, Vector3 normal, float distance )
+		{
+			foreach ( var face in mesh.FaceHandles )
+			{
+				mesh.GetFaceTextureParameters( face, out var axisU, out var axisV, out var scale );
+
+				mesh.SetFaceTextureParameters( face,
+					MirrorTextureAxis( axisU, normal, distance, scale.x ),
+					MirrorTextureAxis( axisV, normal, distance, scale.y ),
+					scale );
+			}
+		}
+
+		static Vector4 MirrorTextureAxis( Vector4 axis, Vector3 normal, float distance, float scale )
+		{
+			var direction = (Vector3)axis;
+			var dot = Vector3.Dot( direction, normal );
+
+			var mirrored = direction - normal * dot * 2.0f;
+			var offset = axis.w + (scale.AlmostEqual( 0.0f ) ? 0.0f : 2.0f * distance * dot / scale);
+
+			return new Vector4( mirrored, offset );
+		}
+
+		[Shortcut( "mesh.remove-bad-geometry", "", typeof( SceneViewPanel ) )]
+		public void RemoveBadGeometry()
+		{
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Remove Bad Geometry" )
+				.WithComponentChanges( _meshes )
+				.Push() )
+			{
+				foreach ( var mesh in _meshes )
+				{
+					mesh.Mesh.RemoveBadGeometry();
+				}
+			}
+		}
+
+		[Shortcut( "mesh.convert-model-to-mesh", "CTRL+SHIFT+T", typeof( SceneViewPanel ) )]
+		public void ConvertModelsToMeshes()
+		{
+			if ( _modelRenderers.Length == 0 ) return;
+
+			using var scope = SceneEditorSession.Scope();
+			var destroyedComponents = _modelRenderers
+				.SelectMany( x => x.GameObject.Components.GetAll().Where( c => c.IsValid() && c is not MeshComponent ) )
+				.ToArray();
+
+			using ( SceneEditorSession.Active.UndoScope( "Convert Model(s) To Mesh" )
+				.WithComponentChanges( _modelRenderers )
+				.WithComponentCreations()
+				.WithComponentDestructions( destroyedComponents )
+				.WithGameObjectChanges( _modelRenderers.Select( x => x.GameObject ), GameObjectUndoFlags.Properties )
+				.Push() )
+			{
+				var newSelection = new List<GameObject>( _modelRenderers.Length );
+				var failed = 0;
+
+				foreach ( var modelRenderer in _modelRenderers )
+				{
+					if ( !TryBuildMeshFromModel( modelRenderer, out var polygonMesh ) )
+					{
+						failed++;
+						continue;
+					}
+
+					var gameObject = modelRenderer.GameObject;
+					var meshComponent = gameObject.Components.GetOrCreate<MeshComponent>();
+					meshComponent.Mesh = polygonMesh;
+					meshComponent.SmoothingAngle = 180.0f;
+
+					meshComponent.RebuildMesh();
+					foreach ( var component in gameObject.Components.GetAll().Where( c => c.IsValid() && c != meshComponent ).ToArray() )
+					{
+						component.Destroy();
+					}
+
+					newSelection.Add( gameObject );
+				}
+
+				if ( newSelection.Count > 0 )
+					SceneEditorSession.Active.Selection.Set( newSelection.ToArray() );
+
+				if ( newSelection.Count == 0 )
+				{
+					Log.Warning( "Convert To Mesh failed: no usable render mesh data on selected ModelRenderer(s)." );
+				}
+				else if ( failed > 0 )
+				{
+					Log.Warning( $"Convert To Mesh partially failed: converted {newSelection.Count}, skipped {failed}." );
+				}
+			}
+		}
+
+		[Shortcut( "mesh.merge-meshes", "M", typeof( SceneViewPanel ) )]
+		public void MergeMeshes()
+		{
+			if ( _meshes.Length == 0 ) return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Merge Meshes" )
+				.WithGameObjectDestructions( _meshes.Skip( 1 ).Select( x => x.GameObject ) )
+				.WithComponentChanges( _meshes[0] )
+				.Push() )
+			{
+				var sourceMesh = _meshes[0];
+
+				for ( int i = 1; i < _meshes.Length; ++i )
+				{
+					var mesh = _meshes[i];
+					var transform = sourceMesh.WorldTransform.ToLocal( mesh.WorldTransform );
+					sourceMesh.Mesh.MergeMesh( mesh.Mesh, transform, out _, out _, out _ );
+
+					mesh.GameObject.Destroy();
+				}
+
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Set( sourceMesh.GameObject );
+			}
+		}
+
+		[Shortcut( "mesh.frame-selection", "SHIFT+A", typeof( SceneViewPanel ) )]
+		private void FrameSelection()
+		{
+			if ( _gos.Length == 0 )
+				return;
+
+			var pad = 0.4064f;
+			var bounds = _gos[0].GetBounds()
+				.AddBBox( BBox.FromPositionAndSize( _gos[0].WorldPosition, pad ) );
+
+			for ( var i = 1; i < _gos.Length; i++ )
+			{
+				bounds = bounds.AddBBox( _gos[i].GetBounds() );
+				bounds = bounds.AddBBox( BBox.FromPositionAndSize( _gos[i].WorldPosition, pad ) );
+			}
+
+			_gos[0].Scene.Editor.FrameTo( bounds );
+		}
+
+		[Shortcut( "mesh.select-similar", "CTRL+ALT+O", typeof( SceneViewPanel ) )]
+		public void SelectSimilar() => _tool.SelectSimilar();
+
+		public void MergeMeshesByEdge()
+		{
+			if ( _meshes.Length < 2 ) return;
+
+			var touching = new List<(int a, int b)>();
+			for ( int i = 0; i < _meshes.Length; i++ )
+			{
+				for ( int j = i + 1; j < _meshes.Length; j++ )
+				{
+					if ( HasTouchingVertices( _meshes[i], _meshes[j], 0.1f ) )
+						touching.Add( (i, j) );
+				}
+			}
+
+			if ( touching.Count == 0 )
+				return;
+
+			var parent = Enumerable.Range( 0, _meshes.Length ).ToArray();
+			int Find( int x ) => parent[x] == x ? x : parent[x] = Find( parent[x] );
+			void Union( int x, int y ) => parent[Find( x )] = Find( y );
+
+			foreach ( var (a, b) in touching )
+				Union( a, b );
+
+			var groups = Enumerable.Range( 0, _meshes.Length )
+				.GroupBy( Find )
+				.Where( g => g.Count() > 1 )
+				.Select( g => g.ToList() )
+				.ToList();
+
+			using var scope = SceneEditorSession.Scope();
+
+			var toDestroy = groups.SelectMany( g => g.Skip( 1 ) ).Select( i => _meshes[i].GameObject ).ToList();
+
+			using ( SceneEditorSession.Active.UndoScope( "Merge Meshes By Edge" )
+				.WithGameObjectDestructions( toDestroy )
+				.WithComponentChanges( groups.Select( g => _meshes[g[0]] ) )
+				.Push() )
+			{
+				int totalWelded = 0;
+
+				foreach ( var group in groups )
+				{
+					var target = _meshes[group[0]];
+
+					foreach ( var i in group.Skip( 1 ) )
+					{
+						var source = _meshes[i];
+						target.Mesh.MergeMesh( source.Mesh, target.WorldTransform.ToLocal( source.WorldTransform ), out _, out _, out _ );
+						source.GameObject.Destroy();
+					}
+
+					totalWelded += target.Mesh.MergeVerticesWithinDistance( target.Mesh.VertexHandles.ToList(), 0.01f, true, false, out _ );
+					target.Mesh.ComputeFaceTextureCoordinatesFromParameters();
+					target.RebuildMesh();
+				}
+
+				SceneEditorSession.Active.Selection.Set( _meshes[groups[0][0]].GameObject );
+			}
+		}
+
+		static bool HasTouchingVertices( MeshComponent meshA, MeshComponent meshB, float threshold )
+		{
+			var boundsA = meshA.GetWorldBounds();
+			var boundsB = meshB.GetWorldBounds();
+
+			var expandedB = new BBox( boundsB.Mins - threshold, boundsB.Maxs + threshold );
+
+			if ( !boundsA.Overlaps( expandedB ) )
+				return false;
+
+			foreach ( var vA in meshA.Mesh.VertexHandles )
+			{
+				meshA.Mesh.GetVertexPosition( vA, meshA.WorldTransform, out var posA );
+				foreach ( var vB in meshB.Mesh.VertexHandles )
+				{
+					meshB.Mesh.GetVertexPosition( vB, meshB.WorldTransform, out var posB );
+					if ( posA.Distance( posB ) < threshold )
+						return true;
+				}
+			}
+			return false;
+		}
+
+		static void CenterMeshOrigin( MeshComponent meshComponent )
+		{
+			if ( !meshComponent.IsValid() ) return;
+
+			//Asked for, so an origin kept somewhere else is let go of - it stays in the middle from here on. See MeshComponent.KeepOrigin.
+			meshComponent.KeepOrigin = false;
+			meshComponent.CenterOrigin();
+		}
+
+		static void SetMeshOrigin( MeshComponent meshComponent, Vector3 origin )
+		{
+			if ( !meshComponent.IsValid() ) return;
+
+			var mesh = meshComponent.Mesh;
+			if ( mesh is null ) return;
+
+			//Somebody saying where they want it: kept there, rather than put back in the middle when the edit ends. See MeshComponent.KeepOrigin.
+			meshComponent.KeepOrigin = true;
+
+			var world = meshComponent.WorldTransform;
+			var localCenter = world.PointToLocal( origin );
+			meshComponent.Mesh.ApplyTransform( new Transform( -localCenter ) );
+			meshComponent.WorldPosition = origin;
+			meshComponent.RebuildMesh();
+		}
+
+		static void SetObjectOrigin( GameObject go, Vector3 origin )
+		{
+			if ( !go.IsValid() ) return;
+
+			var oldTransform = go.WorldTransform;
+			go.WorldPosition = origin;
+			var newTransform = go.WorldTransform;
+
+			foreach ( var component in go.Components.GetAll() )
+			{
+				var serialized = component.GetSerialized();
+				if ( serialized is null ) continue;
+
+				foreach ( var prop in serialized.Where( p => p.PropertyType == typeof( BBox ) && p.IsEditable ) )
+				{
+					var bounds = prop.GetValue<BBox>();
+
+					var worldMins = oldTransform.PointToWorld( bounds.Mins );
+					var worldMaxs = oldTransform.PointToWorld( bounds.Maxs );
+
+					prop.SetValue( new BBox(
+						newTransform.PointToLocal( worldMins ),
+						newTransform.PointToLocal( worldMaxs ) ) );
+				}
+			}
+		}
+
+		static void BakeScale( MeshComponent meshComponent )
+		{
+			if ( !meshComponent.IsValid() ) return;
+
+			var scale = meshComponent.WorldScale;
+			meshComponent.WorldScale = 1.0f;
+			meshComponent.Mesh.Scale( scale );
+			meshComponent.Mesh.ComputeFaceTextureParametersFromCoordinates();
+			meshComponent.RebuildMesh();
+		}
+
+		void SaveToModel()
+		{
+			if ( _meshes.Length == 0 ) return;
+
+			var targetPath = EditorUtility.SaveFileDialog( "Create Model..", "mdl", "" );
+			if ( targetPath is null ) return;
+
+			EditorUtility.CreateModelFromMeshComponents( _meshes, targetPath );
+		}
+
+		//The selected meshes into an FBX file, for Blender or anything else - see FbxExport.
+		void ExportFbx()
+		{
+			if ( _meshes.Length == 0 ) return;
+
+			var name = _meshes.Length == 1 ? _meshes[0].GameObject.Name : "meshes";
+			if ( string.IsNullOrWhiteSpace( name ) ) name = "mesh";
+
+			foreach ( var invalid in System.IO.Path.GetInvalidFileNameChars() )
+				name = name.Replace( invalid, '_' );
+
+			var targetPath = EditorUtility.SaveFileDialog( "Export FBX..", "fbx", $"{name}.fbx" );
+			if ( targetPath is null ) return;
+
+			if ( !targetPath.EndsWith( ".fbx", StringComparison.OrdinalIgnoreCase ) )
+				targetPath += ".fbx";
+
+			try
+			{
+				var written = FbxExport.SaveMeshes( targetPath, _meshes );
+
+				Log.Info( $"Exported {written} mesh{(written == 1 ? "" : "es")} to {targetPath}" );
+			}
+			catch ( Exception e )
+			{
+				Log.Warning( $"FBX export to {targetPath} failed: {e.Message}" );
+			}
+		}
+
+		static bool TryBuildMeshFromModel( ModelRenderer renderer, out PolygonMesh polygonMesh )
+		{
+			return TryBuildMeshFromRenderData( renderer, out polygonMesh );
+		}
+
+		static bool TryBuildMeshFromRenderData( ModelRenderer renderer, out PolygonMesh polygonMesh )
+		{
+			polygonMesh = null;
+			if ( !renderer.IsValid() || !renderer.Model.IsValid() || !renderer.Model.HasRenderMeshes() )
+				return false;
+
+			var vertices = renderer.Model.GetVertices();
+			var indices = renderer.Model.GetIndices();
+			if ( vertices is null || indices is null || vertices.Length == 0 || indices.Length < 3 )
+				return false;
+
+			polygonMesh = new PolygonMesh
+			{
+				Transform = renderer.WorldTransform
+			};
+
+			var mesh = polygonMesh;
+
+			var hasAnyFaces = false;
+			var vertexMap = new Dictionary<(int, int, int), VertexHandle>( vertices.Length );
+			var cornerNormals = new Dictionary<(FaceHandle, VertexHandle), Vector3>( vertices.Length );
+			var usedDrawCalls = false;
+			var materialSlots = renderer.Model.Materials;
+
+			//Compiled models split vertices at every normal, uv and material seam. Weld them back by
+			//position so the mesh is manifold again, otherwise every edge stays open and reads as hard.
+			VertexHandle GetOrAddVertex( int index )
+			{
+				const float weldScale = 10000.0f;
+
+				var position = vertices[index].Position;
+				var key = ((int)MathF.Round( position.x * weldScale ),
+					(int)MathF.Round( position.y * weldScale ),
+					(int)MathF.Round( position.z * weldScale ));
+
+				if ( !vertexMap.TryGetValue( key, out var handle ) )
+				{
+					handle = mesh.AddVertex( position );
+					vertexMap[key] = handle;
+				}
+
+				return handle;
+			}
+
+			FaceHandle AddTriangle( int ia, int ib, int ic )
+			{
+				var va = GetOrAddVertex( ia );
+				var vb = GetOrAddVertex( ib );
+				var vc = GetOrAddVertex( ic );
+
+				if ( va == vb || vb == vc || vc == va )
+					return FaceHandle.Invalid;
+
+				var face = mesh.AddFace( new[] { va, vb, vc } );
+
+				//Welding made this corner non-manifold, keep the triangle as its own island rather than dropping it
+				if ( !face.IsValid )
+				{
+					va = mesh.AddVertex( vertices[ia].Position );
+					vb = mesh.AddVertex( vertices[ib].Position );
+					vc = mesh.AddVertex( vertices[ic].Position );
+
+					face = mesh.AddFace( new[] { va, vb, vc } );
+					if ( !face.IsValid )
+						return face;
+				}
+
+				cornerNormals[(face, va)] = vertices[ia].Normal;
+				cornerNormals[(face, vb)] = vertices[ib].Normal;
+				cornerNormals[(face, vc)] = vertices[ic].Normal;
+
+				return face;
+			}
+
+			for ( int drawCall = 0; drawCall < materialSlots.Length; drawCall++ )
+			{
+				var indexStart = renderer.Model.GetIndexStart( drawCall );
+				var indexCount = renderer.Model.GetIndexCount( drawCall );
+				var baseVertex = renderer.Model.GetBaseVertex( drawCall );
+				if ( indexCount < 3 || indexStart < 0 )
+					continue;
+
+				var material = ResolveRenderMaterial( renderer, drawCall );
+				usedDrawCalls = true;
+
+				var end = Math.Min( indices.Length, indexStart + indexCount );
+				for ( int i = indexStart; i + 2 < end; i += 3 )
+				{
+					var ia = baseVertex + (int)indices[i];
+					var ib = baseVertex + (int)indices[i + 1];
+					var ic = baseVertex + (int)indices[i + 2];
+
+					if ( ia < 0 || ib < 0 || ic < 0 || ia >= vertices.Length || ib >= vertices.Length || ic >= vertices.Length )
+						continue;
+
+					var face = AddTriangle( ia, ib, ic );
+					if ( !face.IsValid )
+						continue;
+
+					polygonMesh.SetFaceTextureCoords( face, new[]
+					{
+						new Vector2( vertices[ia].TexCoord0.x, vertices[ia].TexCoord0.y ),
+						new Vector2( vertices[ib].TexCoord0.x, vertices[ib].TexCoord0.y ),
+						new Vector2( vertices[ic].TexCoord0.x, vertices[ic].TexCoord0.y )
+					} );
+
+					if ( material is not null )
+						polygonMesh.SetFaceMaterial( face, material );
+
+					hasAnyFaces = true;
+				}
+			}
+
+			if ( !hasAnyFaces && !usedDrawCalls )
+			{
+				var material = ResolveRenderMaterial( renderer, 0 );
+
+				for ( int i = 0; i + 2 < indices.Length; i += 3 )
+				{
+					var ia = (int)indices[i];
+					var ib = (int)indices[i + 1];
+					var ic = (int)indices[i + 2];
+
+					if ( ia < 0 || ib < 0 || ic < 0 || ia >= vertices.Length || ib >= vertices.Length || ic >= vertices.Length )
+						continue;
+
+					var face = AddTriangle( ia, ib, ic );
+					if ( !face.IsValid )
+						continue;
+
+					polygonMesh.SetFaceTextureCoords( face, new[]
+					{
+						new Vector2( vertices[ia].TexCoord0.x, vertices[ia].TexCoord0.y ),
+						new Vector2( vertices[ib].TexCoord0.x, vertices[ib].TexCoord0.y ),
+						new Vector2( vertices[ic].TexCoord0.x, vertices[ic].TexCoord0.y )
+					} );
+
+					if ( material is not null )
+						polygonMesh.SetFaceMaterial( face, material );
+
+					hasAnyFaces = true;
+				}
+			}
+
+			if ( !hasAnyFaces )
+			{
+				polygonMesh = null;
+				return false;
+			}
+
+			//Compiled models only carry smoothing as normal discontinuities across their split
+			//vertices, so classify each shared edge by comparing the source normals either side.
+			RestoreEdgeSmoothing();
+
+			polygonMesh.ComputeFaceTextureParametersFromCoordinates();
+
+			return true;
+
+			void RestoreEdgeSmoothing()
+			{
+				const float smoothTolerance = 0.9999f;
+
+				foreach ( var hFace in mesh.FaceHandles )
+				{
+					mesh.GetFaceVerticesConnectedToFace( hFace, out var hEdges );
+
+					foreach ( var hEdge in hEdges )
+					{
+						var hOpposite = hEdge.OppositeEdge;
+						if ( !hOpposite.IsValid )
+							continue;
+
+						var hOtherFace = hOpposite.Face;
+						if ( !hOtherFace.IsValid )
+							continue;
+
+						if ( !mesh.GetVerticesConnectedToEdge( hEdge, hFace, out var vA, out var vB ) )
+							continue;
+
+						if ( !cornerNormals.TryGetValue( (hFace, vA), out var nearA ) ) continue;
+						if ( !cornerNormals.TryGetValue( (hFace, vB), out var nearB ) ) continue;
+						if ( !cornerNormals.TryGetValue( (hOtherFace, vA), out var farA ) ) continue;
+						if ( !cornerNormals.TryGetValue( (hOtherFace, vB), out var farB ) ) continue;
+
+						var smooth = nearA.Dot( farA ) > smoothTolerance && nearB.Dot( farB ) > smoothTolerance;
+						var mode = smooth ? PolygonMesh.EdgeSmoothMode.Soft : PolygonMesh.EdgeSmoothMode.Hard;
+
+						mesh.SetEdgeSmoothing( hEdge, mode );
+						mesh.SetEdgeSmoothing( hOpposite, mode );
+					}
+				}
+			}
+		}
+
+		static Material ResolveRenderMaterial( ModelRenderer renderer, int drawCall )
+		{
+			if ( renderer.MaterialOverride is not null )
+				return renderer.MaterialOverride;
+
+			var overrideMaterial = renderer.Materials.GetOverride( drawCall );
+			if ( overrideMaterial is not null )
+				return overrideMaterial;
+
+			var originalMaterial = renderer.Materials.GetOriginal( drawCall );
+			if ( originalMaterial is not null )
+				return originalMaterial;
+
+			return renderer.Model.Materials.ElementAtOrDefault( drawCall );
+		}
+
+	}
+}

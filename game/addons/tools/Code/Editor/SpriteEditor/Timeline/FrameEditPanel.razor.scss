@@ -1,0 +1,58 @@
+//The frame editor, a card held over the window: title and close button, the sheet of the frame's
+//properties, and Done. The buttons are design.scss's .btn and .good, the scroll its .scroll.
+
+.frame-edit
+{
+	flex-direction: column;
+	width: 520px;
+	max-height: 80%;
+	border-radius: 10px;
+	background-color: $window-background;
+	border: 1px solid rgba( $text, 0.08 );
+	box-shadow: 0 12px 40px rgba( black, 0.5 );
+	overflow: hidden;
+
+	> .head
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		height: 36px;
+		padding: 0 6px 0 12px;
+		gap: 8px;
+		border-bottom: 1px solid rgba( $text, 0.08 );
+
+		> .glyph
+		{
+			font-size: $type-large;
+			color: rgba( $text, 0.6 );
+		}
+
+		> .title
+		{
+			flex-grow: 1;
+			font-family: $font-family;
+			font-size: $type-body;
+			font-weight: 600;
+			color: $text;
+		}
+	}
+
+	> .scroll
+	{
+		flex-direction: column;
+		flex-shrink: 1;
+		min-height: 0;
+		padding: 8px 12px;
+	}
+
+	> .foot
+	{
+		flex-direction: row;
+		justify-content: flex-end;
+		flex-shrink: 0;
+		padding: 8px 12px;
+
+		> .btn { min-width: 96px; }
+	}
+}

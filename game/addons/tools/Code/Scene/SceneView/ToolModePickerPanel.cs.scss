@@ -1,0 +1,60 @@
+//Which tool mode the scene views are in, and a menu of the others. First on
+//the bar over the view, a group of its own and as tall as the ones beside it.
+.tool-mode-picker
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	column-gap: 6px;
+	height: $row;
+	min-width: 150px;
+	padding: 0px 2px 0px 8px;
+	//Dark and edged like the drop-downs in the inspector - see ControlDropDown.cs.scss -
+	//rather than glass like the buttons beside it: this one opens a list, those do a thing.
+	border: $control-border;
+	border-radius: $control-radius;
+	background-color: $control-background;
+	color: $text-control;
+	cursor: pointer;
+	pointer-events: all;
+	transition: border-color $fast $ease;
+
+	&:hover,
+	&.open
+	{
+		border-color: $border-light;
+	}
+
+	> .icon
+	{
+		flex-shrink: 0;
+		font-size: 16px;
+		color: inherit;
+		pointer-events: none;
+
+		//Drawn art rather than a glyph - see .tool-strip-button .picture.
+		&.picture
+		{
+			width: 16px;
+			height: 16px;
+			background-size: 100% 100%;
+			background-repeat: no-repeat;
+			background-position: 0px 0px;
+		}
+	}
+
+	> .title
+	{
+		flex-grow: 1;
+		font-size: 12px;
+		white-space: nowrap;
+		pointer-events: none;
+	}
+
+	> .chevron
+	{
+		flex-shrink: 0;
+		font-size: 18px;
+		pointer-events: none;
+	}
+}

@@ -1,0 +1,78 @@
+TagStringControl.control.tag-string
+{
+	flex-grow: 1;
+	min-width: 0;
+	flex-direction: row;
+	align-items: center;
+	min-height: $control-row-height;
+	padding: 2px;
+	background-color: $control-background;
+	border: $control-border;
+	border-radius: $control-radius;
+	gap: 2px;
+
+	> .chips
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		gap: 2px;
+
+		&.empty { display: none; }
+
+		> .chip
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 4px;
+			padding: 0px 6px;
+			min-height: $control-row-height - 8px;
+			border-radius: $control-radius;
+			background-color: rgba( $green, 0.2 );
+			color: $text-control;
+			font-size: $control-text-size;
+			cursor: pointer;
+			transition: none;
+
+			> .icon
+			{
+				flex-shrink: 0;
+				font-size: $type-body;
+				color: $green;
+			}
+
+			&:hover
+			{
+				background-color: rgba( $red, 0.25 );
+
+				> .icon { color: $red; }
+			}
+		}
+	}
+
+	> textentry
+	{
+		position: relative;
+		flex-grow: 1;
+		min-width: 0;
+		padding: $control-text-padding;
+		color: $text-control;
+
+		> .content-label,
+		> .label
+		{
+			color: inherit;
+			pointer-events: none;
+		}
+	}
+
+	&.multiple > textentry > .content-label
+	{
+		color: $multiple-values;
+	}
+
+	&.readonly > .chips > .chip
+	{
+		pointer-events: none;
+	}
+}

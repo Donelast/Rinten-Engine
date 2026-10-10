@@ -1,0 +1,71 @@
+//The document's tree: the editor's one tree, a row per panel, indented under
+//its parent, and the name of what is being carried riding beside the pointer.
+
+.ui-hierarchy
+{
+	position: relative;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+
+	//The carried row's name, riding beside the pointer.
+	> .ghost
+	{
+		position: absolute;
+		padding: 2px 8px;
+		border-radius: 3px;
+		background-color: rgba( $accent, 0.9 );
+		color: white;
+		font-family: $font-family;
+		font-size: $type-body;
+		white-space: nowrap;
+		pointer-events: none;
+		z-index: 10;
+
+		&.hidden { display: none; }
+	}
+}
+
+.ui-hierarchy > .ui-hierarchy-tree
+{
+	flex-grow: 1;
+	min-height: 0;
+}
+
+.ui-hierarchy .note
+{
+	padding: 12px;
+	font-family: $font-family;
+	font-size: $type-body;
+	color: rgba( $text, 0.35 );
+
+	&.hidden { display: none; }
+}
+
+//The rows are the editor's one tree row - see TreeRowPanel.cs.scss. What is here is only the
+//document's: words rather than a tag, and something carried over a row - into it, or beside it.
+.ui-hierarchy-row
+{
+	&.words > .title
+	{
+		color: rgba( $text, 0.55 );
+		font-style: italic;
+	}
+
+	&.carry-target
+	{
+		background-color: rgba( $accent, 0.18 );
+	}
+
+	&.carry-before
+	{
+		background-color: transparent;
+		border-top: 2px solid $accent;
+	}
+
+	&.carry-after
+	{
+		background-color: transparent;
+		border-bottom: 2px solid $accent;
+	}
+}

@@ -1,0 +1,48 @@
+@using System
+@using Rinten.UI
+
+@namespace Editor.Inspectors
+
+@attribute [CustomEditor( typeof(bool) )]
+
+@inherits BaseControl
+
+<root class="@(Value ? "active" : "inactive")" onclick=@(() => Value = !Value)>
+    @{
+        var icon = Value ? EnabledIcon : DisabledIcon;
+        if ( !string.IsNullOrEmpty( icon ) )
+        {
+            <i class="icon">@icon</i>
+        }
+    }
+</root>
+
+@code
+{
+    public override bool SupportsMultiEdit => true;
+
+    [Parameter]
+    public string EnabledIcon { get; set; } = "check";
+
+    [Parameter]
+    public string DisabledIcon { get; set; } = string.Empty;
+
+
+    public bool Value
+    {
+        get => Property?.As.Bool ?? field;
+        set
+        {
+            if ( IsReadOnly )
+                return;
+
+            if ( Value == value )
+                return;
+
+            Property?.As.Bool = value;
+            field = value;
+        }
+    }
+
+    protected override int BuildHash() => HashCode.Combine( Value, EnabledIcon, DisabledIcon );
+}

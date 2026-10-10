@@ -1,0 +1,39 @@
+//A scene view: the bar across the top, the viewports under it.
+.scene-view
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-width: 0;
+	min-height: 0;
+
+	> .viewport-area
+	{
+		position: relative;
+		flex-direction: row;
+		flex-grow: 1;
+		min-width: 0;
+		min-height: 0;
+	}
+}
+
+//One picture of the scene. What is under it is the picture itself, so it wears no plate of its own.
+.scene-viewport
+{
+	position: relative;
+	flex-grow: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	background-color: #38393c;
+}
+
+//The scene render fills the viewport; with several viewports SceneViewportPanel.Sizing remeasures each one and writes pixels over this.
+.scene-rendering
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: all;
+}

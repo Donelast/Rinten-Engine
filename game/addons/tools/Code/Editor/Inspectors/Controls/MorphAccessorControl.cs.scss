@@ -1,0 +1,93 @@
+MorphAccessorControl.control.no-background.multiple-rows
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-width: 0;
+	padding: 0;
+	align-self: stretch;
+
+	//Nothing to move - no renderer behind it, or a model with no morphs.
+	> .note
+	{
+		min-height: $control-row-height;
+		color: $text-light;
+		font-size: $control-text-size;
+	}
+
+	> .header
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+		margin-bottom: 4px;
+
+		> .toolbarbutton
+		{
+			flex-shrink: 0;
+			width: $control-row-height;
+			height: $control-row-height;
+		}
+
+		//Pushes the sort button to the far side.
+		> .spacer
+		{
+			flex-grow: 1;
+		}
+	}
+
+	> .groups
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+
+		> .group
+		{
+			flex-shrink: 0;
+			margin-top: 8px;
+			margin-bottom: 2px;
+			color: $text-light;
+			font-size: $control-text-size;
+			font-weight: bold;
+		}
+	}
+}
+
+MorphAccessorControl .morph-row
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	min-height: 20px;
+	gap: 8px;
+
+	//The name doubles as the way back: pressing it clears the morph.
+	> .title
+	{
+		flex-shrink: 0;
+		width: 150px;
+		color: $text;
+		font-size: $control-text-size;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		opacity: 0.2;
+		cursor: pointer;
+
+		//One that is set reads as set, and is the one worth pressing.
+		&.active { opacity: 1; }
+	}
+
+	> .strength
+	{
+		flex-grow: 3;
+		min-width: 0;
+	}
+
+	> .side
+	{
+		flex-grow: 1;
+		min-width: 0;
+	}
+}

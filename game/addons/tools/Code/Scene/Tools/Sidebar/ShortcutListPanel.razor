@@ -1,0 +1,40 @@
+@using System
+@using System.Collections.Generic
+@using Rinten.UI
+@namespace Editor
+@inherits Panel
+
+@* What the keyboard does while this tool is up. A list and nothing else, so it
+   is markup: the rows differ only in what they say. Dressed by design.scss,
+   under .shortcut-list. *@
+
+<root class="shortcut-list">
+
+	@foreach ( var shortcut in Shortcuts )
+	{
+		<div class="shortcut">
+			<div class="name">@shortcut.Name</div>
+			<div class="keys">@shortcut.Keys</div>
+		</div>
+	}
+
+</root>
+
+@code
+{
+	//What each row says: what it does, and what is pressed to do it.
+	public IReadOnlyList<(string Name, string Keys)> Shortcuts { get; set; } = [];
+
+	protected override int BuildHash()
+	{
+		var hash = new HashCode();
+
+		foreach ( var shortcut in Shortcuts )
+		{
+			hash.Add( shortcut.Name );
+			hash.Add( shortcut.Keys );
+		}
+
+		return hash.ToHashCode();
+	}
+}

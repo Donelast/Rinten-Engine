@@ -1,0 +1,105 @@
+ListControl.control.no-background.multiple-rows
+{
+	flex-grow: 1;
+	min-width: 0;
+	min-height: $control-row-height;
+	gap: 0;
+	row-gap: 2px;
+	padding: 0;
+	align-self: stretch;
+
+	> .body
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		flex-shrink: 0;
+		min-width: 0;
+		gap: 2px;
+		align-self: stretch;
+	}
+
+	> .add-row
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		align-items: center;
+
+		&.hidden { display: none; }
+	}
+}
+
+ListControl .list-action
+{
+	width: $control-row-height;
+	height: $control-row-height;
+	flex-shrink: 0;
+	pointer-events: all;
+	background-color: $control-background;
+	border: $control-border;
+	border-radius: $control-radius;
+	color: $ink-dim;
+	transition: background-color 0.12s ease, transform 0.12s ease, color 0.12s ease;
+
+	&:hover
+	{
+		background-color: $control-background-light;
+		color: $ink;
+	}
+
+	&:active
+	{
+		background-color: $veil-down;
+		transform: scale( 0.92 );
+	}
+}
+
+ListControl .list-drag-handle
+{
+	width: $control-row-height;
+	height: $control-row-height;
+	flex-shrink: 0;
+	pointer-events: all;
+	align-items: center;
+	justify-content: center;
+	cursor: grab;
+	color: $ink-dim;
+	transition: color 0.12s ease;
+
+	&:hover { color: $ink; }
+
+	&:active { cursor: grabbing; }
+}
+
+ListControl > .body > .list-entry
+{
+	flex-direction: row;
+	align-items: center;
+	column-gap: 4px;
+	min-width: 0;
+	position: relative;
+
+	> .control
+	{
+		flex-grow: 1;
+		min-width: 0;
+	}
+
+	> .list-drop-line
+	{
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 0;
+		height: 2px;
+		background-color: $text-highlight;
+		pointer-events: none;
+
+		&.bottom
+		{
+			top: auto;
+			bottom: 0;
+		}
+
+		&.hidden { display: none; }
+	}
+}

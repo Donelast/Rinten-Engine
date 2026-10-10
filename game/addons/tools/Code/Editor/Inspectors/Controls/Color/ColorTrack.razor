@@ -1,0 +1,222 @@
+@using System
+@using System.Globalization
+@using Rinten.UI
+@namespace Editor.Inspectors
+@inherits BaseControl
+
+@* One of the colour picker's sliders - its hue, its alpha, or how far past one
+   an HDR colour goes: the track, the handle on it, and the number beside it.
+   What each of them looks like is in ColorTrack.razor.scss. *@
+
+<root class="color-track @ChannelClass @(_dragging ? "dragging" : null) @(Shown ? null : "hidden")">
+	<div class="icon"><label class="material-icon">@IconName</label></div>
+	<div @ref="Track" class="track" onmousedown="@OnDown" onmousemove="@OnMove" onmouseup="@OnUp">
+		@if ( Channel == Channels.Alpha )
+		{
+			<div class="checker"></div>
+			<div class="fill" style="@AlphaFillStyle"></div>
+		}
+		<div class="handle" style="@HandleStyle"></div>
+	</div>
+	<div class="number">
+		<NumberControl Property="@Number" ShowHandle="@false" NumberFormat="@Format" MinValue="@( 0f )" MaxValue="@Most" ReadOnly="@IsReadOnly" />
+	</div>
+</root>
+
+@code
+{
+	//Which of the three a track is.
+	public enum Channels { Hue, Alpha, Range }
+
+	//Which of the three this one is. Set before it is first drawn.
+	public Channels Channel { get; set; }
+
+	//Told once a drag along the track is over.
+	public Action OnDragFinished { get; set; }
+
+	//Told when a drag starts, before the first colour it sets.
+	public Action OnDragStarted { get; set; }
+
+	//How far past one the range track reaches.
+	const float MostRange = 1000f;
+
+	Panel Track { get; set; }
+
+	bool _dragging;
+	SerializedProperty _number;
+	SerializedProperty _numberFor;
+
+	public override bool SupportsMultiEdit => true;
+
+	public ColorTrack()
+	{
+		ShowBackground = false;
+	}
+
+	string ChannelClass => Channel.ToString().ToLowerInvariant();
+
+	string IconName => Channel switch
+	{
+		Channels.Hue => "palette",
+		Channels.Alpha => "opacity",
+		_ => "light_mode",
+	};
+
+	//Alpha only for a colour that has one, and the range only for one that may go past one.
+	bool Shown => Property is not null && Channel switch
+	{
+		Channels.Alpha => ColorPropertyHelper.HasAlpha( Property ),
+		Channels.Range => ColorPropertyHelper.IsHDR( Property ),
+		_ => true,
+	};
+
+	float Most => Channel switch
+	{
+		Channels.Hue => 360f,
+		Channels.Alpha => 1f,
+		_ => MostRange,
+	};
+
+	string Format => Channel switch
+	{
+		Channels.Hue => "0",
+		Channels.Alpha => "0.00",
+		_ => "0.##",
+	};
+
+	//The number field's property, made once for each colour property this is handed. A new one every frame would be a field rebuilt every frame.
+	SerializedProperty Number
+	{
+		get
+		{
+			if ( Property is null ) return null;
+			if ( _numberFor == Property && _number is not null ) return _number;
+
+			var colour = Property;
+			_numberFor = colour;
+
+			_number = Channel switch
+			{
+				Channels.Hue => TypeLibrary.CreateProperty<float>( "Hue",
+					() => ColorPropertyHelper.GetHue( colour ), v => ColorPropertyHelper.SetHue( colour, v ) ),
+				Channels.Alpha => TypeLibrary.CreateProperty<float>( "Alpha",
+					() => ColorPropertyHelper.GetAlpha( colour ), v => ColorPropertyHelper.SetAlpha( colour, v ) ),
+				_ => TypeLibrary.CreateProperty<float>( "Range",
+					() => ColorPropertyHelper.GetRange( colour ), v => ColorPropertyHelper.SetRange( colour, v ) ),
+			};
+
+			return _number;
+		}
+	}
+
+	//Where along the track the handle stands, nought to one.
+	float Fraction
+	{
+		get
+		{
+			if ( Property is null ) return 0f;
+
+			var along = Channel switch
+			{
+				Channels.Hue => ColorPropertyHelper.GetHue( Property ) / 360f,
+				Channels.Alpha => ColorPropertyHelper.GetAlpha( Property ),
+				_ => ColorPropertyHelper.GetRange( Property ) / MostRange,
+			};
+
+			return along.Clamp( 0, 1 );
+		}
+	}
+
+	Color HandleColor => Channel switch
+	{
+		Channels.Hue => ColorPropertyHelper.GetHueHandleColor( ColorPropertyHelper.GetHue( Property ) ),
+		Channels.Alpha => ColorPropertyHelper.GetAlphaHandleColor( Property, ColorPropertyHelper.GetAlpha( Property ) ),
+		_ => ColorPropertyHelper.GetRangeHandleColor( Fraction ),
+	};
+
+	string HandleStyle => Property is null ? null : string.Create( CultureInfo.InvariantCulture,
+		$"left: {Fraction * 100:0.###}%; background-color: {HandleColor.Hex};" );
+
+	//The alpha track runs from nothing to the colour itself, over a checkerboard.
+	string AlphaFillStyle => Property is null ? null :
+		$"background-image: linear-gradient( to right, transparent, {ColorPropertyHelper.GetAlphaTrackColor( Property ).Hex} );";
+
+	protected override int BuildHash() => Property is null ? 0 : HashCode.Combine( Property, Channel,
+		ColorPropertyHelper.GetColor( Property ), ColorPropertyHelper.GetHue( Property ), Shown, _dragging );
+
+	void SetFraction( float along )
+	{
+		switch ( Channel )
+		{
+			case Channels.Hue: ColorPropertyHelper.SetHue( Property, along * 360f ); break;
+			case Channels.Alpha: ColorPropertyHelper.SetAlpha( Property, along ); break;
+			default: ColorPropertyHelper.SetRange( Property, along * MostRange ); break;
+		}
+	}
+
+	void OnDown( PanelEvent e )
+	{
+		if ( e is not MousePanelEvent mouse || mouse.MouseButton != MouseButtons.Left ) return;
+		if ( IsReadOnly || !Shown ) return;
+
+		_dragging = true;
+
+		//One edit from the press to the release: whatever writes the property down - a material to its file -
+		//waits for the release rather than writing every colour the drag passes through. See ResourceDocument.
+		Property.Parent?.NoteStartEdit( Property );
+		OnDragStarted?.Invoke();
+
+		MoveTo( mouse );
+
+		e.StopPropagation();
+	}
+
+	void OnMove( PanelEvent e )
+	{
+		//Only while the press that started it is held - see ColorSvArea, which has the same rule for the same reason.
+		if ( !_dragging ) return;
+
+		if ( Track is null || !Track.HasActive )
+		{
+			Finish();
+			return;
+		}
+
+		if ( e is MousePanelEvent mouse ) MoveTo( mouse );
+
+		e.StopPropagation();
+	}
+
+	void OnUp( PanelEvent e )
+	{
+		if ( _dragging ) Finish();
+	}
+
+	void Finish()
+	{
+		_dragging = false;
+		Property?.Parent?.NoteFinishEdit( Property );
+		OnDragFinished?.Invoke();
+	}
+
+	//Gone in the middle of a drag: the edit it started is still finished.
+	public override void OnDeleted()
+	{
+		if ( _dragging ) Finish();
+
+		base.OnDeleted();
+	}
+
+	void MoveTo( MousePanelEvent mouse )
+	{
+		if ( Track is null ) return;
+
+		var width = Track.Box.Rect.Width;
+		if ( width <= 0 ) return;
+
+		var x = Track.ScreenPositionToPanelPosition( mouse.PointerPosition ).x;
+
+		SetFraction( ( x / width ).Clamp( 0, 1 ) );
+		StateHasChanged();
+	}
+}

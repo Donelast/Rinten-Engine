@@ -1,0 +1,72 @@
+//The compile log: one line saying what the last compile did, and a line per thing it had to say about the graph. The
+//well the lines stand on is design.scss's .well, and the icon font is its .material-icon - neither is restated here.
+
+.compile-log
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+}
+
+.compile-log-row
+{
+	flex-direction: row;
+	align-items: center;
+	width: 100%;
+	height: $list-row-height;
+	padding: 0 8px 0 4px;
+	font-family: $font-family;
+	font-size: $type-body;
+
+	> .icon
+	{
+		flex-shrink: 0;
+		width: 22px;
+		text-align: center;
+		color: $text-light;
+	}
+
+	> .message
+	{
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		color: rgba( $text, 0.8 );
+	}
+
+	//Whose node it was, read off the right edge. Quiet: it says where to look, not what is wrong.
+	> .source
+	{
+		flex-shrink: 0;
+		padding-left: 12px;
+		white-space: nowrap;
+		color: rgba( $text, 0.25 );
+	}
+
+	//The line about the compile itself, rather than about the graph.
+	&.summary
+	{
+		font-style: italic;
+
+		> .message { color: rgba( $text, 0.5 ); }
+		> .icon { color: rgba( $text, 0.4 ); }
+
+		&.compiling > .icon { color: $accent; }
+		&.clean > .icon { color: rgba( $green, 0.8 ); }
+	}
+
+	&.error > .icon { color: rgba( $red, 0.9 ); }
+	&.warning > .icon { color: rgba( $yellow, 0.9 ); }
+
+	//Only a warning that names a node leads anywhere.
+	&.clickable
+	{
+		cursor: pointer;
+
+		&:hover
+		{
+			background-color: $list-row-hover;
+
+			> .message { color: rgba( $text, 0.9 ); }
+		}
+	}
+}

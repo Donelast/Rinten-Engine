@@ -1,0 +1,38 @@
+CurveHandlePopup
+{
+	position: absolute;
+	pointer-events: all;
+	flex-direction: column;
+	width: 148px;
+	gap: 2px;
+	padding: 4px;
+	z-index: 10;
+	background-color: $popup-background;
+	border: $popup-border;
+	border-radius: $control-radius;
+
+	> .field
+	{
+		flex-shrink: 0;
+		width: 100%;
+		max-width: 100%;
+	}
+
+	&.pointing-up
+	{
+		border-top-color: rgba( $text, 0.35 );
+	}
+
+	&:not(.pointing-up)
+	{
+		border-bottom-color: rgba( $text, 0.35 );
+	}
+
+	> .modes
+	{
+		flex-direction: row;
+		flex-wrap: nowrap;
+		gap: 2px;
+		justify-content: center;
+	}
+}

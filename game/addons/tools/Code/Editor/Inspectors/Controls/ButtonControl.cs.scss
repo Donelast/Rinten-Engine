@@ -1,0 +1,8 @@
+//A method button in the inspector takes the whole row.
+ButtonControl.control
+{
+	> button
+	{
+		flex-grow: 1;
+	}
+}

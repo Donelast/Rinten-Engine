@@ -1,0 +1,18 @@
+//A graph canvas fills whatever it is put in, and what it shows is painted rather than laid out.
+
+.canvas
+{
+	flex-grow: 1;
+	width: 100%;
+	min-width: 0;
+	min-height: 0;
+	pointer-events: all;
+	cursor: default;
+
+	//Over something that can be picked up - a blend point, a state, a transition. Which of those it
+	//is, is the canvas's business; that there is one under the pointer is all the cursor needs to know.
+	&.over-item { cursor: pointer; }
+
+	//While the view is being dragged about under the pointer. Last, so it wins over the one above when both are true.
+	&.panning { cursor: grabbing; }
+}

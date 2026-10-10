@@ -1,0 +1,57 @@
+﻿GradientStopBarPanel
+{
+	height: 18px;
+	min-height: 18px;
+	flex-shrink: 0;
+	width: 100%;
+	position: relative;
+	overflow: visible;
+	pointer-events: all;
+	cursor: default;
+	z-index: 3;
+
+	//The cursor becomes a hand only over a stop itself.
+	&.over-stop
+	{
+		cursor: pointer;
+	}
+	//The stop track is inset by half a stop so the outermost ones fit.
+	> .handles
+	{
+		position: absolute;
+		left: 8px;
+		right: 8px;
+		top: 0;
+		bottom: 0;
+		overflow: visible;
+		pointer-events: none;
+		//A stop is placed by code: left is derived from the stop's time.
+		> .stop
+		{
+			position: absolute;
+			top: 0;
+			width: 10px;
+			height: 100%;
+			pointer-events: none;
+			border: 1px solid rgba( 255, 255, 255, 0.85 );
+			box-shadow: 0 0 0 1px rgba( 0, 0, 0, 0.35 );
+			border-radius: 2px;
+			&.color-stop
+			{
+				clip-path: polygon( 50% 0, 100% 35%, 100% 100%, 0 100%, 0 35% );
+			}
+			&.alpha-stop
+			{
+				clip-path: polygon( 0 0, 100% 0, 100% 65%, 50% 100%, 0 65% );
+			}
+			&.selected
+			{
+				box-shadow: 0 0 0 1px rgba( 0, 0, 0, 0.35 ), 0 0 0 3px $accent;
+			}
+			&.pressed
+			{
+				box-shadow: 0 0 0 1px rgba( 0, 0, 0, 0.35 ), 0 0 0 3px $accent;
+			}
+		}
+	}
+}

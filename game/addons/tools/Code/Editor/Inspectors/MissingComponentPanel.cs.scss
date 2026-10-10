@@ -1,0 +1,8 @@
+//A component whose class is gone: its json is shown as it stands.
+.missing-component-panel
+{
+	> .json
+	{
+		white-space: pre;
+	}
+}

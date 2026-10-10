@@ -1,0 +1,43 @@
+RangedFloatControl.control
+{
+	flex-direction: row;
+	min-width: 0;
+
+	> NumberControl
+	{
+		flex-grow: 0;
+		flex: 1 1 0;
+	}
+
+	//Its 180 pixels where they are going, less where they are not: fixed, it ran off the end of any row narrower than itself and the numbers.
+	> EnumControl
+	{
+		flex: 0 1 180px;
+		min-width: 0;
+	}
+
+	//Stack the values and mode when they cannot share a row. The automatic height lets the enclosing property row account for every line.
+	&.under-240
+	{
+		height: auto;
+		min-height: $control-row-height;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 2px;
+
+		> NumberControl
+		{
+			flex: 0 0 auto;
+		}
+
+		> EnumControl
+		{
+			flex: 0 0 auto;
+		}
+	}
+
+	> .multiple
+	{
+		color: $ink-dim;
+	}
+}

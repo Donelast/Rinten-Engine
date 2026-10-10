@@ -1,0 +1,43 @@
+name: Checkout the core
+description: >
+  Checks out the private repository the C++ core lives in, or says it is not
+  configured so the job can stop rather than build nothing and call it a success.
+
+inputs:
+  repository:
+    description: The private repository, as owner/name. Set the variable CORE_REPO to it.
+    required: false
+    default: ''
+  token:
+    description: A token that can read it. Set the secret CORE_TOKEN to one.
+    required: false
+    default: ''
+  path:
+    description: Where it is checked out, which is where CMakeLists is expected.
+    required: false
+    default: engine/Core
+
+outputs:
+  present:
+    description: Whether the core is there to be built.
+    value: ${{ steps.configured.outputs.present }}
+
+runs:
+  using: composite
+  steps:
+    - id: configured
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.repository }}" ] || [ -z "${{ inputs.token }}" ]; then
+          echo "present=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::CORE_REPO or CORE_TOKEN is not set, so engine/Core cannot be checked out and this job builds nothing."
+        else
+          echo "present=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - if: steps.configured.outputs.present == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.repository }}
+        token: ${{ inputs.token }}
+        path: ${{ inputs.path }}

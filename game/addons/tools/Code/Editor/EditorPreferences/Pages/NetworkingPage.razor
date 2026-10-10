@@ -1,0 +1,34 @@
+@namespace Editor.Preferences
+@attribute [Title( "Networking" ), Icon( "wifi" ), Order( 5 )]
+@attribute [Description( "What a second game instance and a dedicated server are started with." )]
+@using Editor.ProjectSettingsUI
+@inherits PreferencesPage
+
+<root class="preferences-page">
+	<div class="body" @ref="Body">
+		<SettingsCalloutPanel Html="@Explanation" />
+
+		<label class="section-header">Game Instance</label>
+		<div @ref="instanceHost"></div>
+
+		<label class="section-header">Dedicated Server</label>
+		<div @ref="serverHost"></div>
+	</div>
+</root>
+
+@code
+{
+	const string Explanation = "<p>These are options related to opening a new game instance (for testing networking in the editor)</p>";
+
+	Panel instanceHost;
+	Panel serverHost;
+
+	protected override void OnBuild()
+	{
+		var instance = AddSheet( instanceHost );
+		instance.AddProperty( () => EditorPreferences.WindowedLocalInstances );
+		instance.AddProperty( () => EditorPreferences.NewInstanceCommandLineArgs );
+
+		AddSheet( serverHost ).AddProperty( () => EditorPreferences.DedicatedServerCommandLineArgs );
+	}
+}

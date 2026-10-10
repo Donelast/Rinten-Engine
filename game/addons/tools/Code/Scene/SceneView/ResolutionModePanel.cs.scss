@@ -1,0 +1,37 @@
+//Forces the game view into a shape, and says what it came out as.
+.resolution-mode
+{
+	flex-direction: row;
+	align-items: center;
+	column-gap: 8px;
+	height: $row;
+	width: 190px;
+	padding: 0 4px 0 8px;
+	border-radius: $radius-2;
+	background-color: $slab;
+	color: $ink-dim;
+	cursor: pointer;
+	pointer-events: all;
+	transition: background-color $fast $ease;
+
+	&:hover
+	{
+		background-color: $slab-hover;
+		color: $ink;
+	}
+
+	> .title
+	{
+		flex-grow: 1;
+	}
+
+	> .size
+	{
+		color: $ink-faint;
+	}
+
+	> .chevron
+	{
+		font-size: 16px;
+	}
+}

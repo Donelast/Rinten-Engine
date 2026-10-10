@@ -1,0 +1,59 @@
+﻿MixerNavOptionPanel
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	min-height: $row;
+	padding: 0 8px;
+	pointer-events: all;
+
+	> .icon
+	{
+		width: $row;
+		flex-shrink: 0;
+		font-size: $type-default;
+		text-align: center;
+		color: rgba( $text, 0.5 );
+		pointer-events: none;
+	}
+
+	> .title
+	{
+		flex-grow: 1;
+		@include one-line;
+		font-size: $type-body;
+		color: rgba( $text, 0.5 );
+		pointer-events: none;
+	}
+
+	&.hovered:not(.selected)
+	{
+		background-color: rgba( $text, 0.04 );
+
+		> .icon,
+		> .title
+		{
+			color: rgba( $text, 0.8 );
+		}
+	}
+
+	&.processing:not(.selected)
+	{
+		> .icon,
+		> .title
+		{
+			color: $green;
+		}
+	}
+
+	&.selected
+	{
+		background-color: $primary;
+
+		> .icon,
+		> .title
+		{
+			color: $text;
+		}
+	}
+}

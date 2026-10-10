@@ -1,0 +1,95 @@
+//The colour picker - see ColorPickerControl.razor. The square, the sliders under it, the line a colour is typed or pasted into, and the kept colours.
+ColorPickerControl.control
+{
+	flex-direction: column;
+	align-items: stretch;
+	gap: 6px;
+	width: 240px;
+	padding: 8px;
+	pointer-events: all;
+
+	> .sv
+	{
+		flex-shrink: 0;
+	}
+
+	> .sliders
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		gap: 4px;
+	}
+
+	> .footer
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+
+		> .eyedropper
+		{
+			width: $control-row-height;
+			min-width: $control-row-height;
+			height: $control-row-height;
+			flex-shrink: 0;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			border-radius: $control-radius;
+			border: 1px solid $border;
+			background-color: $control-background;
+
+			> label
+			{
+				color: $text-control;
+				pointer-events: none;
+			}
+
+			&:hover
+			{
+				background-color: $veil;
+			}
+		}
+
+		> .code
+		{
+			flex-direction: row;
+			align-items: stretch;
+			min-width: 0;
+			height: $control-row-height;
+			overflow: hidden;
+			border-radius: $control-radius;
+			border: 1px solid $border;
+			background-color: $control-background;
+
+			> TextEntry
+			{
+				flex-grow: 1;
+				min-width: 0;
+			}
+
+			//A line that does not read as a colour says so, instead of the colour quietly not changing.
+			&.bad
+			{
+				border-color: $red;
+			}
+		}
+
+		> .hex
+		{
+			width: 92px;
+			flex-shrink: 0;
+		}
+
+		> .rgba
+		{
+			flex-grow: 1;
+		}
+	}
+
+	> .palette
+	{
+		flex-shrink: 0;
+	}
+}

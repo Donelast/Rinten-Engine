@@ -1,0 +1,44 @@
+﻿<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Text.RegularExpressions" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".cs" #>
+<#
+
+var ActionTypes = new string[] {
+	"BooleanAction",
+    "Vector2Action",
+    "FloatAction",
+    "PoseAction"
+};
+
+#>
+using Rinten.XR;
+
+namespace Rinten.VR;
+
+internal static unsafe partial class VRSystem
+{
+<#
+foreach ( var actionType in ActionTypes )
+{
+#>
+
+	//
+	// <#=actionType#> functions
+	//
+	private static Input<#=actionType#>State Get<#=actionType#>StateInternal( string path, InputSource inputSource )
+	{
+		return Read<#=actionType#>( path, inputSource );
+	}
+	
+	public static Input<#=actionType#>State Get<#=actionType#>State( <#=actionType#> action, InputSource inputSource )
+	{
+		return Get<#=actionType#>StateInternal( <#=actionType#>Strings[ (int)action ], inputSource );
+	}
+<#
+}
+#>
+}

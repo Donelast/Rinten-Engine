@@ -1,0 +1,143 @@
+﻿using Rinten.Internal;
+using System.Text.RegularExpressions;
+
+namespace Rinten;
+
+//Downloaded assets go in the "/download/assets" folder, where they are symlinked on demand for use by the engine.
+static class AssetDownloadCache
+{
+	[ConVar( "debug_network_files", ConVarFlags.Protected )]
+	internal static bool DebugNetworkFiles { get; set; } = false;
+
+	static string cacheFolder;
+
+	public static void Initialize( string folder )
+	{
+		System.IO.Directory.CreateDirectory( folder );
+		cacheFolder = folder;
+	}
+
+	internal static RedirectFileSystem CreateRedirectFileSystem()
+	{
+		if ( string.IsNullOrEmpty( cacheFolder ) )
+			return null;
+
+		return RedirectFileSystem.Create( cacheFolder );
+	}
+
+	/// <summary>We have downloaded an asset file. Store it for reuse in the future</summary>
+	public static string StoreFile( string relativePath, ulong crc, byte[] data )
+	{
+		var cachePath = CreateCacheFilename( relativePath, crc );
+		var absPath = System.IO.Path.Combine( cacheFolder, cachePath );
+
+		//todo - check crc of data
+
+		//make sure the directory tree exists
+		string directory = System.IO.Path.GetDirectoryName( absPath );
+		System.IO.Directory.CreateDirectory( directory );
+
+		//todo - write with retry?
+		System.IO.File.WriteAllBytes( absPath, data );
+
+		return absPath;
+	}
+
+	/// <summary>Try to mount the downloaded file with this path and crc. If it doesn't exist, return false</summary>
+	public static bool IsFileDownloaded( string relativePath, ulong crc, out bool isCoreContent )
+	{
+		isCoreContent = false;
+		relativePath = relativePath.NormalizeFilename( true ).Trim( '/', '\\' );
+
+		//Don't download core content
+		if ( EngineFileSystem.CoreContent.FileExists( relativePath ) )
+		{
+			if ( EngineFileSystem.CoreContent.GetCrc( relativePath ) == crc )
+			{
+				isCoreContent = true;
+				return true;
+			}
+		}
+
+		var cachePath = CreateCacheFilename( relativePath, crc );
+		var absPath = System.IO.Path.Combine( cacheFolder, cachePath );
+
+		if ( !System.IO.File.Exists( absPath ) )
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	/// <summary>Makes sure the directory exists, and returns the relative path to this file</summary>
+	public static string CreateCacheFilename( string filePath, ulong crc )
+	{
+		var ext = System.IO.Path.GetExtension( filePath );
+		var targetFile = filePath[..^ext.Length];
+
+		targetFile = Regex.Replace( targetFile, "[^a-zA-Z0-9/]", "_" );
+		targetFile = targetFile.TrimStart( '/', '\\' );
+		targetFile = $"{targetFile}.{crc:x}{ext}";
+
+		return targetFile;
+	}
+
+	//Generate the absolute path for this, whether it exists or not
+	internal static string GetAbsolutePath( string path, ulong crc )
+	{
+		return System.IO.Path.Combine( cacheFolder, CreateCacheFilename( path, crc ) );
+	}
+
+
+	static string[] _neverDownloadExtensions = new[] { ".dll", ".exe", ".bat", ".cmd", ".msi", ".scr", ".com", ".cpl", ".vbs", ".ps1", ".reg" };
+
+	//Is a file an legal download or not (filter out executables etc)
+	internal static bool IsLegalDownload( string path )
+	{
+		if ( string.IsNullOrWhiteSpace( path ) ) return false;
+		if ( path.Length < 3 ) return false;
+		if ( path.Contains( ".." ) ) return false;
+
+		var ext = System.IO.Path.GetExtension( path );
+		if ( string.IsNullOrWhiteSpace( ext ) )
+			return false;
+
+		if ( _neverDownloadExtensions.Contains( ext, StringComparer.OrdinalIgnoreCase ) )
+			return false;
+
+		return true;
+	}
+
+	//Given a file with a crc, create a unique cache filename for it
+	internal static string CreateGameCacheFilename( string path, string crc )
+	{
+		return $"{path.ToLowerInvariant().Md5()}.{crc}.cache";
+	}
+
+	internal static bool TryMount( RedirectFileSystem fs, string path, ulong crc )
+	{
+		var gc = "/gamecache/" + CreateGameCacheFilename( path, crc.ToString( "x" ) );
+		if ( EngineFileSystem.Root.FileExists( gc ) )
+		{
+			//Log.Info( $"GAMECACHE: [{path}]" );
+			fs.AddAbsFile( path.NormalizeFilename( true ), EngineFileSystem.Root.GetFullPath( gc ) );
+			return true;
+		}
+
+		if ( IsFileDownloaded( path, crc, out var wasCoreContent ) )
+		{
+			if ( !wasCoreContent )
+			{
+				var cachePath = GetAbsolutePath( path, crc );
+				//Log.Info( $"DOWNLOAD: [{path}]" );
+				fs.AddAbsFile( path.NormalizeFilename( true ), cachePath );
+				return true;
+			}
+
+			return true;
+		}
+
+		return false;
+	}
+}

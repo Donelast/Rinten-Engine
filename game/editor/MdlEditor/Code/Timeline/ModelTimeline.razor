@@ -1,0 +1,26 @@
+@using System
+@using Rinten.UI
+@namespace Editor.MdlEditor
+@attribute [StyleSheet( "ModelTimeline.razor.scss" )]
+@inherits Panel
+
+@* The model editor's Timeline dock: the transport that used to lie along the foot
+   of the picture - which clip, play, step, loop, where it is up to - over the
+   clip's timeline, where its frames and its animation events are laid out.
+
+   The transport is the preview's own, made by it and only stood here (see
+   Preview.TransportBar): the preview is what plays the clip, and outlives every
+   page the window builds. *@
+
+<root class="model-timeline">
+	<PanelSlot class="transport" Content="@Preview?.TransportBar" />
+	<ClipTimeline class="track" Preview="@Preview" />
+</root>
+
+@code
+{
+	//The preview whose clip this is the timeline of.
+	public Preview Preview { get; set; }
+
+	protected override int BuildHash() => HashCode.Combine( Preview );
+}

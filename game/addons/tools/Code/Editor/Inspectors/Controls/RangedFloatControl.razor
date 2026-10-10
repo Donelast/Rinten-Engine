@@ -1,0 +1,83 @@
+@using System
+@using Rinten.UI
+
+@namespace Editor.Inspectors
+
+@attribute [CustomEditor( typeof( RangedFloat ) )]
+@attribute [StyleSheet( "RangedFloatControl.razor.scss" )]
+
+@inherits BaseControl
+
+<root>
+	@if ( ShowMultipleValues )
+	{
+		<label class="multiple">Multiple Values</label>
+	}
+	else
+	{
+		@if ( IsBetween )
+		{
+			<NumberControl Property="@MinProp" Label="min" Color="@Theme.Red" />
+			<NumberControl Property="@MaxProp" Label="max" Color="@Theme.Green" />
+		}
+		else
+		{
+			<NumberControl Property="@FixedProp" />
+		}
+
+		<EnumControl Property="@RangeProp" DisplayMode="@ButtonGroup" />
+	}
+</root>
+
+@code
+{
+	public override bool SupportsMultiEdit => true;
+
+	EnumControl.EnumDisplayMode ButtonGroup => EnumControl.EnumDisplayMode.ButtonGroup;
+
+	SerializedProperty FixedProp;
+	SerializedProperty MinProp;
+	SerializedProperty MaxProp;
+	SerializedProperty RangeProp;
+
+	public RangedFloatControl()
+	{
+		ShowBackground = false;
+	}
+
+	bool ShowMultipleValues =>
+		Property is not null && Property.IsMultipleValues && HasMixedRange();
+
+	bool IsBetween =>
+		RangeProp?.GetValue<RangedFloat.RangeType>() == RangedFloat.RangeType.Between;
+
+	public override void Rebuild()
+	{
+		if ( Property is null || !Property.TryGetAsObject( out var so ) )
+		{
+			FixedProp = null;
+			MinProp = null;
+			MaxProp = null;
+			RangeProp = null;
+			return;
+		}
+
+		FixedProp = so.GetProperty( "FixedValue" );
+		MinProp = so.GetProperty( "Min" );
+		MaxProp = so.GetProperty( "Max" );
+		RangeProp = so.GetProperty( "Range" );
+	}
+
+	bool HasMixedRange()
+	{
+		var firstProp = Property.MultipleProperties.FirstOrDefault();
+		if ( firstProp is null )
+			return false;
+
+		var firstRange = firstProp.GetValue<RangedFloat>().Range;
+		return Property.MultipleProperties.Any( x => x is not null && x.GetValue<RangedFloat>().Range != firstRange );
+	}
+
+	protected override int BuildHash() =>
+		HashCode.Combine( Property, Property?.GetValue<RangedFloat>() );
+}

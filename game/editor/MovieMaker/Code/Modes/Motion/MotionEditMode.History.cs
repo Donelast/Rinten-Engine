@@ -1,0 +1,34 @@
+﻿using System.Collections.Immutable;
+using System.Linq;
+using Rinten.MovieMaker;
+using Rinten.Utility;
+
+namespace Editor.MovieMaker;
+
+#nullable enable
+
+partial class MotionEditMode
+{
+	protected override ISnapshot OnSnapshot() => new Snapshot( TimeSelection, Modification?.Snapshot() );
+
+	protected override void OnRestore( ISnapshot snapshot )
+	{
+		if ( snapshot is not Snapshot data ) return;
+
+		_timeSelection = data.Selection;
+
+		if ( data is { Modification: { } modification, Selection: { } selection } )
+		{
+			SetModification( modification.Type, selection )
+				.Restore( modification );
+		}
+		else
+		{
+			ClearChanges();
+		}
+
+		SelectionChanged();
+	}
+}
+
+file sealed record Snapshot( TimeSelection? Selection, ModificationSnapshot? Modification ) : EditMode.ISnapshot;

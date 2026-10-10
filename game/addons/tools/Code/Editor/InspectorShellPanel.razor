@@ -1,0 +1,96 @@
+@namespace Editor
+@inherits Panel
+
+<root class="inspector-shell inspector">
+	@* Not "toolbar": design.scss's .toolbar is the window's own bars, which stand
+	   on nothing, and it took the dock bar's grey away. *@
+	<div class="bar dock-bar">
+		<ToolbarButton Icon="arrow_back" ToolTip="Back" Shortcut="@Inspector.BackShortcut" Tint="@BackTint" Disabled="@(!BackEnabled)" OnPressed="@(() => OnBack())" />
+		<ToolbarButton Icon="arrow_forward" ToolTip="Forward" Disabled="@(!ForwardEnabled)" OnPressed="@(() => OnForward())" />
+		<div class="spacer"></div>
+		<ToolbarButton Icon="unfold_more" ToolTip="Expand every component" Disabled="@(!HasObject)" OnPressed="@(() => FoldAll( true ))" />
+		<ToolbarButton Icon="unfold_less" ToolTip="Collapse every component" Disabled="@(!HasObject)" OnPressed="@(() => FoldAll( false ))" />
+		<ToolbarButton Icon="@LockIcon" ToolTip="Lock inspector" Active="@Locked" OnPressed="@(() => OnToggleLock())" />
+	</div>
+	<div class="separator"></div>
+	<div class="body">
+		@if ( !HasObject )
+		{
+			<div class="empty">No object selected.</div>
+		}
+		<div class="content" @ref="Content"></div>
+	</div>
+</root>
+
+@code
+{
+	public Inspector Host { get; set; }
+
+	internal Panel Content { get; private set; }
+
+	bool HasObject { get; set; }
+
+	bool BackEnabled { get; set; }
+	bool ForwardEnabled { get; set; }
+	bool Locked { get; set; }
+
+	InspectorPanel _pendingContent;
+
+	string LockIcon => Locked ? "lock" : "lock_open";
+
+	//Green while there is somewhere to go back to - the button is the one people reach for.
+	Color? BackTint => BackEnabled ? Theme.Green : null;
+
+	public void SetInspectorContent( InspectorPanel panel )
+	{
+		_pendingContent = panel;
+		HasObject = panel is not null;
+
+		if ( Content is not null )
+		{
+			Content.DeleteChildren();
+			if ( panel is not null )
+				Content.AddChild( panel );
+			_pendingContent = null;
+		}
+
+		StateHasChanged();
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( _pendingContent is not null && Content is not null )
+		{
+			Content.DeleteChildren();
+			Content.AddChild( _pendingContent );
+			_pendingContent = null;
+		}
+	}
+
+	//Opens or folds every card on the page - a GameObject's components, a material's
+	//features, a resource's groups - the way the hierarchy's bar opens and folds its tree.
+	void FoldAll( bool open )
+	{
+		if ( Content is null ) return;
+
+		foreach ( var panel in Content.Descendants )
+		{
+			if ( panel is Inspectors.ComponentSheetPanel sheet ) sheet.SetExpanded( open );
+			else if ( panel is Inspectors.InspectorCard card ) card.SetExpanded( open );
+		}
+	}
+
+	public void UpdateNavigation( bool back, bool forward, bool locked )
+	{
+		BackEnabled = back;
+		ForwardEnabled = forward;
+		Locked = locked;
+		StateHasChanged();
+	}
+
+	void OnBack() => Host?.GoBack();
+	void OnForward() => Host?.GoForward();
+	void OnToggleLock() => Host?.ToggleLock();
+}

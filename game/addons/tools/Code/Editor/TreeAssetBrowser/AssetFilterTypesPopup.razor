@@ -1,0 +1,62 @@
+@namespace Editor.TreeBrowser
+@using Rinten.UI
+@attribute [StyleSheet( "AssetFilterTypesPopup.razor.scss" )]
+@inherits Popup
+
+<root class="asset-filter-types">
+	<div class="body">
+		<div class="head">
+			<span class="heading">@Group.Name</span>
+		</div>
+		@foreach ( var entry in Group.Entries )
+		{
+			<div class="type @(Filter.Contains( entry.Type ) ? "on" : null)" onclick="@(() => Toggle( entry.Type ))">
+				<span class="name">@entry.Type.FriendlyName</span>
+			</div>
+		}
+	</div>
+</root>
+
+@code
+{
+	//Same number as the width in the sheet; the popup has to know if it fits on the right.
+	public const float Width = 220f;
+
+	public AssetTypeFilter.Group Group { get; set; }
+	public AssetTypeFilter Filter { get; set; }
+
+	//Opens beside a category row: edges touching, top level with the row, and on whichever side has room so it never lands on the list it came from.
+	public static AssetFilterTypesPopup Open( AssetFilterGroupRow row, AssetTypeFilter.Group group, AssetTypeFilter filter )
+	{
+		if ( row is null || !row.IsValid() )
+			return null;
+
+		var toTheRight = FitsRight( row );
+		var anchor = toTheRight ? row.RightAnchor : row.LeftAnchor;
+		if ( anchor is null || !anchor.IsValid() )
+			return null;
+
+		var popup = new AssetFilterTypesPopup { Group = group, Filter = filter };
+		popup.SetPositioning( anchor, toTheRight ? PositionMode.Right : PositionMode.Left, 0 );
+		popup.AnchorPanel = row;
+		popup.CloseWhenParentIsHidden = true;
+		popup.AddClass( "editor-popup" );
+		popup.SyncAnchor();
+
+		return popup;
+	}
+
+	static bool FitsRight( AssetFilterGroupRow row )
+	{
+		var rect = row.GetScreenPixelRect();
+		return rect.Right + Width <= Screen.Width;
+	}
+
+	void Toggle( AssetType type )
+	{
+		Filter.Toggle( type );
+		StateHasChanged();
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Group.Name, Group.Entries.Count, Filter?.Count ?? 0 );
+}

@@ -1,0 +1,154 @@
+.gizmo-settings-popup
+{
+	min-width: 280px;
+	width: 280px;
+	max-height: 500px;
+
+	> .body
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		max-height: 500px;
+		overflow-y: scroll;
+		overflow-x: hidden;
+		row-gap: 8px;
+		padding: 8px;
+		pointer-events: all;
+
+		> .separator
+		{
+			height: 1px;
+			flex-shrink: 0;
+			background-color: $edge;
+		}
+
+		> .category
+		{
+			flex-direction: column;
+			flex-shrink: 0;
+			width: 100%;
+			pointer-events: all;
+
+			> .header
+			{
+				flex-direction: row;
+				align-items: center;
+				column-gap: 4px;
+				flex-shrink: 0;
+				min-height: $control-row-height;
+				padding: 0 8px;
+				width: 100%;
+				pointer-events: all;
+				cursor: pointer;
+
+				> .title
+				{
+					flex-shrink: 0;
+					color: $text;
+					font-size: $type-body;
+					font-weight: 500;
+					white-space: nowrap;
+					pointer-events: none;
+				}
+
+				> .stretch
+				{
+					flex-grow: 1;
+					min-width: 0;
+				}
+
+				> .category-check
+				{
+					flex: 0 0 16px;
+					width: 16px;
+					height: 16px;
+					min-width: 16px;
+					max-width: 16px;
+					aspect-ratio: 1;
+					font-size: $type-default;
+					color: $primary;
+					align-items: center;
+					justify-content: center;
+					pointer-events: none;
+
+					&.partial
+					{
+						color: $text-light;
+					}
+				}
+
+				&:hover
+				{
+					background-color: $veil-hover;
+				}
+			}
+
+			> .rule
+			{
+				height: 1px;
+				flex-shrink: 0;
+				margin: 2px 0px;
+				background-color: $edge;
+				pointer-events: none;
+			}
+
+			> .row.gizmo-row
+			{
+				flex-direction: row;
+				align-items: center;
+				column-gap: 4px;
+				flex-shrink: 0;
+				min-height: $control-row-height;
+				width: 100%;
+				padding: 0 8px;
+				border-radius: $radius-2;
+				pointer-events: all;
+				cursor: pointer;
+
+				> .label
+				{
+					flex-grow: 1;
+					color: $text-control;
+					font-size: $type-body;
+					@include one-line;
+					pointer-events: none;
+				}
+
+				//A gizmo icon: either the attribute's texture as a background, or a font glyph inside.
+				> .gizmo-icon
+				{
+					flex-shrink: 0;
+					width: 16px;
+					height: 16px;
+					background-size: cover;
+					pointer-events: none;
+
+					> .material-icon
+					{
+						pointer-events: none;
+					}
+				}
+
+				> .check
+				{
+					flex: 0 0 16px;
+					width: 16px;
+					height: 16px;
+					min-width: 16px;
+					max-width: 16px;
+					aspect-ratio: 1;
+					font-size: $type-default;
+					color: $primary;
+					align-items: center;
+					justify-content: center;
+					pointer-events: none;
+				}
+
+				&:hover
+				{
+					background-color: $veil-hover;
+				}
+			}
+		}
+	}
+}

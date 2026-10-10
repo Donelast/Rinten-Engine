@@ -1,0 +1,106 @@
+.input-actions
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	gap: 8px;
+
+	> .list
+	{
+		flex-direction: column;
+		gap: 4px;
+		padding: 2px;
+		border-radius: 4px;
+		background-color: rgba( $text, 0.05 );
+	}
+
+	> .input-footer
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 4px;
+		padding: 4px;
+
+		> .entry,
+		> TextField
+		{
+			flex-grow: 1;
+		}
+
+		> .btn
+		{
+			padding: 4px 10px;
+			border-radius: 4px;
+			background-color: rgba( $text, 0.08 );
+			pointer-events: all;
+			cursor: pointer;
+			color: $text;
+
+			&.good
+			{
+				background-color: $green;
+				color: white;
+			}
+
+			&.disabled
+			{
+				opacity: 0.4;
+				pointer-events: none;
+			}
+		}
+	}
+}
+
+.input-group
+{
+	flex-direction: column;
+	gap: 2px;
+
+	> .group-header
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 6px;
+		font-weight: 600;
+		pointer-events: all;
+		cursor: pointer;
+		color: $text;
+	}
+
+	> .body
+	{
+		flex-direction: column;
+		gap: 2px;
+	}
+}
+
+.input-action-row
+{
+	flex-direction: row;
+	align-items: center;
+	padding: 4px 8px;
+	min-height: 24px;
+	pointer-events: all;
+	cursor: pointer;
+	color: $text;
+
+	&.alt
+	{
+		background-color: rgba( $text, 0.05 );
+	}
+
+	> .bindings
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+		margin-left: auto;
+
+		> .binding
+		{
+			flex-direction: row;
+			gap: 4px;
+		}
+	}
+}

@@ -1,0 +1,28 @@
+; The encoder's plain C API, exported under its own names - see CMakeLists.txt.
+EXPORTS
+	bu_get_version
+	bu_enable_debug_printf
+	bu_init
+	bu_alloc
+	bu_free
+	bu_new_comp_params
+	bu_delete_comp_params
+	bu_comp_params_get_comp_data_size
+	bu_comp_params_get_comp_data_ofs
+	bu_comp_params_clear
+	bu_comp_params_set_image_rgba32
+	bu_comp_params_set_image_float_rgba
+	bu_compress_texture
+	bt_init
+	bt_alloc
+	bt_free
+	bt_ktx2_open
+	bt_ktx2_close
+	bt_ktx2_get_width
+	bt_ktx2_get_height
+	bt_ktx2_get_levels
+	bt_ktx2_start_transcoding
+	bt_ktx2_get_level_actual_width
+	bt_ktx2_get_level_actual_height
+	bt_basis_compute_transcoded_image_size_in_bytes
+	bt_ktx2_transcode_image_level

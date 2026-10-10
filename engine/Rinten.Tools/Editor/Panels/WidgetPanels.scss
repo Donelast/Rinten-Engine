@@ -1,0 +1,392 @@
+﻿//Panel-backed editor widgets: labels, icons, and control chrome on WidgetSurface.
+
+//Menu names take the left half and are clipped, not squeezed, so they never wrap to two lines
+.menubar-titles
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	flex-direction: row;
+	align-items: center;
+	pointer-events: all;
+	overflow: hidden;
+}
+
+.menubar-title
+{
+	align-items: center;
+	justify-content: center;
+	pointer-events: all;
+	padding: 0 8px;
+	border-radius: $radius-2;
+
+	//A name is as wide as the word in it, whatever the window does. Its width is also what MenuBar.MeasureTitleRects reads to
+	//know where to drop the menu under it, so a squeezed name opened its menu in the wrong place as well as reading badly.
+	flex-shrink: 0;
+
+	&.hover,
+	&.open
+	{
+		background-color: $veil-hover;
+	}
+
+	label
+	{
+		font-family: $font-family;
+		font-size: $type-body;
+		font-weight: 500;
+		color: $text-light;
+		pointer-events: none;
+
+		//One line. "Window" over two of them in a bar 26px tall is the fault this closes.
+		white-space: nowrap;
+	}
+
+	&.hover label,
+	&.open label
+	{
+		color: $text;
+	}
+}
+
+//A widget's label covers its whole surface. Size, colour and padding come from code
+//- they are properties of the widget itself; wrapping respects the source text.
+.widget-label-content
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	flex-grow: 1;
+
+	//The font the label is measured in - EditorText.Measure, in the theme's default font. Drawn in another, a
+	//label was laid out for narrower words than it showed, and whatever stood beside it covered the end of them.
+	font-family: $font;
+	font-size: $type-body;
+	white-space: pre-line;
+	color: $ink-dim;
+}
+
+//The label widget's surface: its content sits in a row.
+.widget-label
+{
+	flex-direction: row;
+}
+
+.widget-icon
+{
+	font-family: Material Icons;
+	font-size: $type-body;
+	text-align: center;
+}
+
+.widget-dropdown-text
+{
+	flex-grow: 1;
+	font-family: $font;
+	font-size: $type-body;
+	white-space: nowrap;
+}
+
+//WidgetIconPanel fills whatever it is put in - the icon sits over the field.
+.widget-icon-fill
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+}
+
+//A widget holding a panel editor: the editor takes the whole surface.
+.widget-panel-control
+{
+	> .control
+	{
+		width: 100%;
+		min-height: $control-row-height;
+	}
+}
+
+//The dropdown widget's surface: a full-width label with the arrow at the right.
+.widget-dropdown,
+.widget-embedded-resource
+{
+	flex-direction: row;
+	align-items: center;
+}
+
+.widget-dropdown
+{
+	padding-left: 8px;
+
+	> .widget-icon
+	{
+		flex-shrink: 0;
+		width: 17px;
+		font-size: 17px;
+	}
+}
+
+//An embedded resource: a row-high thumbnail on the left, then the label.
+.widget-embedded-resource
+{
+	padding-left: 2px;
+
+	> .widget-dropdown-text
+	{
+		flex-grow: 1;
+		padding-left: 8px;
+	}
+
+	> .widget-icon
+	{
+		flex-shrink: 0;
+		width: 17px;
+	}
+}
+
+.label.disabled
+{
+	opacity: 0.5;
+}
+
+.controlwidget.disabled
+{
+	opacity: 0.5;
+}
+
+.controlwidget .control-field
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	border-radius: $radius-2;
+	border: 1px solid $edge;
+	background-color: $sunken;
+	pointer-events: none;
+}
+
+.controlwidget .control-field.hovered
+{
+	border-color: $edge-lit;
+}
+
+.controlwidget .control-field.active
+{
+	background-color: $base;
+	border-color: $edge-focus;
+}
+
+.controlwidget .control-field.pressed
+{
+	border-color: $edge-lit;
+}
+
+.controlwidget .control-field.button
+{
+	background-color: $tile;
+}
+
+.controlwidget .control-field.button.hovered
+{
+	background-color: $tile;
+}
+
+.controlwidget .control-field.drop-target
+{
+	border-color: $green;
+	background-color: $green;
+	opacity: 0.12;
+}
+
+//The axis-letter square left of the number: the widget places it from its own height and colours it on hover; the shape comes from here.
+.widget-float-icon
+{
+	position: absolute;
+	left: 2px;
+	top: 2px;
+	border-radius: $control-radius - 1px;
+
+	//What is in it sits in the middle of it, as the painted letter did (TextFlag.Center over the whole square).
+	align-items: center;
+	justify-content: center;
+}
+
+//The axis letter, in the square's middle. It filled the square as a box with its text at the box's top-left, which put the letter in a
+//corner; and at the micro size it was half the height of the painted one - the heading font at nine points, twelve pixels, weight 500.
+.widget-float-axis
+{
+	font-size: 12px;
+	font-weight: 500;
+	text-align: center;
+	pointer-events: none;
+}
+
+//The unit, pinned to the right edge of the field.
+.widget-float-unit
+{
+	position: absolute;
+	top: 0;
+	height: 100%;
+	right: 4px;
+	text-align: right;
+}
+
+//A checkbox: a rounded square whose edge appears under the cursor. Its colour depends on whether it is pressed, so it comes from
+//code. The widget is the layout's cell; the box is a plate two pixels inside it - see BoolControlWidget.Panels.cs, which colours it.
+.boolcontrolwidget > .widget-check
+{
+	position: absolute;
+	left: 2px;
+	top: 2px;
+	right: 2px;
+	bottom: 2px;
+	border-radius: $control-radius;
+	border-width: 0px;
+	pointer-events: none;
+
+	&.hovered
+	{
+		border-width: 1px;
+	}
+
+	> .widget-icon
+	{
+		font-size: $type-body;
+	}
+}
+
+.widget-resource-thumb
+{
+	position: relative;
+	flex-shrink: 0;
+	width: $control-row-height - 4px;
+	height: $control-row-height - 4px;
+	margin-left: 2px;
+	margin-bottom: 2px;
+
+	> image
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+	}
+}
+
+.widget-resource-title
+{
+	color: $ink;
+}
+
+.widget-resource-path
+{
+	color: $ink-faint;
+}
+
+//A splitter panel: the cells divide the space by fractions that code writes.
+.splitter-panel
+{
+	flex-direction: row;
+	flex-grow: 1;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+
+	&.vertical { flex-direction: column; }
+
+	> .splitter-cell
+	{
+		flex-shrink: 1;
+		flex-basis: 0;
+		min-width: 0;
+		min-height: 0;
+
+		//Folded away. Its share is kept, so it comes back where it was left.
+		&.hidden { display: none; }
+	}
+}
+
+//The strip between two cells of a SplitterPanel: a seam that lights up under the pointer and stays lit while it is being dragged.
+.splitter-handle
+{
+	flex-grow: 0;
+	flex-shrink: 0;
+	pointer-events: all;
+	width: $separator-width;
+	height: 100%;
+	cursor: ew-resize;
+	background-color: $separator-color;
+	transition: background-color $fast $ease;
+
+	&.vertical
+	{
+		width: 100%;
+		height: $separator-width;
+		cursor: ns-resize;
+	}
+
+	&:hover,
+	&.dragging
+	{
+		background-color: $separator-hover-color;
+	}
+
+	//Gone with the cell it divides: a divider with nothing on one side of it is a strip that drags nowhere.
+	&.hidden { display: none; }
+}
+
+//A modal window over the editor. The scrim below it catches everything that misses,
+//and the window is a card rather than part of the chrome, so it has its own edge.
+.dialog-scrim
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	background-color: rgba( 0, 0, 0, 0.5 );
+	pointer-events: all;
+
+	//Above editor-overlay (1000) and the window bars that share that band.
+	z-index: 5000;
+}
+
+.window.inside
+{
+	z-index: 5001;
+	pointer-events: all;
+
+	//Opaque: it stands on the window's chrome rather than a blurred backdrop, and any thinner the project list reads through it.
+	background-color: $solid;
+	border: 1px solid rgba( 255, 255, 255, 0.15 );
+	border-radius: $radius-3;
+}
+
+//A panel embedded in a widget: it fills the widget and takes the pointer.
+.panel-widget-content
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	pointer-events: all;
+
+	//Where the widget takes its height from the panel instead, the panel has to be free to have
+	//one - laid out at 100% it would only ever report back the height it was already given.
+	&.panel-widget-content-auto { height: auto; }
+}
+

@@ -1,0 +1,25 @@
+//The chevron, the title and the folding are PanelFoldHeader's, and styled with it. What is here is what a property group's header adds on top.
+
+ControlSheetGroupHeader,
+.controlsheetgroupheader
+{
+	//Chevron, enable checkbox, title - in that order, however they were added.
+	> .control
+	{
+		order: 1;
+		flex-shrink: 0;
+	}
+
+	> .prefab-bar
+	{
+		position: absolute;
+		left: 24px;
+		top: 4px;
+		width: 2px;
+		height: 14px;
+		background-color: $accent;
+		pointer-events: none;
+
+		&.hidden { display: none; }
+	}
+}

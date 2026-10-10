@@ -1,0 +1,37 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Packages" ), Icon( "inventory" )]
+@using Editor.ProjectSettingsUI
+@using Editor.ProjectSettingPages.Categories.Settings
+@inherits ProjectSettingsCategoryPanel
+
+<root class="project-settings-category">
+	<div class="body" @ref="Body">
+		<SettingsCalloutPanel Warning="@true" Html="This stuff hasn't been properly end to end tested - please don't expect it to work just yet!" />
+		<div @ref="sheetHost"></div>
+	</div>
+</root>
+
+@code
+{
+	PackageReferencesSettings settings;
+	Panel sheetHost;
+
+	protected override void OnInit( Project project )
+	{
+		settings = new PackageReferencesSettings();
+		settings.Load( project );
+
+		var so = settings.GetSerialized();
+		var sheet = sheetHost.AddChild<Editor.Inspectors.ControlSheet>();
+		sheet.AddPropertyRow( so.GetProperty( nameof( PackageReferencesSettings.PackageReferences ) ) );
+		sheet.Target = so;
+		sheet.Rebuild();
+		ListenForChanges( so );
+	}
+
+	public override void OnSave()
+	{
+		settings.Apply( Project );
+		base.OnSave();
+	}
+}

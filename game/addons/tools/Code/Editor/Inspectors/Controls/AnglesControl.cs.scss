@@ -1,0 +1,6 @@
+@import "NumericFields.scss";
+
+AnglesControl.control.no-background
+{
+	@include numeric-fields;
+}

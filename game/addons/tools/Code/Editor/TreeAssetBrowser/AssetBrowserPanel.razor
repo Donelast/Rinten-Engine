@@ -1,0 +1,184 @@
+﻿@namespace Editor.TreeBrowser
+@attribute [StyleSheet( "AssetBrowserPanel.razor.scss" )]
+@inherits Panel
+@implements IBrowserPanel
+@implements AssetSystem.IEventListener
+
+<root class="asset-browser-panel">
+	<AssetTreePanel @ref="tree" class="tree" PanelId="@PanelId" Options="@Options" Filter="@Filter" />
+	<div class="chrome">
+		@if ( ShowExpandAll )
+		{
+			<ToolbarButton Icon="unfold_more" ToolTip="Expand All" OnPressed="@ExpandAll" />
+			<ToolbarButton Icon="unfold_less" ToolTip="Collapse All" OnPressed="@CollapseAll" />
+		}
+		@if ( ShowMoveLeft )
+		{
+			<ToolbarButton Icon="chevron_left" ToolTip="Move Panel Left" OnPressed="@(() => OnMoveLeftRequested?.Invoke())" />
+		}
+		@if ( ShowMoveRight )
+		{
+			<ToolbarButton Icon="chevron_right" ToolTip="Move Panel Right" OnPressed="@(() => OnMoveRightRequested?.Invoke())" />
+		}
+		@if ( ShowClose )
+		{
+			<ToolbarButton Icon="close" ToolTip="Close Panel" OnPressed="@(() => OnCloseRequested?.Invoke())" />
+		}
+	</div>
+</root>
+
+@code
+{
+	public Panel Root => this;
+
+	public string PanelId { get; set; }
+
+	//Mode this panel runs in; handed to the tree it hosts.
+	public TreeBrowserOptions Options { get; set; } = TreeBrowserOptions.Dock;
+
+	//Which files the tree may list.
+	public IAssetFilter Filter { get; set; } = AllAssetsFilter.Instance;
+
+	AssetTreePanel tree;
+	public AssetTreePanel Tree => tree;
+
+	public Action OnCloseRequested { get; set; }
+	public Action OnMoveLeftRequested { get; set; }
+	public Action OnMoveRightRequested { get; set; }
+
+	public Action<Asset> OnAssetSelected;
+	public Action<Asset> OnAssetHighlighted;
+	public Action<Asset> OnAssetActivated;
+	public Action<string> OnFileSelected;
+	public Action<string> OnFolderSelected;
+	public Action<string> OnFolderClicked;
+	public Action<AssetTreeItem> OnSectionSelected;
+	public Action<AssetBrowser.Location> OnBrowseLocationSelected;
+
+	bool ShowClose;
+	bool ShowMoveLeft;
+	bool ShowMoveRight;
+	bool ShowExpandAll;
+	string pendingReveal;
+	string searchText = string.Empty;
+	AssetTreeScope scope = AssetTreeScope.Project;
+	AssetTreeSection section = AssetTreeSections.Default;
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+		WireTree();
+		ApplyPendingReveal();
+	}
+
+	void WireTree()
+	{
+		if ( Tree is null ) return;
+
+		Tree.Options = Options;
+		Tree.Filter = Filter;
+		Tree.Scope = scope;
+		Tree.Section = section;
+		Tree.OnAssetSelected = asset => OnAssetSelected?.Invoke( asset );
+		Tree.OnAssetHighlighted = asset => OnAssetHighlighted?.Invoke( asset );
+		Tree.OnAssetActivated = asset => OnAssetActivated?.Invoke( asset );
+		Tree.OnFileSelected = path => OnFileSelected?.Invoke( path );
+		Tree.OnFolderSelected = path => OnFolderSelected?.Invoke( path );
+		Tree.OnFolderClicked = path => OnFolderClicked?.Invoke( path );
+		Tree.OnSectionSelected = item => OnSectionSelected?.Invoke( item );
+		Tree.OnBrowseLocationSelected = location => OnBrowseLocationSelected?.Invoke( location );
+
+		if ( !string.IsNullOrEmpty( searchText ) )
+			Tree.ApplySearch( searchText );
+	}
+
+	public bool ShowCloseButton
+	{
+		get => ShowClose;
+		set
+		{
+			ShowClose = value;
+			StateHasChanged();
+		}
+	}
+
+	public bool ShowMoveLeftButton
+	{
+		get => ShowMoveLeft;
+		set
+		{
+			ShowMoveLeft = value;
+			StateHasChanged();
+		}
+	}
+
+	public bool ShowMoveRightButton
+	{
+		get => ShowMoveRight;
+		set
+		{
+			ShowMoveRight = value;
+			StateHasChanged();
+		}
+	}
+
+	public void ApplySearch( string text )
+	{
+		searchText = text ?? string.Empty;
+		ShowExpandAll = !string.IsNullOrEmpty( searchText );
+		Tree?.ApplySearch( searchText );
+		StateHasChanged();
+	}
+
+	public void Refresh() => Tree?.RefreshTree();
+
+	public void FilterChanged() => Tree?.FilterChanged();
+
+	public void SetScope( AssetTreeScope scope )
+	{
+		this.scope = scope;
+
+		if ( Tree is not null )
+			Tree.Scope = scope;
+	}
+
+	public void SetSection( AssetTreeSection section )
+	{
+		this.section = section;
+
+		if ( Tree is not null )
+			Tree.Section = section;
+	}
+
+	public void Reveal( string fullPath )
+	{
+		//Held until the tree exists: a picker asks for this before it has rendered.
+		pendingReveal = fullPath;
+		ApplyPendingReveal();
+	}
+
+	//Held until the tree has the node, too: the project's folder is asked for the moment the project opens, before the tree has been built from it.
+	void ApplyPendingReveal()
+	{
+		if ( string.IsNullOrEmpty( pendingReveal ) || Tree is null ) return;
+
+		if ( Tree.NavigateToFile( pendingReveal ) )
+			pendingReveal = null;
+	}
+
+	void ExpandAll() => Tree?.ExpandAll();
+
+	void CollapseAll() => Tree?.CollapseAll();
+
+	//Editor events are handed to widgets, not panels, so the tree is ticked from here.
+	public override void Tick()
+	{
+		base.Tick();
+		Tree?.TickSharedState();
+		ApplyPendingReveal();
+	}
+
+	void AssetSystem.IEventListener.OnAssetThumbGenerated( Asset asset ) => Tree?.Bump();
+
+	protected override int BuildHash() => HashCode.Combine( ShowClose, ShowMoveLeft, ShowMoveRight, ShowExpandAll );
+}

@@ -1,0 +1,27 @@
+ParticleGradientControl.control.no-background
+{
+	flex-direction: row;
+	align-items: stretch;
+	flex-grow: 1;
+	min-width: 0;
+	gap: 2px;
+	padding: 0;
+
+	//The colour, the two colours, or the gradient - whichever the type asks for.
+	> .controls
+	{
+		flex-direction: row;
+		align-items: stretch;
+		flex-grow: 1;
+		min-width: 0;
+		gap: 2px;
+	}
+
+	//The type and evaluation dropdowns keep the same width whatever is beside them.
+	> .mode
+	{
+		flex-grow: 0;
+		flex-shrink: 0;
+		width: 100px;
+	}
+}

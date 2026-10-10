@@ -1,0 +1,15 @@
+//A list that keeps only the cells its window can reach. The cells are placed by hand inside .content,
+//which carries the height of the whole list - that is the only thing the scroll has to measure against.
+
+.pooled-cell-list
+{
+	flex-direction: column;
+	overflow: scroll;
+
+	> .content
+	{
+		position: relative;
+		width: 100%;
+		flex-shrink: 0;
+	}
+}

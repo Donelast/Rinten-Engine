@@ -1,0 +1,53 @@
+{
+  "RootObject": {
+    "__guid": "a79c1f2b-0bd9-4b34-9c41-6e85787ac686",
+    "Flags": 0,
+    "Name": "light - point",
+    "Tags": "light_point,light",
+    "Enabled": true,
+    "Components": [
+      {
+        "__type": "Rinten.PointLight",
+        "__guid": "f86e27d7-ba69-4ebd-b8f0-1a3521118f59",
+        "Attenuation": 0.15,
+        "FogMode": "Enabled",
+        "FogStrength": 1,
+        "LightColor": "0.91373,0.98039,1,1",
+        "Radius": 10.16,
+        "Shadows": true
+      }
+    ],
+    "Children": [],
+    "__variables": [],
+    "__properties": {
+      "FixedUpdateFrequency": 50,
+      "MaxFixedUpdates": 5,
+      "NetworkFrequency": 30,
+      "NetworkInterpolation": true,
+      "PhysicsSubSteps": 1,
+      "ThreadedAnimation": true,
+      "TimeScale": 1,
+      "UseFixedUpdate": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": true,
+        "AgentHeight": 1.6,
+        "AgentRadius": 0.4,
+        "AgentStepSize": 0.45,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": ""
+      }
+    }
+  },
+  "ShowInMenu": true,
+  "MenuPath": "Light/Point Light",
+  "MenuIcon": "lightbulb",
+  "DontBreakAsTemplate": false,
+  "ResourceVersion": 1,
+  "__references": [],
+  "__version": 1
+}

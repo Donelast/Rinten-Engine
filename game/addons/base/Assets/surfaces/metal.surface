@@ -1,0 +1,35 @@
+{
+  "BaseSurface": "surfaces/default.surface",
+  "AudioSurface": "Metal",
+  "Description": "Generic metal",
+  "Friction": 0.7,
+  "Elasticity": 0.1,
+  "Density": 2700,
+  "Thickness": -1,
+  "RollingResistance": 0,
+  "BounceThreshold": 0,
+  "Dampening": 0,
+  "PrefabCollection": {
+    "BulletImpact": {
+      "_type": "gameobject",
+      "prefab": "prefabs/surface/metal_bullet.prefab"
+    },
+    "BulletImpactDecal": null,
+    "BluntImpact": null
+  },
+  "SoundCollection": {
+    "FootLeft": null,
+    "FootRight": null,
+    "FootLaunch": null,
+    "FootLand": null,
+    "Bullet": null,
+    "ImpactHard": null,
+    "ImpactSoft": null,
+    "ScrapeRough": null,
+    "ScrapeSmooth": null,
+    "Break": null
+  },
+  "Tags": null,
+  "__references": [],
+  "__version": 0
+}

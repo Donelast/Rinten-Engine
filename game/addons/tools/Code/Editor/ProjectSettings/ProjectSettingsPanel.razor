@@ -1,0 +1,176 @@
+@namespace Editor.ProjectSettingsUI
+@attribute [StyleSheet( "ProjectSettingsPanel.razor.scss" )]
+@inherits Panel
+
+<root class="project-settings inspector">
+	<ProjectSettingsBannerPanel Project="@Project" OnChanged="@(() => StateHasChanged())" />
+	<div class="body">
+		<div class="tree">
+			<SettingsTreePanel @ref="treePanel" />
+		</div>
+		<ProjectSettingsContentPanel @ref="contentPanel" />
+	</div>
+	<div class="footer">
+		<div class="footer-spacer" />
+		<div class="btn" onclick="@OnRevert">Revert Changes</div>
+		<div class="btn good @(!saveEnabled ? "disabled" : null)" onclick="@OnSave">Save</div>
+	</div>
+</root>
+
+@code
+{
+	public Project Project { get; set; }
+	public Widget Host { get; set; }
+	public Action OnSaveRequested { get; set; }
+	public Action OnRevertRequested { get; set; }
+	public Action<SerializedProperty> OnPropertyChanged { get; set; }
+
+	//Asked before leaving a page for another. Handed what moving on does and what staying does,
+	//and calls one of them - now, or once somebody has answered. Null moves on straight away.
+	public Action<Action, Action> OnLeavingPage { get; set; }
+
+	//The page to open on, or null for whichever the tree opens with.
+	public string InitialPage { get; set; }
+
+	SettingsTreePanel treePanel;
+	ProjectSettingsContentPanel contentPanel;
+	SettingsTreeItem currentItem;
+	SettingsTreeItem pendingCategories;
+	ProjectSettingsCategoryPanel[] activeCategories = [];
+	string headerTitle = "";
+	string headerDescription = "";
+	bool saveEnabled;
+
+	protected override int BuildHash() => HashCode.Combine( Project, saveEnabled, currentItem );
+
+	protected override void OnParametersSet()
+	{
+		if ( treePanel is not null && Project is not null )
+			treePanel.Project = Project;
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( Host is not null && Project is not null && firstTime )
+		{
+			treePanel.Project = Project;
+			treePanel.SelectionChanged = OnTreeSelectionChanged;
+			treePanel.SelectCategory( InitialPage );
+		}
+
+		SyncCategories();
+	}
+
+	void SyncCategories()
+	{
+		if ( contentPanel is null || !contentPanel.IsValid() ) return;
+
+		var item = pendingCategories ?? currentItem;
+		if ( item is null ) return;
+
+		if ( pendingCategories is not null || !contentPanel.Content.HasChildren )
+			MountCategories( item );
+
+		pendingCategories = null;
+	}
+
+	[EditorEvent.Frame]
+	void Frame() => SyncCategories();
+
+	void OnTreeSelectionChanged( IReadOnlyList<SettingsTreeItem> selection )
+	{
+		if ( selection.Count == 0 ) return;
+
+		var item = selection[0];
+		if ( item.Kind == SettingsTreeItemKind.Section && item.CategoryTypes.Count == 0 ) return;
+		if ( item == currentItem ) return;
+
+		//The first page is no page being left.
+		if ( currentItem is null || OnLeavingPage is null )
+		{
+			ShowPage( item );
+			return;
+		}
+
+		var leaving = currentItem;
+
+		OnLeavingPage(
+			() => ShowPage( item ),
+			() => treePanel?.Select( [leaving], skipEvents: true ) );
+	}
+
+	void ShowPage( SettingsTreeItem item )
+	{
+		currentItem = item;
+		headerTitle = item.Title;
+		headerDescription = item.Description ?? "";
+		pendingCategories = item;
+		StateHasChanged();
+	}
+
+	void MountCategories( SettingsTreeItem item )
+	{
+		contentPanel.Content.DeleteChildren();
+
+		var categories = new List<ProjectSettingsCategoryPanel>();
+		var multiple = item.CategoryTypes.Count > 1;
+
+		foreach ( var categoryType in item.CategoryTypes )
+		{
+			var category = ProjectSettingsCategoryPanel.Create( categoryType );
+			if ( category is null ) continue;
+
+			var typeInfo = EditorTypeLibrary.GetType( categoryType );
+			var title = multiple ? typeInfo?.Title ?? categoryType.Name : headerTitle;
+			var description = multiple ? typeInfo?.Description ?? "" : headerDescription;
+
+			item.Configure?.Invoke( category );
+			category.HostWindow = Host;
+			category.InitFromProject( Project, _ => { }, OnPropertyChanged );
+
+			if ( category.ShowTitle && !string.IsNullOrEmpty( title ) )
+				contentPanel.Content.AddChild( new ProjectSettingsSectionPanel( title, description, category ) );
+			else
+				contentPanel.Content.AddChild( category );
+
+			categories.Add( category );
+		}
+
+		activeCategories = categories.ToArray();
+	}
+
+	public void SetSaveEnabled( bool enabled )
+	{
+		if ( saveEnabled == enabled ) return;
+
+		saveEnabled = enabled;
+		StateHasChanged();
+	}
+
+	public void RemountCurrent()
+	{
+		if ( currentItem is null ) return;
+
+		pendingCategories = currentItem;
+		StateHasChanged();
+	}
+
+	void OnSave()
+	{
+		if ( !saveEnabled ) return;
+		OnSaveRequested?.Invoke();
+	}
+
+	void OnRevert()
+	{
+		OnRevertRequested?.Invoke();
+	}
+
+	public void SaveCategories()
+	{
+		foreach ( var category in activeCategories )
+			category.OnSave();
+	}
+}

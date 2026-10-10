@@ -1,0 +1,50 @@
+//The timeline: the transport across the top, and the strip of frames under it. The strip and its cells
+//are FrameStrip.razor.scss's; the buttons are design.scss's .toolbarbutton and the well its .well.
+
+.timeline
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+
+	> .toolbar
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		padding: 2px 4px;
+		gap: 4px;
+
+		> .caption
+		{
+			flex-shrink: 0;
+			font-family: $font-family;
+			font-size: 12px;
+			color: rgba( $text, 0.7 );
+		}
+
+		//The frame number, typed or read. Narrow, and no taller than the bar.
+		> .frame-field
+		{
+			flex-grow: 0;
+			width: 64px;
+			height: 20px;
+			padding: 0 6px;
+		}
+
+		> .stretch { flex-grow: 1; }
+
+		> .zoom-glyph
+		{
+			flex-shrink: 0;
+			font-size: $type-default;
+			color: rgba( $text, 0.6 );
+		}
+
+		> .zoom
+		{
+			width: 128px;
+			flex-shrink: 0;
+		}
+	}
+}

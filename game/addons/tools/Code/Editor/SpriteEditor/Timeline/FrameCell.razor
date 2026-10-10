@@ -1,0 +1,150 @@
+@namespace Editor.SpriteEditor
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Rinten.UI
+@inherits Panel
+@implements IEditorDropTarget
+
+@* One frame on the timeline: its number, its picture - just its cell, where it is
+   one cell of a sheet - the messages it broadcasts, and on the frames at either
+   end of the loop the handle the loop is dragged by. What it looks like against the
+   timeline is handed in by the strip; the styles are FrameStrip.razor.scss's. *@
+
+<root class="frame-cell @LookClasses" style="@SizeStyle" tooltip="@Tip"
+	onmousedown="@OnDown" onmouseup="@OnUp" ondoubleclick="@OnDoubleClick">
+	<label class="index">@Index</label>
+
+	<div class="picture">
+		<Image class="thumb" Texture="@Frame?.ToTexture()" />
+
+		@if ( Messages.Count > 0 )
+		{
+			<div class="tags">
+				<i class="icons">@Icons</i>
+				<label class="text grow-shrink">@TagText</label>
+			</div>
+		}
+	</div>
+
+	@if ( Look.LoopStart )
+	{
+		<div class="loop-handle start" tooltip="Loop start - drag to move" onmousedown="@( ( PanelEvent e ) => OnHandleDown( e, true ) )">
+			<i>arrow_right</i>
+		</div>
+	}
+
+	@if ( Look.LoopEnd )
+	{
+		<div class="loop-handle end" tooltip="Loop end - drag to move" onmousedown="@( ( PanelEvent e ) => OnHandleDown( e, false ) )">
+			<i>arrow_left</i>
+		</div>
+	}
+</root>
+
+@code
+{
+	static readonly Dictionary<Sprite.BroadcastEventType, string> IconCache = new();
+
+	public FrameStrip Strip { get; set; }
+	public int Index { get; set; }
+	public Sprite.Frame Frame { get; set; }
+	public FrameLook Look { get; set; }
+	public bool Current { get; set; }
+
+	//How big the picture is, square; the number's band goes on top.
+	public float Size { get; set; } = 96f;
+
+	//Where a drop would land: before, after, or nowhere.
+	bool? _dropSide;
+
+	IReadOnlyList<Sprite.BroadcastEvent> Messages => (IReadOnlyList<Sprite.BroadcastEvent>)Frame?.BroadcastMessages ?? Array.Empty<Sprite.BroadcastEvent>();
+
+	string Tip => $"Frame {Index}\nDouble-click to edit, drag to reorder";
+
+	string SizeStyle => $"width: {Size:0}px; height: {Size + FrameStrip.HeaderHeight:0}px;";
+
+	string LookClasses => string.Join( " ", new[]
+	{
+		Look.Selected ? "selected" : null,
+		Look.OutsideLoop ? "outside-loop" : null,
+		Look.LoopStart ? "loop-start" : null,
+		Look.LoopEnd ? "loop-end" : null,
+		Current ? "current" : null,
+		_dropSide == false ? "drop-before" : null,
+		_dropSide == true ? "drop-after" : null,
+	}.Where( c => c is not null ) );
+
+	string Icons => string.Join( " ", Messages.Select( m => IconFor( m.Type ) ).Distinct() ).Trim();
+
+	string TagText => string.Join( ", ", Messages.Select( m => m.ToString() ).Distinct() );
+
+	protected override int BuildHash() => HashCode.Combine( Index, Frame, Frame?.Texture, Frame?.Region, Look, Current, Size,
+		HashCode.Combine( Messages.Count, TagText, _dropSide ) );
+
+	static string IconFor( Sprite.BroadcastEventType type )
+	{
+		if ( IconCache.TryGetValue( type, out var icon ) ) return icon;
+
+		icon = EditorTypeLibrary.GetEnumDescription( type.GetType() ).GetEntry( type ).Icon;
+		IconCache[type] = icon;
+
+		return icon;
+	}
+
+	//The pointer
+
+	void OnHandleDown( PanelEvent e, bool start )
+	{
+		if ( e is not MousePanelEvent { MouseButton: MouseButtons.Left } ) return;
+
+		Strip?.BeginLoopDrag( start );
+		e.StopPropagation();
+	}
+
+	void OnDown( PanelEvent e )
+	{
+		if ( e is not MousePanelEvent mouse ) return;
+
+		Strip?.CellPressed( this, mouse.MouseButton );
+		e.StopPropagation();
+	}
+
+	void OnUp( PanelEvent e ) => Strip?.CellReleased();
+
+	void OnDoubleClick( PanelEvent e )
+	{
+		if ( e is not MousePanelEvent { MouseButton: MouseButtons.Left } ) return;
+
+		Strip?.OpenEditor( this );
+		e.StopPropagation();
+	}
+
+	//Being dropped on
+
+	public bool AcceptEditorDrops => true;
+
+	public DropAction OnEditorDragHover( Widget.DragEvent ev )
+	{
+		var side = Strip?.DropSide( this, ev );
+		ShowDropSide( side );
+
+		return side is null ? DropAction.Ignore : DropAction.Move;
+	}
+
+	public void OnEditorDragLeave() => ShowDropSide( null );
+
+	public void OnEditorDragDrop( Widget.DragEvent ev )
+	{
+		ShowDropSide( null );
+		Strip?.Drop( this, ev );
+	}
+
+	void ShowDropSide( bool? after )
+	{
+		if ( _dropSide == after ) return;
+
+		_dropSide = after;
+		StateHasChanged();
+	}
+}

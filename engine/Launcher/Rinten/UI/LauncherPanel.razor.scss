@@ -1,0 +1,1389 @@
+//Launcher laid out at 1.3x scale; colours come from the editor tokens
+
+LauncherPanel
+{
+	flex-grow: 1;
+	flex-shrink: 1;
+	width: 100%;
+	min-height: 0;
+	flex-direction: column;
+
+	font-family: $font;
+	font-size: $type-small;
+	color: $ink;
+
+	background-color: $panel-ground;
+
+	i
+	{
+		font-family: Material Icons;
+		font-size: 14px;
+		color: $ink-dim;
+
+		transition: color $fast $ease, transform $fast $ease;
+	}
+
+	.fill { flex-grow: 1; }
+
+	//The side and the pane, side by side.
+	.body
+	{
+		//What the shade along the foot is placed against.
+		position: relative;
+
+		flex-direction: row;
+		flex-grow: 1;
+		width: 100%;
+		min-height: 0;
+	}
+
+	//Darker towards the foot of the window, over both halves: about a tenth of black at the very bottom, gone thirty-odd pixels up.
+	.shade
+	{
+		position: absolute;
+		left: 0px;
+		bottom: 0px;
+
+		width: 100%;
+		height: 34px;
+
+		pointer-events: none;
+
+		background-image: linear-gradient( to bottom, transparent, rgba( 0, 0, 0, 0.1 ) );
+	}
+
+	//The side: the page's own dark, and rows on it a breath lighter.
+
+	.side
+	{
+		//What the square in the corner is placed against.
+		position: relative;
+
+		width: 202px;
+		flex-shrink: 0;
+		flex-direction: column;
+
+		padding: 14px 16px 16px 18px;
+
+		background-color: $window-ground;
+	}
+
+	.brand
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+
+		height: 34px;
+		margin-bottom: 12px;
+
+		.logo
+		{
+			width: 34px;
+			height: 34px;
+			flex-shrink: 0;
+
+			border-radius: $radius-2;
+		}
+	}
+
+	//A row down the side: a glyph, the words, and - for the ones that open something outside the launcher - a glyph at the far end saying so.
+	.nav
+	{
+		@include pressable;
+
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+
+		height: 28px;
+		padding: 0px 10px 0px 12px;
+		margin-bottom: 3px;
+
+		border-radius: $radius-2;
+		background-color: $ground-plate;
+
+		.caption
+		{
+			flex-grow: 1;
+			margin-left: 6px;
+
+			color: $ink-dim;
+
+			@include one-line;
+
+			transition: color $fast $ease;
+		}
+
+		.out
+		{
+			flex-shrink: 0;
+			margin-left: 6px;
+
+			color: $ink-off;
+		}
+
+		&:hover
+		{
+			background-color: $ground-plate-hover;
+
+			i, .caption { color: $ink; }
+			.out { color: $ink-dim; }
+		}
+
+		&:active { background-color: $ground-plate; }
+	}
+
+	//Where the window is: the green-grey plate, the words and glyph on it white.
+	.nav.on
+	{
+		background-color: $picked;
+
+		i, .caption { color: $ink; }
+
+		&:hover { background-color: $picked; }
+	}
+
+	//Between what the window shows and what it opens elsewhere.
+	.rule
+	{
+		height: 1px;
+		flex-shrink: 0;
+
+		margin: 10px 0px 12px 0px;
+
+		background-color: $ground-plate;
+	}
+
+	//A square: a button with a glyph on it and nothing else. On a card it is a step up from the card; in the side's corner, a step up from the side.
+
+	.square
+	{
+		@include pressable;
+
+		width: 24px;
+		height: 24px;
+		flex-shrink: 0;
+
+		align-items: center;
+		justify-content: center;
+
+		border-radius: $radius-1;
+		background-color: $chip;
+
+		i { font-size: 13px; }
+
+		&:hover
+		{
+			background-color: $chip-hover;
+
+			i { color: $ink; }
+		}
+
+		&:active { transform: scale( 0.92 ); }
+	}
+
+	//On: the green-grey, the way the pin is on a project kept at the top.
+	.square.on
+	{
+		background-color: $chip-on;
+
+		i { color: $ink; }
+
+		&:hover { background-color: lighten( $chip-on, 0.08 ); }
+	}
+
+	//The links, in the corner beside the mark - level with it, flush with the right-hand end of the rows under it.
+	.corners
+	{
+		position: absolute;
+		top: 14px;
+		right: 16px;
+
+		flex-direction: row;
+		gap: 6px;
+	}
+
+	.community > .link
+	{
+		background-color: $ground-plate;
+
+		&:hover { background-color: $ground-plate-hover; }
+	}
+
+	//The links as squares the size of the mark beside them
+	.community
+	{
+		gap: 6px;
+
+		> .link
+		{
+			width: 34px;
+			height: 34px;
+			border-radius: $radius-2;
+
+			> svg { width: 18px; height: 18px; }
+		}
+	}
+
+	//The pane: what there is, and how to get more.
+
+	.main
+	{
+		flex-grow: 1;
+		flex-direction: column;
+		min-width: 0;
+
+		padding: 14px 16px 0px 16px;
+
+		background-color: $panel-ground;
+	}
+
+	.head
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+
+		height: 34px;
+		margin-bottom: 12px;
+	}
+
+	//The search, where a filter would go: a plate like the cards under it rather than a hole in the pane. TextField's own sheet
+	//makes it a well with a hairline and a height for a form; here it is a card-grey strip the height of a row down the side.
+	.search
+	{
+		width: 260px;
+		height: 28px;
+		flex-shrink: 0;
+
+		padding: 0px 8px;
+
+		background-color: $tile;
+		border-color: transparent;
+		border-radius: $radius-2;
+
+		font-size: $type-small;
+
+		.mark
+		{
+			font-size: 14px;
+			margin-right: 6px;
+		}
+
+		&:hover
+		{
+			background-color: $tile-hover;
+			border-color: transparent;
+		}
+	}
+
+	.search.focused
+	{
+		background-color: $tile;
+		border-color: $edge-focus;
+	}
+
+	.search .hint { left: 8px; }
+
+	.search.marked .hint { left: 28px; }
+
+	//What the page is, on the pages that are not the list: a name and, beside it, the small print.
+	.heading
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+
+		.title
+		{
+			font-size: $type-default;
+			font-weight: 600;
+			color: $ink;
+			white-space: nowrap;
+		}
+
+		.count
+		{
+			margin-left: 10px;
+
+			@include micro;
+			font-size: $type-small;
+		}
+	}
+
+	//The way back, in front of the heading: a square the height of the search it stands in place of.
+	.back
+	{
+		width: 28px;
+		height: 28px;
+		margin-right: 10px;
+
+		background-color: $tile;
+
+		animation-name: editor-fade;
+		animation-duration: $normal;
+		animation-timing-function: $ease;
+
+		i { font-size: 18px; }
+
+		&:hover
+		{
+			background-color: $tile-hover;
+
+			i { transform: translateX( -1px ); }
+		}
+	}
+
+	//Which channel the engines are read from: three words in one hole, the one read from on a plate.
+	.channels
+	{
+		@include well;
+
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+
+		height: 30px;
+		padding: 3px;
+	}
+
+	.channel
+	{
+		@include pressable;
+
+		align-items: center;
+		justify-content: center;
+
+		height: 22px;
+		padding: 0px 12px;
+
+		border-radius: $radius-1;
+
+		font-size: $type-small;
+		font-weight: 500;
+		letter-spacing: $tracking;
+		color: $ink-off;
+
+		&:hover { color: $ink-dim; background-color: $veil; }
+	}
+
+	.channel.on
+	{
+		background-color: $tile;
+		color: $ink;
+
+		&:hover { background-color: $tile-hover; }
+	}
+
+	.button
+	{
+		@include pressable;
+		@include slab;
+
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+
+		height: 30px;
+		padding: 0px 16px;
+		margin-left: 8px;
+
+		//The engine's own sheet has a .button with a hairline round it.
+		border-width: 0px;
+
+		//A button is as wide as what is written on it. Squashing it is how the words on it end up somewhere else.
+		flex-shrink: 0;
+
+		.caption
+		{
+			margin-left: 8px;
+
+			font-weight: 500;
+			color: $ink-dim;
+
+			transition: color $fast $ease;
+		}
+
+		&:hover
+		{
+			i, .caption { color: $ink; }
+		}
+
+		&:active { transform: scale( 0.97 ); }
+	}
+
+	//Square, with only a glyph.
+	.button.ghost
+	{
+		width: 30px;
+		padding: 0px;
+	}
+
+	//The one button with a colour: the accent's green, written on in dark ink because the green is a light one - the thing the page is for.
+	.button.primary
+	{
+		background-color: $accent-fill;
+
+		i, .caption { color: $text-dark; }
+
+		&:hover { background-color: lighten( $accent-fill, 0.08 ); }
+
+		&:active { background-color: $accent-fill; }
+	}
+
+	//A button with nothing but words on it.
+	.button.plain .caption { margin-left: 0px; }
+
+	//Asking again while it is already being asked.
+	.button.ghost.off
+	{
+		cursor: default;
+
+		i { color: $ink-off; }
+
+		&:hover
+		{
+			background-color: $slab;
+
+			i { color: $ink-off; }
+		}
+	}
+
+	//Not yet. It stays where it is and stays the size it was - a button that appears when the last field is filled in is one nobody was expecting.
+	.button.primary.off
+	{
+		background-color: $slab;
+
+		cursor: default;
+
+		i, .caption { color: $ink-off; }
+
+		&:hover { background-color: $slab; }
+
+		&:active { transform: scale( 1 ); }
+	}
+
+	//The projects.
+
+	//The page under the search: the projects under their headings, and under them what is on the disk and not in the list. One scroller for all of it.
+	.projects
+	{
+		flex-direction: column;
+		flex-grow: 1;
+
+		padding-right: 2px;
+		padding-bottom: 16px;
+
+		overflow-y: scroll;
+	}
+
+	//What the cards under it are: a glyph and a word, in the space between two runs of cards.
+	.section
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+
+		height: 20px;
+		margin: 10px 0px;
+
+		i { font-size: 14px; }
+
+		.caption
+		{
+			margin-left: 4px;
+
+			font-size: 12px;
+			color: $ink-dim;
+		}
+	}
+
+	//The two columns, side by side. Nothing here wraps: there are two columns because two were asked for, and a card is as wide as the column it is in.
+	.pair
+	{
+		flex-direction: row;
+		align-items: flex-start;
+		flex-shrink: 0;
+
+		gap: 5px;
+	}
+
+	//Half the row via equal flex share, not a percentage; min-width 0 so long paths get cut
+	.column
+	{
+		flex-direction: column;
+
+		flex-grow: 1;
+		flex-shrink: 1;
+		flex-basis: 0px;
+
+		min-width: 0;
+
+		gap: 5px;
+	}
+
+	.card
+	{
+		flex-direction: row;
+		align-items: center;
+
+		//What the passes of light over a card being worked on measure from.
+		position: relative;
+
+		width: 100%;
+		flex-basis: auto;
+		flex-grow: 0;
+		flex-shrink: 0;
+		min-width: 0;
+
+		height: 46px;
+		padding: 0px 8px;
+
+		background-color: $tile;
+		border-radius: $radius-2;
+
+		//design.scss's .card is a plate with a hairline round it. Not here.
+		border-width: 0px;
+
+		cursor: pointer;
+
+		//Every card starts out of place and arrives, a little after the one before it - which is the delay the markup writes on
+		//it. Backwards, so a card waiting its turn is the animation's first frame rather than a card that is there and then jumps.
+		animation-name: editor-rise;
+		animation-duration: $slow;
+		animation-timing-function: $ease;
+		animation-fill-mode: backwards;
+
+		transition: background-color $fast $ease;
+
+		&:hover { background-color: $tile-hover; }
+
+		&:active { background-color: $tile-down; }
+
+		.thumb
+		{
+			width: 34px;
+			height: 34px;
+			flex-shrink: 0;
+
+			align-items: center;
+			justify-content: center;
+
+			background-color: $chip;
+			border-radius: $radius-1;
+			overflow: hidden;
+
+			&.has-image { background-color: transparent; }
+
+			.pic
+			{
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+			}
+		}
+
+		.letter
+		{
+			font-size: $type-body;
+			font-weight: 600;
+			color: $ink;
+		}
+
+		.text
+		{
+			flex-direction: column;
+			flex-grow: 1;
+
+			//Nought rather than the content's own width: a path is as wide as the path, and without this it pushes the card past its half of the row.
+			min-width: 0px;
+
+			margin-left: 7px;
+			overflow: hidden;
+		}
+
+		.title
+		{
+			color: $ink;
+
+			@include one-line;
+		}
+
+		//Under the name, in the small print: where it is, and when it was last opened. The place gives way first; the time is always read whole.
+		.sub
+		{
+			flex-direction: row;
+			align-items: center;
+
+			min-width: 0;
+			margin-top: 3px;
+
+			i
+			{
+				flex-shrink: 0;
+
+				font-size: 12px;
+				color: $ink-off;
+			}
+
+			.caption
+			{
+				flex-shrink: 0;
+				margin-left: 3px;
+
+				font-size: $type-micro;
+				color: $ink-off;
+				white-space: nowrap;
+			}
+
+			.path
+			{
+				flex-shrink: 1;
+
+				@include one-line;
+			}
+
+			.dot
+			{
+				flex-shrink: 0;
+				margin: 0px 5px;
+
+				font-size: $type-micro;
+				color: $ink-off;
+			}
+		}
+
+		.actions
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+
+			margin-left: 8px;
+
+			gap: 3px;
+		}
+
+		//The pass of light that says something is happening to this card - a wash rather than a shape, transparent
+		//at both ends, so there is no edge for the eye to catch on. Only the colour changes with what is happening.
+		.working
+		{
+			position: absolute;
+			left: 0px;
+			top: 0px;
+
+			width: 100%;
+			height: 100%;
+
+			.sweep
+			{
+				position: absolute;
+				top: 0px;
+				height: 100%;
+
+				width: 42%;
+				left: -50%;
+
+				animation-name: launcher-sweep;
+				animation-duration: 1.9s;
+				animation-timing-function: ease-in-out;
+				animation-iteration-count: infinite;
+			}
+
+			//A second, thinner one on its own clock. Two passes at speeds that do not divide into each other never line up twice the same way.
+			.sweep.behind
+			{
+				width: 26%;
+
+				animation-duration: 3.1s;
+				animation-delay: -1.35s;
+			}
+		}
+	}
+
+	//The one being started, while its window comes up: the accent passing over it, and the step it is on in place of when it was last opened.
+	.card.opening
+	{
+		//The light rides the card's own edge, so half of it would sit past the rounded corner without this.
+		overflow: hidden;
+
+		.working .sweep
+		{
+			background-image: linear-gradient( to right,
+				transparent, rgba( $accent, 0.16 ), transparent );
+		}
+
+		.working .sweep.behind
+		{
+			background-image: linear-gradient( to right,
+				transparent, rgba( $accent, 0.09 ), transparent );
+		}
+
+		.when
+		{
+			color: $accent;
+
+			animation-name: editor-breathe;
+			animation-duration: 1.2s;
+			animation-timing-function: ease-in-out;
+			animation-iteration-count: infinite;
+		}
+	}
+
+	//A project a porter is still filling in. Red, because the folder under that name holds a project
+	//file and nothing else yet - the card is there so it can be seen arriving, not so it can be opened.
+	.card.porting
+	{
+		overflow: hidden;
+
+		cursor: default;
+
+		&:hover { background-color: $tile; }
+
+		&:active { background-color: $tile; }
+
+		.working .sweep
+		{
+			background-image: linear-gradient( to right,
+				transparent, rgba( $red, 0.16 ), transparent );
+		}
+
+		.working .sweep.behind
+		{
+			background-image: linear-gradient( to right,
+				transparent, rgba( $red, 0.09 ), transparent );
+		}
+
+		.when
+		{
+			color: $red;
+
+			animation-name: editor-breathe;
+			animation-duration: 1.2s;
+			animation-timing-function: ease-in-out;
+			animation-iteration-count: infinite;
+		}
+	}
+
+	//Somebody else's, which is minutes of converting rather than a press. Said at the card's end, where a project of ours has its squares.
+	.tag
+	{
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+
+		height: 24px;
+		padding: 0px 8px;
+
+		border-radius: $radius-1;
+		background-color: $chip-on;
+
+		font-size: $type-small;
+		font-weight: 600;
+		letter-spacing: $tracking;
+		color: $ink;
+	}
+
+	//Said in the space it needs and no more, between the card above and the found
+	//cards below, so the thing worth reading is never the thing you have to scroll for.
+	.empty
+	{
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+
+		flex-shrink: 0;
+
+		padding: 34px 0px;
+
+		animation-name: editor-fade;
+		animation-duration: $slow;
+		animation-timing-function: $ease;
+
+		i
+		{
+			font-size: 46px;
+			color: rgba( 255, 255, 255, 0.2 );
+		}
+
+		.caption
+		{
+			margin-top: 10px;
+
+			font-size: $type-body;
+			font-weight: 500;
+			color: $ink-faint;
+		}
+
+		.hint
+		{
+			margin-top: 5px;
+			max-width: 420px;
+
+			color: $ink-off;
+			text-align: center;
+		}
+	}
+
+	//Three pages of the same pane: what there is, what a new one could be, and what this one is called.
+
+	//A page arrives from the side it was reached from: forwards from the right, back from the left.
+	.page
+	{
+		animation-duration: $normal;
+		animation-timing-function: $ease;
+		animation-fill-mode: backwards;
+	}
+
+	.page.ahead { animation-name: launcher-ahead; }
+
+	.page.behind { animation-name: launcher-behind; }
+
+	//What kind of project: tiles, three to a row, wrapping down the page.
+	.types
+	{
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-content: flex-start;
+
+		flex-grow: 1;
+
+		padding-right: 2px;
+		padding-bottom: 16px;
+		overflow-y: scroll;
+
+		gap: 5px;
+	}
+
+	.type
+	{
+		@include pressable;
+
+		flex-direction: column;
+
+		width: 244px;
+		height: 190px;
+		flex-shrink: 0;
+
+		padding: 16px;
+
+		background-color: $tile;
+		border-radius: $radius-2;
+
+		animation-name: editor-rise;
+		animation-duration: $slow;
+		animation-timing-function: $ease;
+		animation-fill-mode: backwards;
+
+		.glyph
+		{
+			width: 42px;
+			height: 42px;
+			flex-shrink: 0;
+
+			align-items: center;
+			justify-content: center;
+
+			background-color: $chip;
+			border-radius: $radius-1;
+
+			transition: background-color $fast $ease;
+
+			i { font-size: 24px; }
+		}
+
+		.name
+		{
+			margin-top: 13px;
+
+			font-size: $type-body;
+			font-weight: 500;
+			color: $ink;
+		}
+
+		.about
+		{
+			margin-top: 5px;
+
+			color: $ink-off;
+		}
+
+		//What pressing it does, said only while it is being pointed at.
+		.pick
+		{
+			flex-direction: row;
+			align-items: center;
+
+			opacity: 0;
+
+			transition: opacity $fast $ease;
+
+			.caption
+			{
+				@include micro;
+				font-size: $type-small;
+				color: $ink;
+			}
+
+			i
+			{
+				margin-left: 5px;
+				color: $ink;
+			}
+		}
+
+		&:hover
+		{
+			background-color: $tile-hover;
+
+			.glyph { background-color: $chip-hover; }
+			.pick { opacity: 1; }
+		}
+
+		&:active { background-color: $tile-down; }
+	}
+
+	//The one that makes nothing: a way to get a project rather than a kind of one, so it is the side's darker plate and stands a little apart.
+	.type.existing
+	{
+		margin-right: 10px;
+
+		background-color: $ground-plate;
+
+		.glyph { background-color: $tile; }
+
+		&:hover { background-color: $ground-plate-hover; }
+	}
+
+	//The questions about the one being made, and what happens when they are answered at the foot of them.
+	.setup
+	{
+		flex-direction: column;
+		flex-grow: 1;
+
+		padding-right: 2px;
+		overflow-y: scroll;
+	}
+
+	.field
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+
+		margin-bottom: 16px;
+
+		animation-name: editor-rise;
+		animation-duration: $slow;
+		animation-timing-function: $ease;
+		animation-fill-mode: backwards;
+
+		//Not .label. Every piece of text in a panel tree is a Label, and a Label puts the class "label" on itself -
+		//so a rule written for the word above a field lands on every word under it, the ligature in an icon included.
+		.legend
+		{
+			@include micro;
+			font-size: $type-small;
+		}
+
+		//The field's own line under its legend, and not the placeholder inside a TextField, which is a .hint as well.
+		> .hint
+		{
+			margin-top: 3px;
+
+			font-size: $type-small;
+			color: $ink-off;
+		}
+
+		.input
+		{
+			flex-grow: 1;
+
+			height: 34px;
+			margin-top: 8px;
+			padding: 0px 10px;
+
+			font-size: $type-small;
+
+			.hint { left: 10px; }
+		}
+
+		//A field with something beside it: the box grows, the button does not.
+		.line
+		{
+			flex-direction: row;
+			align-items: center;
+
+			.button
+			{
+				height: 34px;
+				width: 34px;
+				margin-top: 8px;
+			}
+		}
+	}
+
+	//The project being converted from, chosen rather than typed.
+	.source
+	{
+		@include pressable;
+		@include well;
+
+		flex-direction: row;
+		align-items: center;
+
+		height: 34px;
+		padding: 0px 10px;
+		margin-top: 8px;
+
+		i { font-size: 18px; }
+
+		.value
+		{
+			margin-left: 8px;
+
+			font-family: $font-mono;
+			color: $ink-off;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+		}
+
+		&:hover
+		{
+			border-color: $edge-lit;
+
+			i { color: $ink; }
+			.value { color: $ink-dim; }
+		}
+	}
+
+	//One that has been chosen says so: what is in it is a path rather than an instruction.
+	.source.chosen
+	{
+		i { color: $ink; }
+		.value { color: $ink-dim; }
+	}
+
+	//A yes or no. The box is the answer; the words are as much a part of what is pressed as the box is.
+	.check
+	{
+		@include pressable;
+
+		flex-direction: row;
+		align-items: center;
+
+		height: 28px;
+		margin-top: 8px;
+
+		i { font-size: 18px; }
+
+		.caption
+		{
+			margin-left: 8px;
+
+			color: $ink-dim;
+
+			transition: color $fast $ease;
+		}
+
+		&:hover
+		{
+			i, .caption { color: $ink; }
+		}
+	}
+
+	.check.on i { color: $accent; }
+
+	//Something worth knowing, which is not a reason not to go on - in the red the foot
+	//uses for what is wrong, so there is one colour on the page that means look at this.
+	.note
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+
+		padding: 10px 13px;
+		margin-bottom: 10px;
+
+		background-color: rgba( $red, 0.12 );
+		border-radius: $radius-2;
+
+		animation-name: editor-fade;
+		animation-duration: $normal;
+		animation-timing-function: $ease;
+
+		i
+		{
+			font-size: 18px;
+			color: $red;
+		}
+
+		.caption
+		{
+			margin-left: 10px;
+
+			color: $red;
+		}
+	}
+
+	.foot
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+
+		padding-top: 13px;
+		margin-bottom: 16px;
+
+		border-top: 1px solid $tile;
+
+		//Where it ends up, in the same monospace a path is written in anywhere else - it is the same thing, said about a project that does not exist yet.
+		.where
+		{
+			flex-direction: row;
+			align-items: center;
+
+			min-width: 0;
+			overflow: hidden;
+
+			.caption
+			{
+				margin-left: 8px;
+
+				font-size: $type-small;
+				font-family: $font-mono;
+				color: $ink-off;
+				white-space: nowrap;
+				text-overflow: ellipsis;
+			}
+		}
+
+		//What is missing, in the place the path would be. Red is no.
+		.where.bad
+		{
+			i { color: $red; }
+
+			.caption
+			{
+				font-family: $font;
+				color: $red;
+			}
+		}
+	}
+
+	//The engines: the same cards as the projects; a version is installed or taken away, not opened.
+	.releases
+	{
+		flex-direction: column;
+		flex-grow: 1;
+
+		padding-right: 2px;
+		overflow-y: scroll;
+
+		gap: 5px;
+	}
+
+	.release
+	{
+		flex-direction: row;
+		align-items: center;
+
+		//What the download's track measures itself against.
+		position: relative;
+
+		height: 46px;
+		padding: 0px 8px;
+		flex-shrink: 0;
+
+		background-color: $tile;
+		border-radius: $radius-2;
+
+		//The track runs along the very edge, and would stand past the corners.
+		overflow: hidden;
+
+		cursor: default;
+
+		animation-name: editor-rise;
+		animation-duration: $slow;
+		animation-timing-function: $ease;
+		animation-fill-mode: backwards;
+
+		.mark
+		{
+			width: 34px;
+			height: 34px;
+			flex-shrink: 0;
+
+			align-items: center;
+			justify-content: center;
+
+			background-color: $chip;
+			border-radius: $radius-1;
+
+			i { font-size: 18px; }
+		}
+
+		.text
+		{
+			flex-direction: column;
+			flex-grow: 1;
+
+			margin-left: 7px;
+			overflow: hidden;
+		}
+
+		.title
+		{
+			font-family: $font-mono;
+			color: $ink;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+		}
+
+		.about
+		{
+			margin-top: 3px;
+
+			font-size: $type-small;
+			color: $ink-off;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+		}
+
+		//How far along, in words, where the buttons would be.
+		.state
+		{
+			flex-shrink: 0;
+			margin-left: 10px;
+
+			font-family: $font-mono;
+			color: $accent;
+			white-space: nowrap;
+		}
+
+		//Nothing to press, because there is nothing for this machine.
+		.state.off
+		{
+			font-family: $font;
+			color: $ink-off;
+		}
+	}
+
+	//Already here, and says so on its square: the green-grey, and a tick.
+	.release.installed .mark
+	{
+		background-color: $chip-on;
+
+		i { color: $ink; }
+	}
+
+	//Coming down: the accent, the same as a project that is opening.
+	.release.working
+	{
+		.mark i { color: $accent; }
+
+		.state
+		{
+			animation-name: editor-breathe;
+			animation-duration: 1.2s;
+			animation-timing-function: ease-in-out;
+			animation-iteration-count: infinite;
+		}
+	}
+
+	//A project's engines, under its card: the channel chips, wrapping where there are many
+	.channels.engines
+	{
+		flex-wrap: wrap;
+		height: auto;
+		margin-top: -4px;
+		margin-bottom: 8px;
+
+		animation-name: editor-rise;
+		animation-duration: $normal;
+		animation-timing-function: $ease;
+	}
+
+	//The download along the row's bottom edge: a hole, filled as far as it got.
+	.track
+	{
+		position: absolute;
+		left: 0px;
+		bottom: 0px;
+
+		width: 100%;
+		height: 3px;
+
+		background-color: $sunken;
+
+		.done
+		{
+			height: 100%;
+
+			background-color: $accent;
+
+			transition: width $normal $ease;
+		}
+	}
+
+	//What just happened, under the list - the launcher answering, not the page.
+	.status
+	{
+		flex-shrink: 0;
+
+		padding: 10px 0px;
+
+		border-top: 1px solid $tile;
+
+		font-size: $type-small;
+		color: $ink-off;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+}
+
+//A page coming in from the side it was reached from. Both end where the page belongs, so nothing is left standing to one side if it is cut short.
+@keyframes launcher-ahead
+{
+	from { opacity: 0; transform: translateX( 26px ); }
+	to { opacity: 1; transform: translateX( 0px ); }
+}
+
+@keyframes launcher-behind
+{
+	from { opacity: 0; transform: translateX( -26px ); }
+	to { opacity: 1; transform: translateX( 0px ); }
+}
+
+//The pass of light over a card being worked on. From wholly off one side to wholly off the other, so neither end of it is ever seen arriving.
+@keyframes launcher-sweep
+{
+	from { left: -50%; }
+	to   { left: 105%; }
+}
+
+//Launcher as a card over an editor with no project: 1000x596 inside the window frame
+LauncherPanel.over-editor
+{
+	flex-grow: 0;
+	flex-shrink: 1;
+
+	width: 1006px;
+	height: 602px;
+	max-width: 94%;
+	max-height: 94%;
+
+	overflow: hidden;
+
+	@include frame;
+
+	//The band's own dark behind the contents, so the round inside of the band shows no speck of the pane's grey at the corners.
+	background-color: $frame-gap;
+
+	//The contents rounded to the inside of the band.
+	.body
+	{
+		overflow: hidden;
+		border-radius: 5px;
+	}
+}

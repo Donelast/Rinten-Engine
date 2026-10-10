@@ -1,0 +1,86 @@
+//The tool strips over the left of the viewports, the tool's settings beside them, and the footer under both. Only as wide as what it
+//holds; the gaps between its buttons let the mouse through to the scene, the buttons themselves do not - see ToolStripPanel.cs.scss.
+.tool-sidebar
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	height: 100%;
+	flex-direction: column;
+	pointer-events: none;
+
+	&.hidden
+	{
+		display: none;
+	}
+
+	> .middle
+	{
+		flex-direction: row;
+		flex-grow: 1;
+		min-height: 0;
+		pointer-events: none;
+
+		//The columns of buttons, side by side: the modes, then what the mode that is on can do.
+		> .strips
+		{
+			flex-direction: row;
+			flex-shrink: 0;
+			align-items: flex-start;
+			pointer-events: none;
+		}
+
+		> .settings
+		{
+			width: 240px;
+			flex-shrink: 0;
+			flex-direction: column;
+			overflow-y: scroll;
+			overflow-x: hidden;
+			pointer-events: all;
+
+			//A plate under the settings, as tall as they are and no taller. Over the viewport there is nothing else behind them, and names and fields
+			//read against grass and asphalt are not read at all. The strips beside it are plates for the same reason - see ToolSidebarWidget.Plate.
+			align-self: flex-start;
+			max-height: 100%;
+			background-color: $panel-ground;
+			border-radius: $radius-2;
+
+			&.hidden
+			{
+				display: none;
+			}
+		}
+	}
+
+	//Along the bottom: the material palette, then the tool's own footer.
+	> .bottom
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		column-gap: 4px;
+		align-items: flex-end;
+		pointer-events: none;
+
+		> .footer
+		{
+			flex-direction: row;
+			flex-grow: 1;
+			flex-shrink: 0;
+			column-gap: 4px;
+			align-items: flex-end;
+			pointer-events: none;
+
+			> .grow
+			{
+				flex-grow: 1;
+			}
+
+			//A settings panel built for its keys and not for its look - see ToolSidebarPanel.BuildSettings.
+			> .kept
+			{
+				display: none;
+			}
+		}
+	}
+}

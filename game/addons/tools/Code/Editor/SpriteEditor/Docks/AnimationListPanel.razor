@@ -1,0 +1,124 @@
+@namespace Editor.SpriteEditor
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Rinten.UI
+@attribute [StyleSheet( "AnimationListPanel.razor.scss" )]
+@inherits EditorPanel
+
+@* The sprite's animations: a button that adds one, and a row for each with the
+   selected one lit. A row knows its animation; what may be done to it is decided
+   here, with the commands. *@
+
+<root class="animation-list">
+	<div class="toolbar">
+		<ToolbarButton Icon="add" ToolTip="Create New Animation" OnPressed="@PromptCreate" />
+	</div>
+
+	<div class="rows well scroll">
+		@foreach ( var animation in Animations )
+		{
+			<AnimationRow List="@this" Animation="@animation" Selected="@( animation == Selection?.Selected )" />
+		}
+	</div>
+</root>
+
+@code
+{
+	public ISpriteDocument Document { get; set; }
+	public IAnimationSelection Selection { get; set; }
+	public AnimationCommands Commands { get; set; }
+
+	IEnumerable<Sprite.Animation> Animations => Document?.Sprite?.Animations ?? Enumerable.Empty<Sprite.Animation>();
+
+	int _version;
+	bool _wired;
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( _wired || Document is null || Selection is null ) return;
+		_wired = true;
+
+		Document.Loaded += Refresh;
+		Document.Restored += Refresh;
+		Document.Changed += OnDocumentChanged;
+		Selection.Changed += Refresh;
+	}
+
+	public override void OnDeleted()
+	{
+		base.OnDeleted();
+
+		if ( !_wired ) return;
+
+		Document.Loaded -= Refresh;
+		Document.Restored -= Refresh;
+		Document.Changed -= OnDocumentChanged;
+		Selection.Changed -= Refresh;
+	}
+
+	void OnDocumentChanged( SpriteChange change ) => Refresh();
+
+	void Refresh()
+	{
+		_version++;
+		StateHasChanged();
+	}
+
+	protected override int BuildHash() => HashCode.Combine( _version, Selection?.Selected );
+
+	//What a row asks for
+
+	internal void Select( Sprite.Animation animation ) => Selection.Selected = animation;
+
+	void PromptCreate()
+	{
+		Prompts.AskName( HostWidget, "What would you like to name the animation?", string.Empty, "Create", name =>
+		{
+			if ( !Commands.TryValidateName( name, except: null, out var problem ) )
+			{
+				Prompts.ShowNamingError( problem );
+				return;
+			}
+
+			Commands.Create( name );
+		} );
+	}
+
+	internal void PromptDuplicate( Sprite.Animation animation )
+	{
+		Prompts.AskName( HostWidget, "What would you like to name the duplicated animation?", $"{animation.Name} 2", "Duplicate", name =>
+		{
+			if ( !Commands.TryValidateName( name, except: null, out var problem ) )
+			{
+				Prompts.ShowNamingError( problem );
+				return;
+			}
+
+			Commands.Duplicate( animation, name );
+		} );
+	}
+
+	internal void PromptDelete( Sprite.Animation animation )
+	{
+		Prompts.Confirm( "Delete Animation", $"Are you sure you want to delete \"{animation.Name}\"?", "Delete",
+			() => Commands.Delete( animation ) );
+	}
+
+	//A rename typed into a row. False, and said why, where the name will not do.
+	internal bool TryRename( Sprite.Animation animation, string name )
+	{
+		if ( !Commands.TryValidateName( name, except: animation, out var problem ) )
+		{
+			Prompts.ShowNamingError( problem );
+			return false;
+		}
+
+		Commands.Rename( animation, name );
+		return true;
+	}
+
+	internal void MoveBefore( Sprite.Animation moving, Sprite.Animation target ) => Commands.MoveBefore( moving, target );
+}

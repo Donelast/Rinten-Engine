@@ -1,0 +1,114 @@
+@namespace Editor.Preferences
+@attribute [StyleSheet( "PreferencesPanel.razor.scss" )]
+@inherits Panel
+
+<root class="preferences">
+	<PreferencesNavPanel @ref="nav" />
+	<div class="content inspector">
+		<div class="content-inner">
+			<div class="page-header">
+				<label class="title">@headerTitle</label>
+				@if ( !string.IsNullOrEmpty( headerDescription ) )
+				{
+					<label class="description">@headerDescription</label>
+				}
+			</div>
+			<div class="page-host" @ref="pageHost"></div>
+		</div>
+	</div>
+</root>
+
+@code
+{
+	//Where the pages come from: everything the type library has, unless told otherwise.
+	public IPreferencesPageSource Pages { get; set; } = PreferencesPageCatalog.Default;
+
+	PreferencesNavPanel nav;
+	Panel pageHost;
+
+	//The page picked but not yet put in, the page that is in, and whether one is.
+	PreferencesPageDescriptor pending;
+	PreferencesPageDescriptor shown;
+	bool mounted;
+
+	//A page asked for by type before there was a sidebar to ask.
+	Type wanted;
+
+	string headerTitle = "";
+	string headerDescription = "";
+
+	protected override int BuildHash() => HashCode.Combine( headerTitle, headerDescription );
+
+	//Opens on one page, for the parts of the editor that link straight to a setting.
+	public void SwitchTo<T>() where T : PreferencesPage
+	{
+		wanted = typeof( T );
+
+		ApplyWanted();
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( firstTime )
+		{
+			nav.SelectionChanged = Show;
+			nav.SetSections( Pages.Sections() );
+
+			if ( !ApplyWanted() ) nav.SelectFirst();
+		}
+
+		MountPending();
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		MountPending();
+	}
+
+	bool ApplyWanted()
+	{
+		if ( wanted is null || nav is null ) return false;
+
+		var found = nav.Select( wanted );
+		wanted = null;
+
+		return found;
+	}
+
+	void Show( PreferencesPageDescriptor page )
+	{
+		if ( page is null ) return;
+
+		pending = page;
+		headerTitle = page.Title;
+		headerDescription = page.Description;
+
+		StateHasChanged();
+	}
+
+	//Puts the page in, once there is somewhere to put it. Mounted rather than written into the markup: razor rebuilds what it renders, and
+	//a page that fills itself in code would be emptied along with it - which is the second way in here, a host left empty by a re-render.
+	void MountPending()
+	{
+		if ( pageHost is null || !pageHost.IsValid() ) return;
+
+		var next = pending ?? (mounted && !pageHost.HasChildren ? shown : null);
+
+		if ( next is null ) return;
+
+		pending = null;
+		shown = next;
+
+		pageHost.DeleteChildren( true );
+
+		var page = next.Create();
+		mounted = page is not null;
+
+		if ( page is not null )
+			pageHost.AddChild( page );
+	}
+}

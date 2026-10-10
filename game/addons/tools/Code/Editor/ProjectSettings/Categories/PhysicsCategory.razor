@@ -1,0 +1,52 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Physics" ), Icon( "sports_cricket" )]
+@using Editor.ProjectSettingsUI
+@inherits ProjectSettingsCategoryPanel
+
+<root class="project-settings-category">
+	<div class="body" @ref="Body">
+		<div @ref="physicsHost"></div>
+
+		<label class="settings-section-header">Collision Rules</label>
+		<CollisionMatrixPanel @ref="matrix" />
+
+		<SettingsCalloutPanel Html="Left Click to toggle. Shift and left to collide, Ctrl and left to ignore, alt and left to trigger, right click to clear." />
+
+		<SettingsCalloutPanel Html="@CollisionHelpHtml" />
+	</div>
+</root>
+
+@code
+{
+	private readonly string CollisionHelpHtml =
+		"The collision matrix represents what will happen when two physics bodies are about to touch. Your changes here should affect the game on save.<br/><br/>" +
+		"Collisions are chosen using the following logic..<br/>" +
+		"• Get tags from both objects<br/>" +
+		"• Matching pair? Use as collision<br/>" +
+		"• Multiple matching pairs? Use the least colliding (ignore, trigger, then collision)<br/>" +
+		"• No matching pairs? Use the tag's default value<br/>" +
+		"• Multiple default values? Use least colliding<br/>" +
+		"• No defaults &amp; no pairs? Collide.";
+
+	CollisionMatrixPanel matrix;
+	Panel physicsHost;
+
+	protected override void OnInit( Project project )
+	{
+		var so = ProjectSettings.Physics.GetSerialized();
+		var sheet = physicsHost.AddChild<Editor.Inspectors.ControlSheet>();
+		sheet.Target = so;
+		sheet.Rebuild();
+		ListenForChanges( so );
+
+		matrix.Rebuild( ProjectSettings.Collision );
+		matrix.ValueChanged = () => StateHasChanged();
+	}
+
+	public override void OnSave()
+	{
+		EditorUtility.SaveProjectSettings( ProjectSettings.Collision, "Collision.config" );
+		EditorUtility.SaveProjectSettings( ProjectSettings.Physics, "Physics.config" );
+		base.OnSave();
+	}
+}

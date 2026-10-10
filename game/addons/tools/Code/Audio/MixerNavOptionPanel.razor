@@ -1,0 +1,55 @@
+@using Rinten.Audio
+@using Rinten.UI
+@namespace Editor.Audio
+@inherits Panel
+
+<root class="mixer-nav-option @(Selected ? "selected" : "")" onclick="@Press" onrightclick="@OpenMenu">
+	<Rinten.UI.Label class="icon material-icon">@Icon</Rinten.UI.Label>
+	<Rinten.UI.Label class="title">@Title</Rinten.UI.Label>
+</root>
+
+@code
+{
+	public string Title { get; set; }
+	public string Icon { get; set; }
+	public bool Selected { get; set; }
+	public AudioProcessor Processor { get; set; }
+	public Action OnPressed { get; set; }
+	public Action OpenContextMenu { get; set; }
+
+	bool hovered;
+	bool processing;
+
+	protected override int BuildHash() => HashCode.Combine( Title, Icon, Selected, Processor?.Mix > 0.01f );
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		var newHovered = HasHovered;
+		if ( newHovered != hovered )
+		{
+			hovered = newHovered;
+			SetClass( "hovered", hovered );
+		}
+
+		if ( Processor is null ) return;
+
+		var newProcessing = Processor.Mix > 0.01f;
+		if ( newProcessing == processing ) return;
+
+		processing = newProcessing;
+		SetClass( "processing", processing );
+	}
+
+	void Press()
+	{
+		OnPressed?.Invoke();
+	}
+
+	void OpenMenu( PanelEvent e )
+	{
+		OpenContextMenu?.Invoke();
+		e.StopPropagation();
+	}
+}

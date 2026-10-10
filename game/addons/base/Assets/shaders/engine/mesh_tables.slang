@@ -1,0 +1,265 @@
+﻿//Instance layout comes from cluster_main.slang (VisInstance), aliased as Instance; must match C#
+
+//The tables the engine's cluster passes read - the cull, the depth raster and the skin pass - declared once for all three.
+
+#ifndef ENGINE_MESH_TABLES
+#define ENGINE_MESH_TABLES
+
+static const uint MaxViews = 32;
+static const uint MaxLists = 100;
+
+//The project's level-of-detail groups: how many, and how many samples each curve is baked to. Rendering.LodGroups says the same two numbers.
+static const uint MaxLodGroups = 16;
+static const uint LodCurveSamples = 32;
+static const uint ClusterVertices = 372;
+
+static const uint InstanceDrawn = 1;
+static const uint InstanceNoShadow = 2;
+static const uint InstanceShadowOnly = 4;
+static const uint InstanceSquare = 8;
+//16 is InstancePosed and 32 InstanceNeverStill - neither is read here; they are the
+//processor's, and the list is kept whole so the bits cannot drift apart. See CoreMeshShaders.
+static const uint InstancePosed = 16;
+
+//The bit a visible-list entry carries above its cluster when the entry's triangles found no room in its list's run of the index buffer:
+//nothing draws it, and the bin pass must not shade it - see Append. Declared here because every shader that reads the entries needs it.
+static const uint ClusterDropped = 0x40000000u;
+
+//Distance slice stored in the entry so the count and fill passes can't disagree about it
+static const uint ClusterSliceShift = 26;
+static const uint ClusterSlices = 16;
+
+//First slice shaded with kFarShading (~45 m); must match CoreMeshShaders.FarSlice
+static const uint ClusterFarSlice = 11;
+
+//Where a span of a material's run begins, in slices: the first span is everything nearer than the cut, and the rest divide what is past
+//it. A material drawn in one call has one span and no cut at all - that call is the whole run and is drawn with the surface whole.
+uint ClusterSpanFrom( uint span, uint draws, uint slices, uint cut )
+{
+	if ( draws <= 1u || span == 0u ) return 0u;
+
+	cut = min( cut, slices );
+
+	return cut + ( ( ( span - 1u ) * ( slices - cut ) ) / ( draws - 1u ) );
+}
+
+//Cluster index of an entry (low 26 bits); always use this, a raw read indexes far past the table
+uint ClusterOf( uint entry ) { return entry & ( ( 1u << ClusterSliceShift ) - 1u ); }
+
+//And which slice of the distance it stood in.
+uint SliceOf( uint entry ) { return ( entry >> ClusterSliceShift ) & ( ClusterSlices - 1u ); }
+
+//Index = entry << 7 | vertex within cluster (max 128), so shared vertices transform once
+static const uint EntryShift = 7;
+static const uint CornerMask = 127;
+
+static const uint MaterialTwoSided = 1;
+static const uint MaterialAlphaTest = 2;
+static const uint MaterialTranslucent = 4;
+static const uint MaterialLoose = 8;
+
+//The surface moves its own vertices: its clusters are binned and shaded, and left out of the pre-pass,
+//because the corner the pre-pass would put in the depth is not the corner the surface draws - see Append.
+static const uint MaterialMoves = 16;
+
+//Free: it was MaterialThins, a surface the cull drew fewer clusters of with distance. A canopy's
+//levels are thinned where they are built now - see LevelChain - and nothing is dropped at draw time.
+
+//MeshInfo.flags: the mesh's levels are a chain - one level of the whole model at a time, every level judged by the mesh's sphere - and
+//two bits from MeshShadowShift say how many levels coarser its shadows are. See ChainLevel in mesh_cull.slang and CoreClusters.MeshChain.
+static const uint MeshChain = 4u;
+static const uint MeshShadowShift = 8u;
+
+struct MeshInfo
+{
+	uint clusterFirst;
+	uint clusterCount;
+	uint flags;
+	uint levels;
+	float4 sphere;
+	float4 boxMin;
+	float4 boxMax;
+
+	//A level a row: where its clusters are, how many, the smallest error any of them carries and the largest its parents do.
+	uint4 level[8];
+};
+
+#include "vis_instance.slang"
+typealias Instance = VisInstance;
+
+//A posed thing's vertex is read out of its posed range rather than the mesh's own.
+uint PosedVertex( Instance i, uint vertex )
+{
+	return ( i.flags & InstancePosed ) != 0 ? ( vertex - i.posedSource ) + i.posedFirst : vertex;
+}
+
+struct ClusterInfo
+{
+	float4 sphere;
+	float4 cone;
+	float4 boxMinError;
+	float4 boxMaxParentError;
+	uint4 words;
+};
+
+struct MaterialInfo
+{
+	uint flags;
+	uint colourSlot;
+	float cutoff;
+	uint pad;
+};
+
+//A cull view (camera or light); eye.w is error scale per metre, screen holds scales or caster set
+struct View
+{
+	float4 planes[6];
+	row_major float4x4 worldToClip;
+	float4 eye;
+	float4 lod;
+	float4 hzb;
+	float4 screen;
+
+	//Headset gaze direction and foveation strength (zero for non-eye views); keep last
+	float4 fovea;
+};
+
+//Which instances a light's view takes: every one, only what stands still - the sun's pages hold the still world, and a thing in
+//motion would leave its shadow standing where it was - or only what moves, which is what the map drawn again every frame is for.
+static const uint CastersAll = 0;
+static const uint CastersStill = 1;
+static const uint CastersMoving = 2;
+
+bool IsCamera( View view ) { return view.screen.w > 0.5; }
+
+//Orthographic view: size by eye.w directly, not by distance from its far-back eye
+bool IsFlat( View view ) { return view.screen.w > 1.5; }
+
+//Whether a light's view shrinks with distance - a lamp's face - and so cuts its DAG the way the camera does, from its own eye;
+//or looks down parallel rays - the sun's - and cuts by texels a metre wherever a thing stands. See NearLevels and LightLevels.
+bool PerspectiveLight( View view ) { return !IsCamera( view ) && view.screen.y > 0.5; }
+uint ViewCasters( View view ) { return IsCamera( view ) ? CastersAll : uint( view.screen.x ); }
+
+//Whether an instance is one of what moves: posed, or put somewhere else since the last time it held still.
+bool Moves( Instance instance ) { return ( instance.flags & InstancePosed ) != 0 || instance.moving != 0; }
+
+struct ListInfo
+{
+	uint base;
+	uint capacity;
+
+	//The list's run of the index buffer, in triangles - see Append. A drawn list's only: the first
+	//half's three and what appeared share a run a kind, the second starting where the first ended.
+	uint indexBase;
+	uint indexCapacity;
+};
+
+struct Params
+{
+	uint instanceCount;
+	uint viewCount;
+	uint listCount;
+	uint workCapacity;
+	uint retestList;
+	uint cameraLists;
+	uint materialsAt;
+	uint entriesAt;
+	//The run of the index buffer the lights' lists share, in triangles: where it begins and how many it has room for.
+	//Every light list is laid in it after the one before by the finish, and filled by the bin pass - see Append.
+	uint shadowIndexAt;
+	uint shadowIndexCapacity;
+	uint listTotal;
+
+	//Materials and their distance-sorted bins: counts/fill reset each frame, one draw per material
+	uint materials;
+	uint binCountsAt;
+	uint binOffsetsAt;
+	uint binFillAt;
+	uint binnedAt;
+	uint binArgsAt;
+
+	//Where the camera's hidden instances are in the visible buffer, a bit each by instance - nought
+	//where the camera hides nothing. See CoreMeshRender.HiddenFromCamera and Takes in mesh_cull.slang.
+	uint hiddenAt;
+
+	//Distance slices per material bin (1..16); only orders clusters near-first within one run
+	uint binSlices;
+	//Where the lists' mesh-stage draws are in the visible buffer, four words a list: the group counts of a draw that gives every visible entry of
+	//the list a workgroup. Written by the cull's finish beside the indexed draws; read only where the device draws mesh stages - see CoreMeshRender.
+	uint meshArgsAt;
+
+	//Where the debug words are in the visible buffer, under RINTEN_MESH_DEBUG.
+	uint debugAt;
+
+	//Camera pixels per metre at 1 m, so vertex stages size clusters exactly as the cull did
+	uint errorScale;
+
+	//How many triangles landed in each bin - a word a bin, beside the counts and
+	//the fills. What the bin's run of the index buffer is sized by; see the finish.
+	uint binTrisAt;
+
+	//Bin count (materials * binSlices). Struct is written by index: never insert words, free in place
+	uint bins;
+
+	//Where the packed clusters live, as a uint4 index, and how many of them there is room for - see the emit in CullInstance.
+	uint singlesAt;
+	uint singlesCapacity;
+
+	//The bins' runs of the index buffer: how far the bin pass has got into each, and where each begins - see the finish and the bin pass.
+	uint binTriFillAt;
+	uint binTriOffsetsAt;
+
+	//Where the lists' indexed draws are, five words a list - see the finish.
+	uint drawArgsAt;
+
+	//The binned list's run of the index buffer, in triangles, how many triangles it has room for, and how many pairs the binned list has.
+	uint binIndexAt;
+	uint binIndexCapacity;
+	uint binnedCapacity;
+
+	//Draw calls per material run, split by distance so far spans use the kFarShading pipeline
+	uint binDraws;
+
+	//Which lists of depth are drawn by a mesh stage this frame: a bit each for the camera's solid, two-sided and cut-out kinds, and 8
+	//for the lights'. Nothing writes indices for those, and their runs of the index buffer are not there. See CoreMeshRender.MeshKinds.
+	uint meshDepth;
+	//Offset of the visible-cell list in the work buffer (see CullCells)
+	uint cellsAt;
+
+	//Which still clusters the depth pre-pass draws, by distance slice: those in a nearer slice. Nought is none, all ones is all - see
+	//CoreSceneDrawer.PrepassSlices. Past it a cluster's material writes its depth in its own far pass, and the cull writes it no pre-pass run.
+	uint prepassSlices;
+
+	//Per-material texture demand words (float bits, max per frame), read back for texture streaming
+	uint wantAt;
+	uint wantPad0;
+	uint wantPad1;
+	uint wantPad2;
+
+	//Header must be whole float4s (40 words); keep in sync with CoreMeshRender.HeaderWords and VisParams
+
+	View views[MaxViews];
+	ListInfo lists[MaxLists];
+
+	//The level-of-detail groups' curves, baked: LodCurveSamples multiples of the error a group, then where each group's distance begins
+	//and one over how long it is, in x and y. Last, so nothing before it moved - see Rendering.LodGroups and LodScaleOf in mesh_cull.slang.
+	float4 lodCurves[MaxLodGroups * LodCurveSamples / 4];
+	float4 lodSpans[MaxLodGroups];
+};
+
+float4x4 WorldOf( Instance i ) { return float4x4( i.world0, i.world1, i.world2, i.world3 ); }
+
+float GrewBy( float4x4 world )
+{
+	float3 x = float3( world[0][0], world[0][1], world[0][2] );
+	float3 y = float3( world[1][0], world[1][1], world[1][2] );
+	float3 z = float3( world[2][0], world[2][1], world[2][2] );
+	return sqrt( max( dot( x, x ), max( dot( y, y ), dot( z, z ) ) ) );
+}
+
+uint TriangleByte( StructuredBuffer<uint> bytes, uint at )
+{
+	return ( bytes[at >> 2] >> ( ( at & 3 ) * 8 ) ) & 255u;
+}
+
+#endif

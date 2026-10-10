@@ -1,0 +1,228 @@
+@using Rinten.UI
+@namespace Editor.Inspectors
+@inherits BaseControl
+@attribute [CustomEditor( typeof( Color ) )]
+@attribute [CustomEditor( typeof( Color32 ) )]
+@attribute [CustomEditor( typeof( ColorHsv ) )]
+
+<root>
+	<div @ref="Swatch" class="colorswatch" onmousedown="@OnSwatchMouseDown">
+		<div class="checker"></div>
+		<div @ref="SwatchFill" class="fill"></div>
+	</div>
+	<div @ref="ChannelsHost" class="channels"></div>
+</root>
+
+@code
+{
+	public override bool SupportsMultiEdit => true;
+
+	Panel Swatch { get; set; }
+	Panel SwatchFill { get; set; }
+	Panel ChannelsHost { get; set; }
+
+	bool _hasAlpha = true;
+	bool _isColorHsv;
+	ColorPickerPopup _pickerPopup;
+
+	//Alpha channel uses a slider row instead of a number field.
+	public bool AlphaAsSlider { get; set; }
+
+	public ColorControl()
+	{
+		ShowBackground = false;
+	}
+
+	public override void Rebuild()
+	{
+		if ( ChannelsHost is null )
+			return;
+
+		ChannelsHost.DeleteChildren();
+
+		if ( Property is null )
+			return;
+
+		_hasAlpha = ColorPropertyHelper.HasAlpha( Property );
+		_isColorHsv = Property.PropertyType == typeof( ColorHsv );
+
+		if ( Property.TryGetAsObject( out var so ) )
+		{
+			EnsureOpaqueAlpha( so );
+			BuildChannels( so );
+			return;
+		}
+
+		if ( !Property.PropertyType.IsValueType )
+			return;
+
+		var boxed = Property.GetValue<object>();
+		if ( boxed is null )
+			return;
+
+		var tempSo = Game.TypeLibrary.GetSerializedObject( boxed );
+		if ( tempSo is null )
+			return;
+
+		EnsureOpaqueAlpha( tempSo );
+		tempSo.OnPropertyChanged += _ => Property.SetValue( tempSo.Targets.FirstOrDefault() );
+		BuildChannels( tempSo );
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+		if ( firstTime )
+			Rebuild();
+	}
+
+	void EnsureOpaqueAlpha( SerializedObject so )
+	{
+		if ( _hasAlpha )
+			return;
+
+		var alphaName = _isColorHsv ? "Alpha" : "a";
+		var alpha = so.GetProperty( alphaName );
+		if ( alpha is null )
+			return;
+
+		if ( Property.PropertyType == typeof( Color32 ) )
+			alpha.SetValue( (byte)255 );
+		else
+			alpha.SetValue( 1f );
+	}
+
+	void BuildChannels( SerializedObject so )
+	{
+		if ( _isColorHsv )
+		{
+			AddAxis( so, "Hue", "H", Theme.Pink, 0, 360 );
+			AddAxis( so, "Saturation", "S", Theme.Yellow, 0, 1 );
+			AddAxis( so, "Value", "V", Theme.Blue.Lighten( 0.2f ), 0, 1 );
+			if ( _hasAlpha )
+				AddAlphaChannel( so, "Alpha", "A", Theme.Text, 0, 1 );
+		}
+		else
+		{
+			AddAxis( so, "r", "R", Theme.Red );
+			AddAxis( so, "g", "G", Theme.Green );
+			AddAxis( so, "b", "B", Theme.Blue );
+			if ( _hasAlpha )
+				AddAlphaChannel( so, "a", "A", Theme.Text );
+		}
+
+		UpdateSwatch();
+		ApplyReadOnlyToChannels();
+	}
+
+	void AddAlphaChannel( SerializedObject so, string name, string label, Color color, float? min = null, float? max = null )
+	{
+		if ( AlphaAsSlider )
+		{
+			var prop = so.GetProperty( name );
+			if ( prop is null )
+				return;
+
+			var slider = ChannelsHost.AddChild<SliderControl>();
+			slider.Min = min ?? 0f;
+			slider.Max = max ?? 1f;
+			slider.Step = 0.01f;
+			slider.NumberFormat = Property.PropertyType == typeof( Color32 ) ? "0" : "0.00";
+			slider.ShowTextEntry = true;
+			slider.ShowScale = false;
+			slider.Property = prop;
+			slider.ReadOnly = IsReadOnly;
+			slider.Rebuild();
+			return;
+		}
+
+		AddAxis( so, name, label, color, min, max );
+	}
+
+	void AddAxis( SerializedObject so, string name, string label, Color color, float? min = null, float? max = null )
+	{
+		var prop = so.GetProperty( name );
+		if ( prop is null )
+			return;
+
+		var field = ChannelsHost.AddChild<NumberControl>();
+		field.Label = label;
+		field.Color = color;
+		field.Property = prop;
+
+		if ( min is not null )
+			field.MinValue = min.Value;
+		if ( max is not null )
+			field.MaxValue = max.Value;
+
+		if ( Property.PropertyType == typeof( Color32 ) )
+			field.NumberFormat = "0";
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( _pickerPopup is not null && !_pickerPopup.IsValid() )
+			_pickerPopup = null;
+
+		if ( Property is null )
+			return;
+
+		UpdateSwatch();
+	}
+
+	void UpdateSwatch()
+	{
+		if ( SwatchFill is null || !SwatchFill.IsValid() )
+			return;
+
+		if ( Property.IsMultipleDifferentValues )
+		{
+			SwatchFill.Style.BackgroundColor = Color.Transparent;
+			return;
+		}
+
+		SwatchFill.Style.BackgroundColor = ColorPropertyHelper.GetColor( Property );
+	}
+
+	protected override void OnReadOnlyChanged()
+	{
+		ApplyReadOnlyToChannels();
+	}
+
+	void ApplyReadOnlyToChannels()
+	{
+		if ( ChannelsHost is null )
+			return;
+
+		foreach ( var child in ChannelsHost.Children )
+		{
+			if ( child is NumberControl field )
+				field.ReadOnly = IsReadOnly;
+			else if ( child is SliderControl slider )
+				slider.ReadOnly = IsReadOnly;
+		}
+	}
+
+	void OnSwatchMouseDown( PanelEvent e )
+	{
+		OpenPopup();
+		e.StopPropagation();
+	}
+
+	void OpenPopup()
+	{
+		if ( IsReadOnly || Property is null || Swatch is null || !Swatch.IsValid() )
+			return;
+
+		if ( _pickerPopup is { IsValid: true } )
+		{
+			_pickerPopup.Delete();
+			_pickerPopup = null;
+			return;
+		}
+
+		_pickerPopup = ColorPickerPopup.Open( Swatch, Property );
+	}
+}

@@ -1,0 +1,59 @@
+//The undo history: three buttons across the top, and every change under them with the one the graph is standing on marked.
+//The well the changes stand on is design.scss's .well, and the icon font is its .material-icon - neither is restated here.
+
+.history
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+}
+
+.history-row
+{
+	flex-direction: row;
+	align-items: center;
+	width: 100%;
+	height: $list-row-height;
+	padding: 0 8px;
+	font-family: $font-family;
+	font-size: $type-body;
+	cursor: pointer;
+
+	//Where the graph is standing. The arrow keeps its room whether or not it is drawn, so the names do not step sideways as the mark moves down the list.
+	> .marker
+	{
+		flex-shrink: 0;
+		width: 18px;
+		color: $ink;
+	}
+
+	> .name
+	{
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		color: rgba( $text, 0.8 );
+	}
+
+	> .time
+	{
+		flex-shrink: 0;
+		padding-left: 12px;
+		white-space: nowrap;
+		color: rgba( $text, 0.25 );
+	}
+
+	//Done and then undone: still there, still clickable, but not what the graph is made of at the moment.
+	&.undone > .name
+	{
+		font-style: italic;
+		color: rgba( $text, 0.4 );
+	}
+
+	&:hover
+	{
+		background-color: $list-row-hover;
+
+		> .name { color: rgba( $text, 0.9 ); }
+		&.undone > .name { color: rgba( $text, 0.5 ); }
+	}
+}

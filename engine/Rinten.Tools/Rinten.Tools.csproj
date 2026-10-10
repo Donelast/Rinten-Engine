@@ -1,0 +1,59 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="../Razor.Targets" />
+
+  <!-- The editor's own panels carry their styles inside the assembly: they are on screen before any filesystem is mounted. See EditorStyles. A sheet is named after the file that uses it - Foo.cs.scss - and MSBuild reads that .cs as a culture: the sheets went into a Czech satellite assembly,
+       cs/Rinten.Tools.resources.dll, and were not in this one at all. It failed silently, and TextField.cs.scss had never loaded once since it was written. WithCulture says they are not translations; the logical name is spelt out because the culture pass strips the .cs out of it too. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Editor/**/*.scss">
+      <WithCulture>false</WithCulture>
+      <LogicalName>$(RootNamespace).%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <VersionPrefix>1.0.1</VersionPrefix>
+    <TargetFramework>net10.0</TargetFramework>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AssemblyName>Rinten.Tools</AssemblyName>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <NoWarn>1701;1702;1591;CA1416</NoWarn>
+    <OutputPath>../../game/bin/managed</OutputPath>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- The Memory dock's heap census walks our own heap through a snapshot of
+       ourselves. Same package the crash reporter reads minidumps with. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Diagnostics.Runtime" Version="3.1.512801" />
+    <!-- The cloud asset index - the editor's, and nothing a game or a page reaches. -->
+    <PackageReference Include="LiteDB" Version="5.0.21" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Rinten.Bind/Rinten.Bind.csproj" />
+    <ProjectReference Include="../Rinten.Code/Rinten.Code.csproj" />
+    <ProjectReference Include="../Rinten.Compiling/Rinten.Compiling.csproj" />
+    <ProjectReference Include="../Rinten.Engine/Rinten.Engine.csproj" />
+    <ProjectReference Include="../Rinten.Event/Rinten.Event.csproj" />
+    <ProjectReference Include="../Rinten.GameInstance/Rinten.GameInstance.csproj" />
+    <ProjectReference Include="../Porting/Rinten.Porting/Rinten.Porting.csproj" />
+    <ProjectReference Include="../Porting/Rinten.Porting.SBox/Rinten.Porting.SBox.csproj" />
+    <ProjectReference Include="../Rinten.Reflection/Rinten.Reflection.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+
+</Project>

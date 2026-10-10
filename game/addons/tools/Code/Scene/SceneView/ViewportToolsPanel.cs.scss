@@ -1,0 +1,14 @@
+//The bar across the top of a scene view: its controls' 26 pixels with three round them (10-08: 28
+//with row-high controls read as small over the picture; it was 36 before, fourteen of them air).
+.viewport-tools
+{
+	height: 32px;
+	flex-shrink: 0;
+	flex-direction: row;
+	pointer-events: all;
+
+	> .viewport-toolbar
+	{
+		flex-grow: 1;
+	}
+}

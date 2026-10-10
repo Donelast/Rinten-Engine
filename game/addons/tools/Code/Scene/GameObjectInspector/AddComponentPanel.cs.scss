@@ -1,0 +1,30 @@
+.add-component-panel
+{
+	flex-shrink: 0;
+	padding: 16px;
+	align-items: center;
+	justify-content: center;
+
+	> .button
+	{
+		min-width: 300px;
+		flex-direction: row;
+		gap: 8px;
+	}
+
+	> .button > .icon
+	{
+		flex-shrink: 0;
+	}
+
+	> .button > .label
+	{
+		pointer-events: none;
+	}
+}
+
+.add-component-panel > .button
+{
+	> .icon { flex-shrink: 0; }
+	> .label { pointer-events: none; }
+}

@@ -1,0 +1,33 @@
+BrowserSideTab,
+.browser-side-tab {
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	cursor: pointer;
+	pointer-events: all;
+
+	> i {
+		font-family: Material Icons;
+		font-size: 16px;
+		color: $ink-dim;
+	}
+
+	&:hover {
+		background-color: $veil-hover;
+	}
+
+	&:hover > i {
+		color: $ink;
+	}
+
+	//Where you are: the picked plate, the glyph on it white.
+	&.active {
+		background-color: $picked;
+
+		> i {
+			color: $ink;
+		}
+	}
+}

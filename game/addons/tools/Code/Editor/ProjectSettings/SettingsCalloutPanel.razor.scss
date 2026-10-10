@@ -1,0 +1,45 @@
+SettingsCalloutPanel
+{
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 10px 12px;
+	border-radius: 4px;
+	flex-shrink: 0;
+	width: 100%;
+	color: $text;
+
+	> .icon
+	{
+		flex-shrink: 0;
+		font-size: $type-large;
+		opacity: 0.8;
+		color: inherit;
+	}
+
+	> .text
+	{
+		flex-grow: 1;
+		font-size: 12px;
+		line-height: 1.4;
+		opacity: 0.9;
+		color: inherit;
+
+		p
+		{
+			margin: 0 0 4px 0;
+		}
+	}
+
+	&.info
+	{
+		background-color: rgba( $accent, 0.12 );
+		border: 1px solid rgba( $accent, 0.25 );
+	}
+
+	&.warning
+	{
+		background-color: rgba( $yellow, 0.12 );
+		border: 1px solid rgba( $yellow, 0.25 );
+	}
+}

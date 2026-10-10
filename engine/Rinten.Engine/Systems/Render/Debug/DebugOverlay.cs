@@ -1,0 +1,122 @@
+﻿using Rinten.Rendering;
+
+namespace Rinten;
+
+internal static partial class DebugOverlay
+{
+	static CommandList _overlay = new( "Engine Overlay" );
+	private const float OverlaySpacing = 16f;
+
+	public static CommandList CommandList => _overlay;
+
+	public static HudPainter Hud => new HudPainter( CommandList );
+
+	public static void Reset()
+	{
+		_overlay.Reset();
+	}
+
+	public static void Render()
+	{
+		_overlay.ExecuteOnRenderThread();
+	}
+
+	[ConVar( "overlay_alloc", Help = "Draws an overlay showing allocations and garbage collection" )]
+	internal static int overlay_alloc { get; set; } = 0;
+
+	[ConVar( "overlay_frame", Help = "Render frame stats overlay. 0=off, 1=essentials (timing/geometry/lights/memory), 2=+batching/culling/material changes, 3=+GPU resources" )]
+	internal static int overlay_frame { get; set; } = 0;
+
+	[ConVar( "overlay_network_graph", Help = "Draws an overlay showing a network usage summary" )]
+	internal static int overlay_network_graph { get; set; } = 0;
+
+	[ConVar( "overlay_fps", Help = "Draws an overlay graphing frame-time pacing: a live frametime strip and a distribution histogram" )]
+	internal static int overlay_fps { get; set; } = 0;
+
+	[ConVar( "overlay_network_calls", Help = "Draws an overlay showing most received network calls" )]
+	internal static int overlay_network_calls { get; set; } = 0;
+
+	[ConVar( "overlay_pp", Help = "Draws an overlay showing current post process stack" )]
+	internal static int overlay_pp { get; set; } = 0;
+
+	[ConVar( "overlay_resources", Help = "Draws an overlay showing registered resources and native cache" )]
+	internal static int overlay_resources { get; set; } = 0;
+
+	public static void Draw()
+	{
+		Vector2 pos = new Vector2( 64, 64 );
+		var activeScene = Application.GetActiveScene();
+
+		//Show current render debug mode on screen when not default
+		if ( ToolsVisualization.mat_toolsvis != SceneCameraDebugMode.Normal )
+		{
+			DebugOverlay.ToolsVisualization.Draw( ref pos );
+			pos.y += OverlaySpacing;
+		}
+
+		if ( overlay_network_calls == 1 )
+		{
+			DebugOverlay.NetworkCalls.Draw( ref pos );
+			pos.y += OverlaySpacing;
+		}
+
+		if ( overlay_network_graph == 1 )
+		{
+			DebugOverlay.NetworkGraph.Draw( ref pos );
+			pos.y += OverlaySpacing;
+		}
+
+		if ( overlay_fps > 0 )
+		{
+			DebugOverlay.FrameTimeGraph.Draw( ref pos, overlay_fps );
+			pos.y += OverlaySpacing;
+		}
+
+		if ( overlay_frame > 0 )
+		{
+			DebugOverlay.Frame.Draw( ref pos, overlay_frame );
+			pos.y += OverlaySpacing;
+		}
+
+		if ( overlay_pp == 1 )
+		{
+			activeScene?.Camera?.PrintPostProcessDebugOverlay( ref pos, Hud );
+			pos.y += OverlaySpacing;
+		}
+
+		if ( overlay_alloc == 1 )
+		{
+			DebugOverlay.Allocations.Draw( ref pos );
+			pos.y += OverlaySpacing;
+		}
+		else
+		{
+			DebugOverlay.Allocations.Disabled();
+		}
+
+		if ( overlay_resources == 1 )
+		{
+			DebugOverlay.Resources.Draw( ref pos );
+			pos.y += OverlaySpacing;
+		}
+
+		if ( overlay_ui == 1 )
+		{
+			DebugOverlay.UI.Draw( ref pos );
+			pos.y += OverlaySpacing;
+		}
+
+		if ( overlay_audio != 0 )
+		{
+			DebugOverlay.Audio.Draw( ref pos );
+			pos.y += OverlaySpacing;
+		}
+
+		if ( overlay_video != 0 )
+		{
+			DebugOverlay.Video.Draw( ref pos );
+			pos.y += OverlaySpacing;
+		}
+
+	}
+}

@@ -1,0 +1,12 @@
+@namespace Editor.ProjectSettingsUI
+@attribute [StyleSheet( "ProjectSettingsContentPanel.razor.scss" )]
+@inherits Panel
+
+<root class="settings-content">
+	<div class="settings-content-inner" @ref="Content"></div>
+</root>
+
+@code
+{
+	public Panel Content { get; private set; }
+}

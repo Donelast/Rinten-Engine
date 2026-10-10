@@ -1,0 +1,318 @@
+﻿//The dock is shaped like the main editor's inspector: one scroll, its children a hairline apart, and no plate between
+//them. See GameObjectInspectorPanel.razor.scss - the rules are the same because the two are meant to be the same thing.
+
+.properties
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+
+	> .clip-preview
+	{
+		flex-shrink: 0;
+
+		&.hidden { display: none; }
+	}
+
+	> .scroll
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		overflow: scroll;
+		gap: 1px;
+		align-items: stretch;
+
+		> * { flex-shrink: 0; width: 100%; min-width: 0; }
+	}
+
+	//What sits either side of the properties. A column of its own so it can be emptied without touching the sheet between them.
+	.extras
+	{
+		flex-direction: column;
+		width: 100%;
+		min-width: 0;
+		flex-shrink: 0;
+		gap: 1px;
+	}
+}
+
+//Says what is selected. The same band a component sheet wears in the main editor, so the two docks read as one editor.
+.properties-header
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 4px;
+	padding: 4px 6px;
+	background-color: $surface-background;
+	border-top: 1px solid $edge;
+	border-bottom: 1px solid $edge;
+
+	> .icon
+	{
+		font-size: $type-large;
+		width: 22px;
+		justify-content: center;
+
+		&.hidden { display: none; }
+	}
+
+	> .title
+	{
+		font-size: $type-body;
+		font-weight: 600;
+		color: $ink;
+		flex-shrink: 0;
+		white-space: nowrap;
+	}
+
+	> .dot
+	{
+		color: rgba($text-control, 0.5);
+
+		&.hidden { display: none; }
+	}
+
+	> .detail
+	{
+		color: $text;
+		flex-shrink: 1;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+
+		&.hidden { display: none; }
+	}
+
+	//Pushed to the far end, whatever is before it.
+	> .open
+	{
+		margin-left: auto;
+		font-size: $type-default;
+		color: $text-control;
+		cursor: pointer;
+
+		&:hover { color: $text; }
+		&.hidden { display: none; }
+	}
+}
+
+//A section that folds away - Documentation, Debug.
+.properties .section
+{
+	flex-direction: column;
+	flex-shrink: 0;
+
+	> .section-body
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		padding: 4px 6px 8px 6px;
+		gap: 1px;
+
+		&.hidden { display: none; }
+	}
+
+	> PanelFoldHeader > .lead-icon { color: $text-control; }
+
+	&.blue > PanelFoldHeader > .lead-icon { color: $blue; }
+	&.green > PanelFoldHeader > .lead-icon { color: $green; }
+
+	.documentation
+	{
+		white-space: pre-wrap;
+		color: rgba($text, 0.75);
+	}
+
+	//The live readouts a node puts in its Debug section.
+	.debug-line { color: $text-control; }
+}
+
+//A card of its own inside the sheet: conduit rules, transition priority.
+.properties .card
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 6px;
+	margin: 8px 4px;
+	padding: 8px;
+	border-radius: $control-radius;
+	background-color: $control-background;
+
+	> .heading
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+
+		> .title
+		{
+			flex-grow: 1;
+			font-weight: 600;
+			color: rgba($text, 0.88);
+		}
+
+		> .status { color: $text-control; }
+	}
+
+	> .details { color: $text-control; }
+
+	&.empty > .heading > .status,
+	&.empty > .details { color: $red; }
+
+	> .rows
+	{
+		flex-direction: column;
+		gap: 4px;
+		margin-top: 2px;
+	}
+}
+
+.transition-row
+{
+	position: relative;
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 5px;
+	height: 46px;
+	padding: 0 8px;
+	border-radius: $control-radius;
+	background-color: $widget-background;
+	cursor: grab;
+	pointer-events: all;
+
+	&:hover { background-color: lighten( $widget-background, 0.15 ); }
+
+	> .handle
+	{
+		font-size: $type-default;
+		color: $text-control;
+	}
+
+	> .priority
+	{
+		width: 20px;
+		height: 20px;
+		border-radius: 10px;
+		align-items: center;
+		justify-content: center;
+		font-size: $type-micro;
+		font-weight: 600;
+		background-color: rgba($primary, 0.14);
+		color: rgba($text, 0.88);
+	}
+
+	> .middle
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+		justify-content: center;
+
+		> .name
+		{
+			font-size: $type-micro;
+			font-weight: 500;
+			color: rgba($text, 0.88);
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		> .summary
+		{
+			font-size: $type-micro;
+			color: rgba($text-control, 0.8);
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+	}
+
+	> .badge
+	{
+		padding: 2px 8px;
+		border-radius: 8px;
+		background-color: rgba($accent, 0.14);
+		color: rgba( $accent, 0.9 );
+
+		&.hidden { display: none; }
+	}
+
+	> .target
+	{
+		font-size: $type-micro;
+		font-weight: 500;
+		color: $text-control;
+	}
+
+	//Where the row would land, drawn on the edge it would land against.
+	&.drop-above { border-top: 2px solid $text-highlight; }
+	&.drop-below { border-bottom: 2px solid $text-highlight; }
+}
+
+//Says where a variation data node's data comes from, and lets it be overridden.
+.properties .variation-banner
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 4px;
+	height: $row-height;
+	margin: 2px 4px 2px 26px;
+	padding: 0 6px 0 8px;
+	border-radius: $control-radius;
+	background-color: rgba($green, 0.07);
+
+	> .material-icon
+	{
+		font-size: $type-body;
+		color: $green;
+	}
+
+	> .label
+	{
+		flex-grow: 1;
+		color: $green;
+	}
+
+	> .action
+	{
+		cursor: pointer;
+		font-size: $type-default;
+	}
+
+	&.inherited
+	{
+		background-color: rgba($text-control, 0.07);
+
+		> .material-icon,
+		> .label { color: rgba($text-control, 0.6); }
+
+		> .action { color: $green; }
+	}
+}
+
+.properties .variation-data
+{
+	flex-direction: column;
+	flex-shrink: 0;
+
+	&.is-disabled
+	{
+		opacity: 0.5;
+		pointer-events: none;
+	}
+}
+
+//The button itself is design.scss's .btn - what is said here is only where the row of them sits.
+.properties .button-row
+{
+	flex-direction: row;
+	flex-shrink: 0;
+	margin: 8px 6px 4px 6px;
+
+	> .btn { flex-grow: 1; }
+}

@@ -1,0 +1,50 @@
+@using Editor
+@namespace Editor.Inspectors
+
+@inherits Panel
+
+<root class="gameobject-header inspector-head">
+	<div class="top-row">
+		@if ( EnabledProperty is not null )
+		{
+			<BoolControl Property="@EnabledProperty" EnabledIcon="power_settings_new" />
+		}
+		@if ( NameProperty is not null )
+		{
+			<StringControl Property="@NameProperty" />
+		}
+		@if ( IsStaticProperty is not null )
+		{
+			<div class="bool-field">
+				<BoolControl Property="@IsStaticProperty" />
+				<div class="label">@IsStaticProperty.DisplayName</div>
+			</div>
+		}
+		@if ( Target is not null )
+		{
+			<GameObjectFlagsPanel Target="@Target" />
+		}
+	</div>
+	<div class="bottom-row">
+		@if ( Target is not null )
+		{
+			<NetworkModeControlPanel Target="@Target" />
+		}
+		@if ( TagsProperty is not null )
+		{
+			<TagSetControl Property="@TagsProperty" />
+		}
+	</div>
+</root>
+
+@code
+{
+	public SerializedObject Target { get; set; }
+
+	private SerializedProperty EnabledProperty => Target?.GetProperty( nameof( GameObject.Enabled ) );
+	private SerializedProperty NameProperty => Target?.GetProperty( nameof( GameObject.Name ) );
+	private SerializedProperty IsStaticProperty => Target?.GetProperty( nameof( GameObject.IsStatic ) );
+	private SerializedProperty TagsProperty => Target?.GetProperty( nameof( GameObject.Tags ) );
+
+	protected override int BuildHash() => HashCode.Combine( Target );
+}

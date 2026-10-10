@@ -1,0 +1,203 @@
+@namespace Editor.SpriteEditor
+@using System
+@using Rinten.UI
+@inherits Panel
+@implements IEditorDropTarget
+
+@* One animation: its name - a box to type in while it is being renamed, and only
+   then, so there is no hidden field in the row to catch the pointer - and the two
+   things that can be done to it without a menu. Rows are dragged over one another
+   to reorder the list; a row dropped on another takes its place. *@
+
+<root class="animation-row @( Selected ? "selected" : null ) @( _dropTarget ? "drop-target" : null )"
+	tooltip="@Tip" onmousedown="@OnDown" onmouseup="@OnUp" ondoubleclick="@OnDoubleClick">
+	@if ( _renaming )
+	{
+		<TextField @ref="_rename" class="rename grow-shrink" />
+	}
+	else
+	{
+		<label class="name grow-shrink">@Animation?.Name</label>
+	}
+
+	<ToolbarButton Icon="content_copy" ToolTip="Duplicate Animation" OnPressed="@( () => List?.PromptDuplicate( Animation ) )" />
+	<ToolbarButton Icon="delete" ToolTip="Delete Animation" OnPressed="@( () => List?.PromptDelete( Animation ) )" />
+</root>
+
+@code
+{
+	public AnimationListPanel List { get; set; }
+	public Sprite.Animation Animation { get; set; }
+	public bool Selected { get; set; }
+
+	TextField _rename;
+	bool _renaming;
+	bool _renameWired;
+	bool _dropTarget;
+
+	bool _pressed;
+	bool _carrying;
+	Vector2 _pressAt;
+
+	string Tip => $"Select Animation \"{Animation?.Name}\"\nDouble-click to rename, drag to reorder";
+
+	protected override int BuildHash() => HashCode.Combine( Animation, Animation?.Name, Selected, _renaming, _dropTarget );
+
+	//Renaming
+
+	void StartRename()
+	{
+		if ( _renaming || Animation is null ) return;
+
+		_renaming = true;
+		_renameWired = false;
+		StateHasChanged();
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( !_renaming || _renameWired || !_rename.IsValid() ) return;
+		_renameWired = true;
+
+		_rename.Value = Animation.Name;
+		_rename.Submitted = _ => FinishRename();
+		_rename.ButtonTyped = OnRenameKey;
+
+		//Clicking away is finishing too, or the box stays open over the row.
+		_rename.AddEventListener( "onblur", FinishRename );
+
+		_rename.Focus();
+		_rename.SelectAll();
+	}
+
+	void FinishRename()
+	{
+		if ( !_renaming ) return;
+
+		var name = _rename?.Value?.Trim() ?? string.Empty;
+
+		_renaming = false;
+		StateHasChanged();
+
+		if ( name != Animation.Name ) List?.TryRename( Animation, name );
+	}
+
+	void OnRenameKey( ButtonEvent e )
+	{
+		if ( !e.Pressed || e.Button != "escape" ) return;
+
+		_renaming = false;
+		StateHasChanged();
+		e.StopPropagation = true;
+	}
+
+	//The pointer
+
+	//Whether a press landed on one of the row's buttons, which are theirs and not the row's.
+	bool OnButton( PanelEvent e )
+	{
+		for ( var panel = e.Target as Panel; panel is not null && panel != this; panel = panel.Parent )
+			if ( panel is ToolbarButton || panel is TextField ) return true;
+
+		return false;
+	}
+
+	void OnDown( PanelEvent e )
+	{
+		if ( e is not MousePanelEvent mouse || OnButton( e ) ) return;
+
+		if ( mouse.MouseButton == MouseButtons.Left )
+		{
+			_pressed = true;
+			_carrying = false;
+			_pressAt = Application.CursorPosition;
+
+			List?.Select( Animation );
+			e.StopPropagation();
+		}
+		else if ( mouse.MouseButton == MouseButtons.Right )
+		{
+			List?.Select( Animation );
+			OpenContextMenu();
+			e.StopPropagation();
+		}
+	}
+
+	void OnUp( PanelEvent e ) => _pressed = false;
+
+	void OnDoubleClick( PanelEvent e )
+	{
+		if ( e is not MousePanelEvent { MouseButton: MouseButtons.Left } || OnButton( e ) ) return;
+
+		_pressed = false;
+		StartRename();
+		e.StopPropagation();
+	}
+
+	//A press that travels is a drag.
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( !_pressed || _carrying ) return;
+
+		if ( ( Application.MouseButtons & MouseButtons.Left ) == 0 )
+		{
+			_pressed = false;
+			return;
+		}
+
+		if ( Application.CursorPosition.Distance( _pressAt ) <= 10.0f ) return;
+
+		_carrying = true;
+
+		EditorDrag.Begin( this, new DragData { Text = Animation.Name, Object = new AnimationDragData( Animation ) }, null );
+	}
+
+	void OpenContextMenu()
+	{
+		var menu = new Menu();
+
+		menu.AddOption( "Rename", "edit", StartRename );
+		menu.AddOption( "Duplicate", "content_copy", () => List?.PromptDuplicate( Animation ) );
+		menu.AddOption( "Delete", "delete", () => List?.PromptDelete( Animation ) );
+
+		menu.OpenAtCursor();
+	}
+
+	//Being dropped on
+
+	public bool AcceptEditorDrops => true;
+
+	public DropAction OnEditorDragHover( Widget.DragEvent ev )
+	{
+		var other = Dragged( ev );
+		var valid = other is not null && other != Animation;
+
+		SetDropTarget( valid );
+
+		return valid ? DropAction.Move : DropAction.Ignore;
+	}
+
+	public void OnEditorDragLeave() => SetDropTarget( false );
+
+	public void OnEditorDragDrop( Widget.DragEvent ev )
+	{
+		SetDropTarget( false );
+
+		if ( Dragged( ev ) is { } other && other != Animation )
+			List?.MoveBefore( other, Animation );
+	}
+
+	void SetDropTarget( bool on )
+	{
+		if ( _dropTarget == on ) return;
+
+		_dropTarget = on;
+		StateHasChanged();
+	}
+
+	static Sprite.Animation Dragged( Widget.DragEvent ev ) => ( ev.Data?.Object as AnimationDragData )?.Animation;
+}

@@ -1,0 +1,74 @@
+AssetFilterTypesPopup.popup-panel,
+.asset-filter-types {
+	width: 220px;
+	min-width: 220px;
+	transition: none;
+	transform: none;
+
+	&:intro,
+	&:outro {
+		transition: none;
+		transform: none;
+		opacity: 1;
+		margin-top: 0px;
+	}
+
+	> .body {
+		flex-direction: column;
+		flex-shrink: 0;
+		padding: 6px 0px;
+		pointer-events: all;
+	}
+
+	.head {
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		padding: 2px 10px 6px;
+		pointer-events: none;
+
+		> .heading {
+			flex-grow: 1;
+			min-width: 0;
+			color: $text-light;
+			font-size: 12px;
+			font-weight: 600;
+			pointer-events: none;
+		}
+	}
+
+	.type {
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		min-height: $control-row-height;
+		padding: 0px 10px;
+		cursor: pointer;
+		pointer-events: all;
+
+		&:hover {
+			background-color: $veil-hover;
+		}
+
+		//Chosen reads the same way a chosen category does: the picked plate.
+		&.on {
+			background-color: $picked;
+
+			> .name { color: $text; }
+		}
+
+		> .name {
+			flex-grow: 1;
+			font-size: $type-body;
+			color: $text-control;
+			@include one-line;
+			pointer-events: none;
+		}
+	}
+}
+
+//The base sheet centres a side-opened popup on its anchor; ours sits level with it.
+AssetFilterTypesPopup.popup-panel.left,
+AssetFilterTypesPopup.popup-panel.right {
+	transform: none;
+}

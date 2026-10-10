@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <VersionPrefix>1.0.1</VersionPrefix>
+    <TargetFramework>net7.0</TargetFramework>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AssemblyName>Rinten.Client</AssemblyName>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <NoWarn>1701;1702;1591</NoWarn>
+    <LangVersion>14</LangVersion>
+    <OutputPath>..\..\game\bin\managed</OutputPath>
+		<RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+		<EnableNETAnalyzers>false</EnableNETAnalyzers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rinten.Engine\Rinten.Engine.csproj" />
+    <ProjectReference Include="..\Rinten.Event\Rinten.Event.csproj" />
+    <ProjectReference Include="..\Rinten.Game\Rinten.Game.csproj" />
+  </ItemGroup>
+
+</Project>

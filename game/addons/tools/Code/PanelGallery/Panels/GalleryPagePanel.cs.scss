@@ -1,0 +1,285 @@
+﻿GalleryPagePanel,
+.gallery-page
+{
+	flex-direction: column;
+	flex-grow: 1;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	pointer-events: all;
+	color: $ink;
+
+	> .page-header
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		padding: 20px 32px 12px 32px;
+		border-bottom: 1px solid $edge;
+
+		> .title
+		{
+			font-size: $type-large;
+			font-weight: 600;
+			color: $ink;
+		}
+
+		> .description
+		{
+			margin-top: 4px;
+			font-size: 12px;
+			color: $ink-dim;
+		}
+	}
+
+	> .cards
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		gap: 16px;
+		padding: 16px 32px 32px 32px;
+		overflow-x: hidden;
+		overflow-y: scroll;
+
+		> *
+		{
+			flex-shrink: 0;
+		}
+	}
+
+	//── what the hand-written examples are made of ───────────────────────── Here rather than on each example:
+	//an example is a plain panel with classes on it and no sheet of its own, and a sheet falls down the tree.
+
+	.example
+	{
+		flex-direction: column;
+		gap: 8px;
+		width: 100%;
+		min-width: 0;
+
+		> *
+		{
+			flex-shrink: 0;
+		}
+
+		&.row
+		{
+			flex-direction: row;
+			flex-wrap: wrap;
+			align-items: center;
+		}
+	}
+
+	.example-note
+	{
+		font-size: $type-small;
+		color: $ink-faint;
+	}
+
+	.swatch
+	{
+		flex-direction: column;
+		justify-content: flex-end;
+		width: 96px;
+		height: 64px;
+		padding: 4px 6px;
+		border-radius: $radius-2;
+		border: 1px solid $edge;
+
+		> .name
+		{
+			font-size: $type-micro;
+			color: $ink;
+			text-shadow: 0px 1px 2px rgba( 0, 0, 0, 0.8 );
+			white-space: nowrap;
+			overflow: hidden;
+		}
+
+		> .value
+		{
+			font-size: $type-micro;
+			color: $ink-dim;
+			text-shadow: 0px 1px 2px rgba( 0, 0, 0, 0.8 );
+		}
+	}
+
+	.tile
+	{
+		align-items: center;
+		justify-content: center;
+		width: 120px;
+		height: 72px;
+		padding: 8px;
+		font-size: $type-small;
+		color: $ink-dim;
+		text-align: center;
+	}
+
+	//A box of a set height: what is taller than it scrolls inside it rather than spilling over the readout under the card.
+	.fixed-height
+	{
+		height: 260px;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: scroll;
+	}
+
+	.tall-height
+	{
+		height: 420px;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: scroll;
+	}
+
+	.list-demo
+	{
+		flex-direction: column;
+		width: 100%;
+		border-radius: $radius-2;
+		border: 1px solid $edge;
+
+		.list-row
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 8px;
+			height: $list-row-height;
+			padding: 0px 8px;
+			font-size: 12px;
+			color: $ink-dim;
+
+			> .material-icon { font-size: $type-default; }
+		}
+	}
+
+	.icon-grid
+	{
+		flex-direction: row;
+		flex-wrap: wrap;
+		gap: 6px;
+
+		> .icon-cell
+		{
+			flex-direction: column;
+			align-items: center;
+			width: 72px;
+			gap: 4px;
+			padding: 6px 0px;
+			border-radius: $radius-2;
+
+			> .material-icon { font-size: 22px; color: $ink; }
+			> .name { font-size: $type-micro; color: $ink-faint; white-space: nowrap; overflow: hidden; }
+
+			&:hover { background-color: $veil-hover; }
+		}
+	}
+
+	.key-echo
+	{
+		align-items: center;
+		justify-content: center;
+		height: 96px;
+		border-radius: $radius-2;
+		border: 1px dashed $edge-lit;
+		font-size: $type-body;
+		color: $ink-dim;
+
+		&:focus
+		{
+			border-color: $edge-focus;
+			color: $ink;
+		}
+	}
+
+	.drop-source
+	{
+		align-items: center;
+		justify-content: center;
+		width: 140px;
+		height: 48px;
+		border-radius: $radius-2;
+		background-color: $slab;
+		color: $ink;
+		cursor: pointer;
+	}
+
+	.drop-target
+	{
+		align-items: center;
+		justify-content: center;
+		flex-grow: 1;
+		height: 96px;
+		border-radius: $radius-2;
+		border: 2px dashed $edge;
+		color: $ink-faint;
+		transition: all $fast $ease;
+
+		&.is-drop-target
+		{
+			border-color: $accent;
+			color: $ink;
+		}
+
+		&.has-dropped
+		{
+			border-color: $green;
+		}
+	}
+
+	.type-scale
+	{
+		flex-direction: column;
+		gap: 2px;
+
+		> * { color: $ink; }
+	}
+
+	//Rinten.UI.Form is dressed by the base addon's form.scss, which a game loads and the editor does not;
+	//without it the rows fall into a line. The same shape as that sheet, in the editor's own tokens.
+	.form
+	{
+		flex-direction: column;
+		align-items: stretch;
+		gap: 4px;
+
+		> .field-header
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 6px;
+			padding: 8px 0px 2px 0px;
+			font-size: 12px;
+			font-weight: 600;
+			color: $ink;
+		}
+
+		> .field
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 8px;
+			min-height: $row;
+
+			> .label
+			{
+				flex-shrink: 0;
+				width: 120px;
+				font-size: 12px;
+				color: $ink-dim;
+			}
+
+			> .control
+			{
+				flex-direction: column;
+				flex-grow: 1;
+				min-width: 0;
+			}
+		}
+	}
+}

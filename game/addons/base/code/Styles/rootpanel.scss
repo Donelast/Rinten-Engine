@@ -1,0 +1,241 @@
+﻿
+
+RootPanel
+{
+	font-family: Roboto;
+	color: white;
+}
+
+IconPanel, i
+{
+	font-family: Material Icons;
+	background-position: center;
+	background-size: contain;
+}
+
+.tooltip
+{
+	background-color: rgba( black, 0.8 );
+	border: 1px solid rgba( #555, 0.1 );
+	padding: 10px;
+	border-radius: 4px;
+	color: white;
+	font-family: Inter;
+	font-weight: bold;
+	transition: opacity 0.09s ease;
+	opacity: 1;
+	margin: 0px;
+
+	&:intro, &:outro
+	{
+		opacity: 0;
+	}
+}
+
+.textentry
+{
+	cursor: text;
+	align-items: center;
+	justify-content: center;
+	white-space: nowrap;
+	overflow: hidden;
+	flex-direction: row;
+	position: relative;
+	padding: 10px;
+
+	&.disabled
+	{
+		cursor: default;
+	}
+
+	&.is-multiline
+	{
+		align-items: flex-start;
+		white-space: normal;
+
+		//Scrolls like a textarea: the label grows to its text and the entry scrolls
+		//it. scrollbar-width stays 0, so there is no bar unless a sheet asks for one.
+		overflow-y: scroll;
+	}
+
+	.content-label,
+	.placeholder
+	{
+		flex-grow: 1;
+	}
+
+	.placeholder
+	{
+		opacity: 0.2;
+		pointer-events: none;
+	}
+
+	//The overlay the placeholder rides on. Its padding mirrors the entry's own, so the placeholder stands exactly where typed text will start.
+	.placeholder-wrap
+	{
+		padding: 10px;
+	}
+
+	.iconpanel
+	{
+		position: absolute;
+		right: 0;
+		padding-right: 10px;
+		pointer-events: none;
+
+		&.clearbutton
+		{
+			color: #fff;
+			pointer-events: all;
+			cursor: pointer;
+			opacity: 0.1;
+
+			&:hover
+			{
+				opacity: 0.5;
+			}
+
+			&:active
+			{
+				opacity: 1;
+			}
+		}
+	}
+
+	&:empty
+	{
+		.clearbutton
+		{
+			display: none;
+		}
+	}
+
+	&.has-icon
+	{
+		padding-right: 30px;
+	}
+
+	.content-label,
+	.prefix-label,
+	.suffix-label,
+	.placeholder
+	{
+		overflow: hidden;
+	}
+
+	.content-label
+	{
+		order: 1;
+	}
+
+	.suffix-label
+	{
+		order: 2;
+	}
+
+	.prefix-label,
+	.suffix-label
+	{
+		flex-shrink: 0;
+		opacity: 0.5;
+	}
+
+	&.invalid
+	{
+		box-shadow: 0px 0px 1px 2px #f8356b;
+	}
+}
+
+.popup-panel
+{
+	background-color: #1b202c;
+	flex-direction: column;
+	color: #8e9ec2;
+	transition: none;
+	position: absolute;
+	z-index: 2000;
+	min-height: 20px;
+	min-width: 10px;
+	overflow: scroll;
+	pointer-events: all;
+	box-shadow: 3px 3px 64px #000;
+	border-radius: 4px;
+
+	&.medium
+	{
+		max-width: 300px;
+	}
+
+	&.center-horizontal
+	{
+		transform-origin: top center;
+	}
+
+	&.below-center
+	{
+		transform: translateX( -50% );
+		transform-origin: 0% 0%;
+	}
+
+	&.above-left
+	{
+		transform-origin: 0% 100%;
+	}
+
+	&.above-center
+	{
+		transform: translateX( -50% );
+		transform-origin: 0% 100%;
+	}
+
+	&.left
+	{
+		transform-origin: 100% 50%;
+		transform: translate( 00% -50% );
+	}
+
+	&.right
+	{
+		transform-origin: 0 50%;
+		transform: translate( 0% -50% );
+	}
+
+	//A popup is up or it is not; there is nothing to watch on the way in or out.
+	&:intro,
+	&:outro
+	{
+		transition: none;
+	}
+
+	&.below-stretch
+	{
+		transform-origin: 0% 0%;
+	}
+
+	> .canvas
+	{
+		flex-direction: column;
+	}
+
+	.information
+	{
+		padding: 16px;
+		font-size: 14px;
+		opacity: 0.5;
+	}
+
+	button
+	{
+		padding: 2px 8px;
+		cursor: pointer;
+		font-family: Inter;
+		font-weight: 600;
+		flex-shrink: 0;
+
+		&:hover
+		{
+			background-color: #08f;
+			color: #fff;
+		}
+	}
+}

@@ -1,0 +1,203 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Cursors" ), Icon( "mouse" )]
+@attribute [StyleSheet( "CursorCategory.razor.scss" )]
+@using Editor.ProjectSettingsUI
+@inherits ProjectSettingsCategoryPanel
+
+<root class="project-settings-category">
+	<div class="body" @ref="Body">
+		<SettingsCalloutPanel Html="@IntroHtml" />
+
+		<label class="settings-section-header">Custom Cursors</label>
+		<div class="custom-list">
+			@if ( CustomCursors.Length == 0 )
+			{
+				<label class="empty">No custom cursors yet - enter a name below to create one.</label>
+			}
+			else
+			{
+				@foreach ( var kv in CustomCursors )
+				{
+					var key = kv.Key;
+					<CursorEntryCard
+						Title="@DisplayName( key )"
+						GetCursor="@GetCursorFor( key )"
+						SetCursor="@SetCursorFor( key )"
+						CanDelete="@true"
+						OnRemove="@RemoveCursorFor( key )"
+						OnPropertyChanged="@OnCursorPropertyChanged" />
+				}
+			}
+		</div>
+
+		<div class="custom-footer">
+			<TextField @ref="nameField" Placeholder="Cursor Name..." />
+			<div class="btn @(CanAddName ? null : "disabled")" onclick="@AddCursor">
+				<label class="material-icon">add</label>
+			</div>
+		</div>
+
+		<label class="settings-section-header">System Cursor Overrides</label>
+		<SettingsCalloutPanel Html="Override the built-in system cursors with your own images." />
+
+		<div class="system-list" @ref="systemListHost"></div>
+	</div>
+</root>
+
+@code
+{
+	const string IntroHtml =
+		"<p>Define custom cursors for your game. You can register new cursor types or override built-in system cursors.</p>" +
+		"<p>Set the cursor at runtime with <b>Mouse.CursorType = \"name\"</b></p>";
+
+	CursorSettings settings;
+	TextField nameField;
+	Panel systemListHost;
+	string newCursorName = "";
+	string builtSystemListFor;
+
+	KeyValuePair<string, CursorSettings.Cursor>[] CustomCursors =>
+		settings?.Cursors
+			.Where( kv => !CursorDefinitions.SystemCursors.ContainsKey( kv.Key.ToLower() ) )
+			.ToArray() ?? [];
+
+	bool CanAddName => IsValidName( newCursorName );
+
+	protected override void OnInit( Project project )
+	{
+		settings = EditorUtility.LoadProjectSettings<CursorSettings>( "Cursors.config" );
+		settings.Cursors ??= [];
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+		WireNameField();
+		RebuildSystemList();
+	}
+
+	void RebuildSystemList()
+	{
+		if ( !systemListHost.IsValid() || settings is null )
+			return;
+
+		var key = string.Join( ',', settings.Cursors.Keys.OrderBy( x => x ) );
+		if ( builtSystemListFor == key )
+			return;
+
+		builtSystemListFor = key;
+		systemListHost.DeleteChildren();
+
+		foreach ( var name in CursorDefinitions.SystemCursors.Keys )
+		{
+			if ( settings.Cursors.ContainsKey( name ) )
+			{
+				var card = systemListHost.AddChild<CursorEntryCard>();
+				card.Title = DisplayName( name );
+				card.GetCursor = GetCursorFor( name );
+				card.SetCursor = SetCursorFor( name );
+				card.CanDelete = false;
+				card.OnRemove = RemoveCursorFor( name );
+				card.OnPropertyChanged = OnCursorPropertyChanged;
+				continue;
+			}
+
+			var row = systemListHost.AddChild<Panel>();
+			row.AddClass( "cursor-system-row" );
+
+			var preview = row.AddChild<CursorPreviewPanel>();
+			preview.AddClass( "system-cursor-preview" );
+			preview.SystemCursor = name;
+
+			var nameLabel = row.AddChild<Rinten.UI.Label>();
+			nameLabel.AddClass( "name" );
+			nameLabel.Text = DisplayName( name );
+
+			var btn = row.AddChild<Panel>();
+			btn.AddClass( "btn" );
+			var cursorName = name;
+			btn.AddEventListener( "onclick", _ => OverrideSystemCursor( cursorName ) );
+
+			var icon = btn.AddChild<Rinten.UI.Label>();
+			icon.AddClass( "material-icon" );
+			icon.Text = "edit";
+		}
+	}
+
+	void WireNameField()
+	{
+		if ( !nameField.IsValid() ) return;
+
+		nameField.ValueChanged = text =>
+		{
+			newCursorName = text ?? "";
+			StateHasChanged();
+		};
+		nameField.Submitted = _ => AddCursor();
+		nameField.Value = newCursorName;
+	}
+
+	bool IsValidName( string text )
+	{
+		var name = text?.Trim();
+		if ( string.IsNullOrWhiteSpace( name ) ) return false;
+		if ( settings.Cursors.ContainsKey( name ) ) return false;
+		if ( CursorDefinitions.SystemCursors.ContainsKey( name.ToLower() ) ) return false;
+		if ( CursorDefinitions.SystemCursors.Values.Any( aliases => aliases.Contains( name.ToLower() ) ) ) return false;
+		return true;
+	}
+
+	void AddCursor()
+	{
+		var name = newCursorName?.Trim();
+		if ( !IsValidName( name ) ) return;
+
+		settings.Cursors[name] = new CursorSettings.Cursor();
+		newCursorName = "";
+		builtSystemListFor = null;
+		if ( nameField.IsValid() ) nameField.Value = "";
+		StateHasChanged();
+	}
+
+	void OverrideSystemCursor( string name )
+	{
+		settings.Cursors[name] = new CursorSettings.Cursor();
+		builtSystemListFor = null;
+		StateHasChanged();
+	}
+
+	void RemoveCursor( string name )
+	{
+		settings.Cursors.Remove( name );
+		builtSystemListFor = null;
+		StateHasChanged();
+	}
+
+	Func<CursorSettings.Cursor> GetCursorFor( string name ) => () => settings.Cursors[name];
+
+	Action<CursorSettings.Cursor> SetCursorFor( string name ) => c => settings.Cursors[name] = c;
+
+	Action RemoveCursorFor( string name ) => () => RemoveCursor( name );
+
+	void OnCursorPropertyChanged( SerializedProperty prop )
+	{
+		builtSystemListFor = null;
+		StateHasChanged( prop );
+	}
+
+	static string DisplayName( string name )
+	{
+		if ( CursorDefinitions.SystemCursors.TryGetValue( name, out var aliases ) && aliases.Length > 0 )
+			return $"{name}, {string.Join( ", ", aliases )}";
+
+		return name;
+	}
+
+	public override void OnSave()
+	{
+		EditorUtility.SaveProjectSettings( settings, "Cursors.config" );
+		base.OnSave();
+	}
+
+	protected override int BuildHash() => HashCode.Combine( settings?.Cursors?.Count, newCursorName );
+}

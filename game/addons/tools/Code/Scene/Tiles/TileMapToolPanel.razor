@@ -1,0 +1,139 @@
+@using Rinten.Tiles
+@using System
+@using System.Linq
+@using Rinten
+@using Rinten.UI
+@using Editor.Inspectors
+@namespace Editor.Tiles
+@inherits Panel
+
+@* The tile map tool's sidebar: which map and layer are painted, the layer's own
+   settings, the sheet to pick a tile off, and the terrains of its set. What the
+   buttons do is TileMapToolPanel.razor.cs. *@
+
+<root class="tilemap-tool">
+
+	<div class="heading">
+		<i>grid_on</i>
+		<label class="title">Tile Map</label>
+	</div>
+
+	@if ( tool.MadeByCode is { } generated )
+	{
+		<div class="section">
+			<label class="note">"@generated.GameObject.Name" is built by code when the scene starts and is not saved - it is not painted. Paint on a tile map of your own.</label>
+		</div>
+	}
+
+	@if ( !TileMapTool.Map.IsValid() )
+	{
+		<div class="section">
+			<label class="caption">New tile map</label>
+
+			@if ( Sets.Count == 0 )
+			{
+				<label class="note">The project has no tile sets. Make one in the asset browser (New, 2D, Tile Set) and give it a sheet.</label>
+			}
+			else
+			{
+				<div class="chips">
+					@foreach ( var (asset, offered) in Sets )
+					{
+						<div class="chip @(ReferenceEquals( offered, NewSet ) ? "selected" : "")" onclick=@(() => TileMapTool.NewMapSet = offered)>
+							<i>grid_view</i>
+							<label>@asset.Name</label>
+						</div>
+					}
+				</div>
+			}
+
+			<div class="button" onclick=@(() => tool.CreateMap( NewSet ))><i>add</i><label>New Tile Map</label></div>
+		</div>
+	}
+	else
+	{
+		<div class="section">
+			<label class="caption">Layers</label>
+
+			<div class="chips">
+				@for ( var i = 0; i < TileMapTool.Map.Layers.Count; i++ )
+				{
+					var at = i;
+					var layer = TileMapTool.Map.Layers[i];
+					<div class="chip @(at == TileMapTool.LayerIndex ? "selected" : "")" onclick=@(() => SelectLayer( at ))>
+						<i>@( layer?.Visible == false ? "visibility_off" : "layers" )</i>
+						<label>@( layer?.Name ?? "?" )</label>
+					</div>
+				}
+
+				<div class="chip add" onclick=@AddLayer><i>add</i></div>
+			</div>
+
+			@if ( LayerSheet is not null )
+			{
+				<ControlSheet Target=@LayerSheet />
+			}
+		</div>
+
+		<div class="section">
+			<label class="caption">Tile set of the layer</label>
+
+			@if ( Sets.Count == 0 )
+			{
+				<label class="note">The project has no tile sets. Make one in the asset browser (New, 2D, Tile Set) and give it a sheet.</label>
+			}
+			else
+			{
+				<div class="chips">
+					@foreach ( var (asset, offered) in Sets )
+					{
+						<div class="chip @(ReferenceEquals( offered, TileMapTool.Layer?.TileSet ) ? "selected" : "")" onclick=@(() => tool.SetLayerTileSet( offered ))>
+							<i>grid_view</i>
+							<label>@asset.Name</label>
+						</div>
+					}
+				</div>
+			}
+		</div>
+
+		@if ( TileMapTool.Layer?.TileSet is { } set )
+		{
+			@if ( set.Sheet is null || set.Count == 0 )
+			{
+				<div class="section">
+					<label class="note">This tile set has no sheet to cut tiles from yet.</label>
+					<div class="button" onclick=@(() => OpenTileSet( set ))><i>edit</i><label>Open Tile Set</label></div>
+				</div>
+			}
+			else
+			{
+				<div class="section">
+					<label class="caption">Tile @TileMapTool.Tile@( set.Info( TileMapTool.Tile )?.Name is { Length: > 0 } tileName ? $" - {tileName}" : "" )</label>
+					<TilePalette TileSet=@set Selected=@TileMapTool.Tile OnPick=@PickTile />
+				</div>
+
+				@if ( set.Terrains?.Count > 0 )
+				{
+					<div class="section">
+						<label class="caption">Terrain</label>
+						<div class="chips">
+							@foreach ( var terrain in set.Terrains )
+							{
+								var name = terrain?.Name;
+								<div class="chip @(IsTerrain( name ) ? "selected" : "")" onclick=@(() => TileMapTool.TerrainName = name)>
+									<i>terrain</i>
+									<label>@name</label>
+								</div>
+							}
+						</div>
+					</div>
+				}
+			}
+		}
+
+		<div class="section">
+			<label class="note">@BrushHint</label>
+		</div>
+	}
+
+</root>

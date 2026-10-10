@@ -1,0 +1,165 @@
+﻿namespace Rinten.Audio;
+
+internal sealed class DirectSoundModel : IDisposable
+{
+	//ISO 9613-1 air absorption coefficients (20°C, 50% RH), nepers/m. World units are metres, so the coefficients apply directly.
+	const float AirAbsLow = 0.000024f;
+	const float AirAbsMid = 0.000084f;
+	const float AirAbsHigh = 0.00012f;
+
+
+
+	public Transform Transform { get; private set; }
+
+	/// <summary>Nothing to let go of - it is managed memory - but the mixing thread disposes what it retires.</summary>
+	public void Dispose()
+	{
+	}
+
+	FrequencyBands? _transmission;
+	FrequencyBands _targetTransmission = FrequencyBands.One;
+
+	FrequencyBands? _smoothedDiffraction;
+	FrequencyBands _diffractionTarget = FrequencyBands.One;
+
+	bool _firstTraceApplied;
+
+	internal static bool GlobalOcclusionEnabled { get; set; } = true;
+	internal FrequencyBands? SmoothedTransmission => _transmission;
+	internal FrequencyBands? SmoothedDiffraction => _smoothedDiffraction;
+	internal bool HasFirstTrace => _firstTraceApplied;
+	internal float AvgWalls { get; private set; }
+
+	internal void SetTargetTransmission( FrequencyBands value, float avgWalls = 0f )
+	{
+		_targetTransmission = value;
+		AvgWalls = avgWalls;
+		if ( !_firstTraceApplied )
+			_transmission = value;
+	}
+
+	internal int LastDiffractionProbes { get; private set; }
+	internal int LastDiffractionRays { get; private set; }
+
+	internal void SetTargetDiffraction( FrequencyBands value, int probesFound = 0, int probesTotal = 0 )
+	{
+		_diffractionTarget = value;
+		LastDiffractionProbes = probesFound;
+		LastDiffractionRays = probesTotal;
+		if ( !_firstTraceApplied ) _smoothedDiffraction = value;
+		_firstTraceApplied = true;
+	}
+
+	//Seed both bands before the first trace. GetParams uses Max, so seeding one alone gets masked.
+	//markTraced=true counts it as already traced (a measured prime); false leaves it for the sim.
+	internal void SetInitialOcclusion( FrequencyBands value, bool markTraced = false )
+	{
+		_targetTransmission = value;
+		_transmission = value;
+		_diffractionTarget = value;
+		_smoothedDiffraction = value;
+		if ( markTraced ) _firstTraceApplied = true;
+	}
+
+	public void Update( Transform transform )
+	{
+		Transform = transform;
+
+		var dt = RealTime.Delta;
+		if ( Occlusion && !ListenLocal && GlobalOcclusionEnabled && _firstTraceApplied )
+		{
+			_transmission = _transmission.Value.Decay( _targetTransmission, 0.15f, dt );
+			_smoothedDiffraction = _smoothedDiffraction.Value.Decay( _diffractionTarget, 0.8f, dt );
+		}
+		else if ( Occlusion && !ListenLocal && GlobalOcclusionEnabled )
+		{
+			_transmission = _targetTransmission;
+			_smoothedDiffraction = _diffractionTarget;
+		}
+		else
+		{
+			_firstTraceApplied = false;
+			_targetTransmission = FrequencyBands.One;
+			_transmission = _targetTransmission;
+			_diffractionTarget = FrequencyBands.One;
+			_smoothedDiffraction = _diffractionTarget;
+		}
+	}
+
+	public bool ListenLocal { get; set; }
+	public bool AirAbsorption { get; set; } = true;
+	public bool Occlusion { get; set; } = true;
+	public bool DistanceAttenuation { get; set; } = true;
+	public float ReverbAmount { get; set; } = 1.0f;
+	public float Distance { get; set; } = 15_000f;
+	public Curve Falloff { get; set; } = new(
+		new( 0, 1, 0, -1.8f ),
+		new( 0.05f, 0.22f, 3.5f, -3.5f ),
+		new( 0.2f, 0.04f, 0.16f, -0.16f ),
+		new( 1, 0 ) );
+
+	internal DirectSoundParams GetParams() => new()
+	{
+		Position = Transform.Position,
+		Distance = Distance,
+		Falloff = Falloff,
+		TransmissionBands = _transmission.HasValue && _smoothedDiffraction.HasValue
+			? FrequencyBands.Max( _transmission.Value, _smoothedDiffraction.Value )
+			: _transmission ?? _smoothedDiffraction ?? FrequencyBands.One,
+		DistanceAttenuation = DistanceAttenuation,
+		OcclusionEnabled = Occlusion,
+		AirAbsorption = AirAbsorption,
+		ReverbAmount = ReverbAmount,
+	};
+
+	/// <summary>The sound as it reaches the listener: faded with distance, dulled by the air, and let through whatever stands between. The three scales are the mixer's - how much of each its sounds are let have, nought to one.</summary>
+	public void Apply( in Listener listener, MultiChannelBuffer input, MultiChannelBuffer output,
+		float occlusionMultiplier, float distanceScale, float airScale, float inputGain, in DirectSoundParams p )
+	{
+		var listenerPos = listener.MixTransform.Position;
+		var distInUnits = p.Position.Distance( listenerPos );
+		var distInMeters = distInUnits;
+
+		distanceScale = distanceScale.Clamp( 0f, 1f );
+		airScale = airScale.Clamp( 0f, 1f );
+
+		var distAtten = p.DistanceAttenuation
+			? MathX.Lerp( 1f, p.Falloff.Evaluate( MathX.Clamp( distInUnits / p.Distance, 0f, 1f ) ), distanceScale )
+			: 1f;
+
+		var airLow = p.AirAbsorption ? MathX.Lerp( 1f, MathF.Exp( -AirAbsLow * distInMeters ), airScale ) : 1f;
+		var airMid = p.AirAbsorption ? MathX.Lerp( 1f, MathF.Exp( -AirAbsMid * distInMeters ), airScale ) : 1f;
+		var airHigh = p.AirAbsorption ? MathX.Lerp( 1f, MathF.Exp( -AirAbsHigh * distInMeters ), airScale ) : 1f;
+
+		var occlusion = 1f;
+		var txLow = 1f; var txMid = 1f; var txHigh = 1f;
+
+		if ( p.OcclusionEnabled )
+		{
+			var mul = occlusionMultiplier.Clamp( 0f, 1f );
+			var tx = p.TransmissionBands;
+
+			txLow = tx.Low;
+			txMid = tx.Mid;
+			txHigh = tx.High;
+
+			//SA formula: output = occlusion + (1-occlusion)*tx. We pass occlusion=1-mul so
+			//mul=1 (fully occluded) → SA sees occlusion=0 and applies transmission only.
+			occlusion = 1f - mul;
+		}
+
+		output.Silence();
+
+		//Every band, as one number each: what the air let through, and then what got past whatever is in the way.
+		var low = airLow * ( occlusion + ( ( 1.0f - occlusion ) * txLow ) );
+		var mid = airMid * ( occlusion + ( ( 1.0f - occlusion ) * txMid ) );
+		var high = airHigh * ( occlusion + ( ( 1.0f - occlusion ) * txHigh ) );
+
+		//The gain and the caller's own are applied together, one sample at a time: applied a buffer at a time they step, and a step is heard.
+		ours.Apply( distAtten * inputGain, low, mid, high, input, output );
+	}
+
+	//The filters and gain the sound is put through. Made once and kept, because it is where the gain it is sliding
+	//towards and the filters it is sliding through live - a new one every buffer would start from silence every buffer.
+	private readonly DirectEffect ours = new DirectEffect();
+}

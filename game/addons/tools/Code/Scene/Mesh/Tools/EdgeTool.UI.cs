@@ -1,0 +1,1129 @@
+using HalfEdgeMesh;
+
+namespace Editor.MeshEditor;
+
+partial class EdgeTool
+{
+	public override Panel CreateToolSidebarPanel()
+	{
+		return new EdgeSelectionPanel( GetSerializedSelection(), this );
+	}
+
+	public class EdgeSelectionPanel : ToolSettingsPanel
+	{
+		private readonly MeshEdge[] _edges = null;
+		private readonly List<IGrouping<MeshComponent, MeshEdge>> _edgeGroups;
+		private readonly List<MeshComponent> _components;
+		readonly MeshTool _tool;
+
+		[Range( 0, 16 ), Step( 1 ), WideMode]
+		private int NumCuts = 1;
+
+		public EdgeSelectionPanel( SerializedObject selection, EdgeTool tool )
+		{
+			AddTitle( "Edge Mode", "show_chart" );
+
+			//No move modes here: they are the strip beside the modes, which the mesh tool fills while a mode of its own has the view.
+
+			_tool = tool.Tool;
+
+			_edges = selection.Targets
+				.OfType<MeshEdge>()
+				.ToArray();
+
+			_edgeGroups = _edges.GroupBy( x => x.Component ).ToList();
+			_components = _edgeGroups.Select( x => x.Key ).ToList();
+
+			this.AddPivotGroup( tool );
+			this.AddPivotButtons( tool, _edges.Length > 0 );
+
+			//Two to a row, each with its word and its key - see ButtonGridPanel. They were a row of bare pictures per
+			//group, five across in a panel with room for four, and a picture alone is a thing to hover over to find out.
+			{
+				var grid = AddButtons( AddGroup( "Modify" ) );
+
+				AddButton( grid, "Dissolve", "remove_circle_outline", "mesh.dissolve", Dissolve, CanDissolve );
+				AddButton( grid, "Collapse", "compress", "mesh.collapse", Collapse, CanCollapse );
+				AddButton( grid, "Connect", "timeline", "mesh.connect", Connect, CanConnect );
+				AddButton( grid, "Extend", "open_in_full", "mesh.extend", Extend, CanExtend );
+			}
+
+			{
+				var grid = AddButtons( AddGroup( "Construct" ) );
+
+				AddButton( grid, "Merge", "merge", "mesh.merge", Merge, CanMerge );
+				AddButton( grid, "Split", "call_split", "mesh.split", Split, CanSplit );
+				AddButton( grid, "Snap Edge to Edge", "straighten", "mesh.snap-edge-to-edge", SnapEdgeToEdge, () => _edges.Length == 2 );
+				AddButton( grid, "Fill Hole", "format_color_fill", "mesh.fill-hole", FillHole, CanFillHole );
+				AddButton( grid, "Bridge", "linear_scale", "mesh.bridge-edges", BridgeEdges, CanBridgeEdges );
+			}
+
+			{
+				var grid = AddButtons( AddGroup( "Normals" ), 3 );
+
+				AddButton( grid, "Hard Normals", "crop_square", "mesh.hard-normals", HardNormals, HasEdges );
+				AddButton( grid, "Soft Normals", "blur_on", "mesh.soft-normals", SoftNormals, HasEdges );
+				AddButton( grid, "Default Normals", "settings_backup_restore", "mesh.default-normals", DefaultNormals, HasEdges );
+			}
+
+			{
+				var grid = AddButtons( AddGroup( "UV" ) );
+
+				AddButton( grid, "Weld UVs", "link", "mesh.edge-weld-uvs", WeldUVs, HasEdges );
+			}
+
+			{
+				var grid = AddButtons( AddGroup( "Selection" ) );
+
+				AddButton( grid, "Select Loop", "loop", "mesh.select-loop", SelectLoop, CanSelectLoop );
+				AddButton( grid, "Select Ring", "radio_button_unchecked", "mesh.select-ring", SelectRing, CanSelectRing );
+				AddButton( grid, "Select Ribs", "view_week", "mesh.select-ribs", SelectRibs, CanSelectRibs );
+				AddButton( grid, "Select Path", "route", "mesh.select-path", SelectPath, CanSelectPath );
+			}
+
+			{
+				var group = AddGroup( "Tools" );
+
+				var grid = AddButtons( group );
+
+				AddButton( grid, "Bevel", "rounded_corner", "mesh.edge-bevel", Bevel, CanBevel );
+				AddButton( grid, "Edge Cut Tool", "content_cut", "mesh.edge-cut-tool", OpenEdgeCutTool );
+				AddButton( grid, "Edge Arch", "looks", "mesh.edge-arch-tool", OpenEdgeArchTool, CanArch );
+				AddButton( grid, "Bridge", "linear_scale", "mesh.bridge-tool", OpenBridgeTool, CanBridgeEdges );
+
+				var extrude = AddButton( grid, "Extrude Along Path", "vertical_align_bottom", "mesh.path-extrude", PathExtrude, CanPathExtrude );
+				extrude.Tooltip += "<br/> <br/>Extrude the selected profile edges along a path defined by the selected path edges. Select the profile edges first, then the path edges.";
+
+				//The button and the count it cuts with, half each.
+				var cuts = group.AddRow();
+
+				AddButton( AddButtons( cuts, 1 ), "Quick Bevel", "bolt", "mesh.edge-quick-bevel", QuickBevel, CanBevel );
+
+				AddSheet( cuts ).AddPropertyRow( this.GetSerialized().GetProperty( nameof( NumCuts ) ) );
+			}
+
+			AddSheet( AddGroup( "Visualization" ).Content )
+				.AddPropertyRow( tool.GetSerialized().GetProperty( nameof( ShowSelectionBounds ) ) );
+
+			AddShortcuts(
+				("Loop Select", "Double Click"),
+				("Path Select", "Shift + Double Click"),
+				("Lasso Select", "Alt+Shift+Drag"),
+				("Lasso Deselect", "Alt+Ctrl+Drag"),
+				("Grow Selection", "Numpad +"),
+				("Shrink Selection", "Numpad -")
+			);
+
+			AddStretch();
+		}
+
+		//Whether anything is picked for the buttons that only need that.
+		bool HasEdges() => _edges.Length > 0;
+
+
+		[Shortcut( "mesh.bridge-tool", "ALT+B", typeof( SceneViewPanel ) )]
+		void OpenBridgeTool()
+		{
+			if ( !CanBridgeEdges() )
+				return;
+
+			var tool = new BridgeTool( _edges );
+			tool.Manager = _tool.Manager;
+			_tool.CurrentTool = tool;
+		}
+
+		[Shortcut( "mesh.select-all", "CTRL+A", typeof( SceneViewPanel ) )]
+		private void SelectAll()
+		{
+			using var scope = SceneEditorSession.Scope();
+			using var undoScope = SceneEditorSession.Active.UndoScope( "Select All Edges" ).Push();
+
+			var selection = SceneEditorSession.Active.Selection;
+			selection.Clear();
+
+			foreach ( var edgeGroup in _edgeGroups )
+			{
+				var edges = edgeGroup.Key.Mesh.HalfEdgeHandles;
+
+				foreach ( var edge in edges )
+				{
+					if ( edge.Index > edgeGroup.Key.Mesh.GetOppositeHalfEdge( edge ).Index )
+						continue;
+
+					selection.Add( new MeshEdge( edgeGroup.Key, edge ) );
+				}
+			}
+		}
+
+		[Shortcut( "mesh.edge-cut-tool", "C", typeof( SceneViewPanel ) )]
+		void OpenEdgeCutTool()
+		{
+			var tool = new EdgeCutTool( nameof( EdgeTool ) );
+			tool.Manager = _tool.Manager;
+			_tool.CurrentTool = tool;
+		}
+
+		private void SetNormals( PolygonMesh.EdgeSmoothMode mode )
+		{
+			using ( SceneEditorSession.Active.UndoScope( "Set Normals" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				foreach ( var edge in _edges )
+					edge.EdgeSmoothing = mode;
+			}
+		}
+
+		[Shortcut( "mesh.edge-weld-uvs", "CTRL+F", typeof( SceneViewPanel ) )]
+		private void WeldUVs()
+		{
+			if ( _edges.Length < 1 )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Weld UVs" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				foreach ( var group in _edgeGroups )
+				{
+					var component = group.Key;
+					var mesh = component.Mesh;
+					mesh.AverageEdgeUVs( group.Select( x => x.Handle ).ToList() );
+				}
+			}
+		}
+
+		[Shortcut( "mesh.edge-quick-bevel", "F", typeof( SceneViewPanel ) )]
+		private void QuickBevel()
+		{
+			if ( !CanBevel() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Quick Bevel Edges" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				var newEdges = new Dictionary<MeshComponent, List<HalfEdgeHandle>>();
+
+				var bevelWidth = EditorScene.GizmoSettings.GridSpacing;
+				int steps = NumCuts;
+				const float shape = 1.0f;
+				const bool softEdges = false;
+
+				foreach ( var group in _edgeGroups )
+				{
+					var component = group.Key;
+					var mesh = component.Mesh;
+					var edges = group.Select( x => x.Handle ).ToList();
+
+					var newOuterEdges = new List<HalfEdgeHandle>();
+					var newInnerEdges = new List<HalfEdgeHandle>();
+					var facesNeedingUVs = new List<FaceHandle>();
+					var newFaces = new List<FaceHandle>();
+
+					if ( !mesh.BevelEdges( edges, PolygonMesh.BevelEdgesMode.RemoveClosedEdges, steps, bevelWidth, shape, newOuterEdges, newInnerEdges, newFaces, facesNeedingUVs ) )
+						continue;
+
+					var smoothMode = softEdges
+						? PolygonMesh.EdgeSmoothMode.Soft
+						: PolygonMesh.EdgeSmoothMode.Default;
+
+					foreach ( var edgeHandle in newInnerEdges )
+					{
+						mesh.SetEdgeSmoothing( edgeHandle, smoothMode );
+					}
+
+					foreach ( var hFace in facesNeedingUVs )
+					{
+						mesh.TextureAlignToGrid( mesh.Transform, hFace );
+					}
+
+					mesh.ComputeFaceTextureParametersFromCoordinates( newFaces );
+
+					newEdges[component] = newOuterEdges.Concat( newInnerEdges ).ToList();
+				}
+
+				selection.Clear();
+				foreach ( var edgeGroup in newEdges )
+				{
+					foreach ( var edge in edgeGroup.Value )
+					{
+						selection.Add( new MeshEdge( edgeGroup.Key, edge ) );
+					}
+				}
+			}
+		}
+
+		private bool CanBevel()
+		{
+			return _edges.Length != 0;
+		}
+
+		[Shortcut( "mesh.edge-bevel", "ALT+F", typeof( SceneViewPanel ) )]
+		private void Bevel()
+		{
+			if ( !CanBevel() )
+				return;
+
+			var bevelEdges = new List<BevelEdges>();
+
+			foreach ( var group in _edgeGroups )
+			{
+				var component = group.Key;
+				var mesh = component.Mesh;
+
+				var newMesh = new PolygonMesh();
+				newMesh.Transform = mesh.Transform;
+				newMesh.MergeMesh( mesh, Transform.Zero, out _, out var newEdges, out _ );
+				var edges = group.Select( x => newEdges[x.Handle].Index ).ToList();
+
+				bevelEdges.Add( new BevelEdges()
+				{
+					Component = component,
+					Mesh = newMesh,
+					Edges = edges,
+				} );
+			}
+
+			var tool = new BevelTool( [.. bevelEdges] );
+			tool.Manager = _tool.Manager;
+			_tool.CurrentTool = tool;
+		}
+
+		private bool CanMerge()
+		{
+			if ( _edges.Length < 2 )
+				return false;
+
+			foreach ( var edge in _edges )
+			{
+				if ( !edge.IsValid() )
+					return false;
+
+				if ( !edge.IsOpen )
+					return false;
+			}
+
+			return true;
+		}
+
+		private static MeshEdge MergeMeshesOfEdges( MeshEdge edgeA, MeshEdge edgeB )
+		{
+			if ( edgeB.Component != edgeA.Component )
+			{
+				var meshA = edgeA.Component;
+				var meshB = edgeB.Component;
+
+				var transform = meshA.WorldTransform.ToLocal( meshB.WorldTransform );
+				meshA.Mesh.MergeMesh( meshB.Mesh, transform, out _, out var newHalfEdges, out _ );
+
+				meshB.DestroyGameObject();
+
+				edgeB = new MeshEdge( meshA, newHalfEdges[edgeB.Handle] );
+			}
+
+			return edgeB;
+		}
+
+		[Shortcut( "mesh.merge", "M", typeof( SceneViewPanel ) )]
+		private void Merge()
+		{
+			if ( !CanMerge() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			if ( _edges.Length == 2 )
+			{
+				var edgeA = _edges[0];
+				var edgeB = _edges[1];
+
+				var undoScope = SceneEditorSession.Active.UndoScope( "Merge Edges" );
+
+				if ( edgeA.Component != edgeB.Component )
+				{
+					undoScope = undoScope.WithComponentChanges( edgeA.Component )
+						.WithGameObjectDestructions( edgeB.Component.GameObject );
+				}
+				else
+				{
+					undoScope = undoScope.WithComponentChanges( [edgeA.Component, edgeB.Component] );
+				}
+
+				using ( undoScope.Push() )
+				{
+					edgeB = MergeMeshesOfEdges( edgeA, edgeB );
+					var mesh = edgeA.Component.Mesh;
+
+					if ( mesh.MergeEdges( edgeA.Handle, edgeB.Handle, out var hEdge ) )
+					{
+						var selection = SceneEditorSession.Active.Selection;
+						selection.Set( new MeshEdge( edgeA.Component, hEdge ) );
+					}
+				}
+
+				return;
+			}
+
+			var target = _components[0];
+			var vertexSet = new HashSet<VertexHandle>();
+			var vertices = new List<VertexHandle>();
+
+			using ( SceneEditorSession.Active.UndoScope( "Merge Edges" )
+				.WithComponentChanges( _components )
+				.WithGameObjectDestructions( _components.Skip( 1 ).Select( x => x.GameObject ).ToList() )
+				.Push() )
+			{
+				foreach ( var group in _edgeGroups )
+				{
+					Dictionary<VertexHandle, VertexHandle> remapVertices = null;
+					var sourceMesh = group.Key.Mesh;
+
+					if ( group.Key != target )
+					{
+						var transform = target.WorldTransform.ToLocal( group.Key.WorldTransform );
+						target.Mesh.MergeMesh( sourceMesh, transform, out remapVertices, out _, out _ );
+					}
+
+					foreach ( var edge in group )
+					{
+						sourceMesh.GetEdgeVertices( edge.Handle, out var a, out var b );
+
+						if ( remapVertices != null ) { a = remapVertices[a]; b = remapVertices[b]; }
+
+						if ( vertexSet.Add( a ) ) vertices.Add( a );
+						if ( vertexSet.Add( b ) ) vertices.Add( b );
+					}
+
+					if ( group.Key != target )
+					{
+						group.Key.DestroyGameObject();
+					}
+				}
+
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				var resultVertices = target.Mesh.MergeVerticesWithinDistance( vertices, 0.1f, false, false, out var finalVertices ) > 0 ? finalVertices : vertices;
+
+				var resultVertexSet = new HashSet<VertexHandle>( resultVertices );
+				var addedEdges = new HashSet<int>();
+				foreach ( var hVertex in resultVertices )
+				{
+					target.Mesh.GetEdgesConnectedToVertex( hVertex, out var edges );
+					foreach ( var hEdge in edges )
+					{
+						target.Mesh.GetEdgeVertices( hEdge, out var a, out var b );
+						if ( !resultVertexSet.Contains( a ) || !resultVertexSet.Contains( b ) )
+							continue;
+
+						var canonical = Math.Min( hEdge.Index, target.Mesh.GetOppositeHalfEdge( hEdge ).Index );
+						if ( addedEdges.Add( canonical ) )
+							selection.Add( new MeshEdge( target, hEdge ) );
+					}
+				}
+			}
+		}
+
+		private bool CanSplit()
+		{
+			return _edges.Length != 0;
+		}
+
+		[Shortcut( "mesh.split", "ALT+N", typeof( SceneViewPanel ) )]
+		private void Split()
+		{
+			if ( !CanSplit() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Split Edges" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				foreach ( var group in _edgeGroups )
+				{
+					var mesh = group.Key.Mesh;
+					mesh.SplitEdges( group.Select( x => x.Handle ).ToArray(), out var newEdgesA, out var newEdgesB );
+					if ( newEdgesA is not null )
+					{
+						foreach ( var hEdge in newEdgesA )
+							selection.Add( new MeshEdge( group.Key, hEdge ) );
+					}
+					if ( newEdgesB is not null )
+					{
+						foreach ( var hEdge in newEdgesB )
+							selection.Add( new MeshEdge( group.Key, hEdge ) );
+					}
+				}
+			}
+		}
+
+		[Shortcut( "editor.delete", "DEL", typeof( SceneViewPanel ) )]
+		private void DeleteSelection()
+		{
+			var groups = _edges.GroupBy( face => face.Component );
+
+			if ( !groups.Any() )
+				return;
+
+			var components = groups.Select( x => x.Key ).ToArray();
+
+			using ( SceneEditorSession.Active.UndoScope( "Delete Edges" ).WithComponentChanges( components ).Push() )
+			{
+				foreach ( var group in groups )
+					group.Key.Mesh.RemoveEdges( group.Select( x => x.Handle ) );
+			}
+		}
+
+		private bool CanConnect()
+		{
+			return _edges.Length > 1;
+		}
+
+		[Shortcut( "mesh.connect", "V", typeof( SceneViewPanel ) )]
+		private void Connect()
+		{
+			if ( !CanConnect() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Connect Edges" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				foreach ( var group in _edgeGroups )
+				{
+					var mesh = group.Key.Mesh;
+					mesh.ConnectEdges( group.Select( x => x.Handle ).ToArray(), out var newEdges );
+					foreach ( var hEdge in newEdges )
+						selection.Add( new MeshEdge( group.Key, hEdge ) );
+
+					mesh.ComputeFaceTextureCoordinatesFromParameters();
+				}
+			}
+		}
+
+		private bool CanExtend()
+		{
+			return _edges.Any( x => x.IsOpen );
+		}
+
+		[Shortcut( "mesh.extend", "N", typeof( SceneViewPanel ) )]
+		private void Extend()
+		{
+			if ( !CanExtend() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			var amount = EditorScene.GizmoSettings.GridSpacing;
+
+			using ( SceneEditorSession.Active.UndoScope( "Extend Edges" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				foreach ( var group in _edgeGroups )
+				{
+					if ( !group.Key.Mesh.ExtendEdges( group.Select( x => x.Handle ).ToArray(), amount, out var newEdges, out _ ) )
+						continue;
+
+					if ( newEdges is not null )
+					{
+						foreach ( var hEdge in newEdges )
+						{
+							selection.Add( new MeshEdge( group.Key, hEdge ) );
+						}
+					}
+				}
+			}
+		}
+
+		[Shortcut( "mesh.bridge-edges", "B", typeof( SceneViewPanel ) )]
+		void BridgeEdges()
+		{
+			if ( !CanBridgeEdges() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			var groups = _edges.GroupBy( e => e.Component ).ToList();
+			if ( groups.Count == 2 && groups[0].Count() != groups[1].Count() )
+				return;
+
+			var undo = SceneEditorSession.Active.UndoScope( "Bridge Edges" )
+				.WithComponentChanges( groups[0].Key );
+
+			if ( groups.Count == 2 )
+				undo = undo.WithGameObjectDestructions( groups[1].Key.GameObject );
+
+			using ( undo.Push() )
+			{
+				if ( groups.Count == 2 )
+				{
+					var compA = groups[0].Key;
+					var compB = groups[1].Key;
+
+					var meshA = compA.Mesh;
+					var meshB = compB.Mesh;
+
+					var edgesA = groups[0].Select( e => e.Handle ).ToList();
+					var edgesB = groups[1].Select( e => e.Handle ).ToList();
+
+					var transform = compA.WorldTransform.ToLocal( compB.WorldTransform );
+					meshA.MergeMesh( meshB, transform, out _, out var remapEdges, out _ );
+
+					for ( int i = 0; i < edgesB.Count; i++ )
+						edgesB[i] = remapEdges[edgesB[i]];
+
+					compB.DestroyGameObject();
+
+					meshA.BridgeEdges( edgesA, edgesB );
+				}
+				else
+				{
+					var comp = groups[0].Key;
+					var mesh = comp.Mesh;
+
+					var edges = groups[0].Select( e => e.Handle ).ToList();
+
+					mesh.FindOpenEdgeIslands( edges, out var fullIslands );
+
+					if ( fullIslands.Count == 2 )
+					{
+						mesh.BridgeEdges( fullIslands[0], fullIslands[1] );
+					}
+					else if ( edges.Count == 2 )
+					{
+						mesh.BridgeEdges( edges[0], edges[1], out _ );
+					}
+				}
+			}
+		}
+		bool CanBridgeEdges()
+		{
+			if ( _edges.Length < 2 )
+				return false;
+
+			var groups = _edges.GroupBy( e => e.Component ).ToList();
+			if ( groups.Count is < 1 or > 2 )
+				return false;
+
+			if ( _edges.Any( e => !e.IsValid() || !e.IsOpen ) )
+				return false;
+
+			return groups.Count != 2 || groups[0].Count() == groups[1].Count();
+		}
+
+		bool CanPathExtrude() => PathExtrudeTool.CanExtrude( _edgeGroups, _edges );
+
+		[Shortcut( "mesh.path-extrude", "ALT+X", typeof( SceneViewPanel ) )]
+		void PathExtrude()
+		{
+			if ( !CanPathExtrude() )
+				return;
+
+			var tool = new PathExtrudeTool( _edgeGroups, _edges );
+			tool.Manager = _tool.Manager;
+			_tool.CurrentTool = tool;
+		}
+
+		private bool CanDissolve()
+		{
+			return _edges.Length != 0;
+		}
+
+		[Shortcut( "mesh.dissolve", "Backspace", typeof( SceneViewPanel ) )]
+		private void Dissolve()
+		{
+			if ( !CanDissolve() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Dissolve Edges" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				foreach ( var group in _edgeGroups )
+				{
+					var mesh = group.Key.Mesh;
+					mesh.DissolveEdges( group.Select( x => x.Handle ).ToArray(), false, PolygonMesh.DissolveRemoveVertexCondition.InteriorOrColinear );
+					mesh.ComputeFaceTextureCoordinatesFromParameters();
+				}
+			}
+		}
+
+		private bool CanCollapse()
+		{
+			return _edges.Length != 0;
+		}
+
+		[Shortcut( "mesh.collapse", "SHIFT+O", typeof( SceneViewPanel ) )]
+		private void Collapse()
+		{
+			if ( !CanCollapse() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Collapse Edges" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				foreach ( var group in _edgeGroups )
+				{
+					group.Key.Mesh.CollapseEdges( group.Select( x => x.Handle ).ToArray() );
+				}
+			}
+		}
+
+		private bool CanFillHole()
+		{
+			return _edges.Any( x => x.IsOpen );
+		}
+
+		[Shortcut( "mesh.fill-hole", "P", typeof( SceneViewPanel ) )]
+		private void FillHole()
+		{
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Fill Hole" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				foreach ( var edge in _edges )
+				{
+					edge.Component.Mesh.CreateFaceInEdgeLoop( edge.Handle, out var _ );
+				}
+			}
+		}
+
+		private bool CanSelectRibs()
+		{
+			return _edges.Length != 0;
+		}
+
+		[Shortcut( "mesh.select-ribs", "CTRL+G", typeof( SceneViewPanel ) )]
+		private void SelectRibs()
+		{
+			if ( !CanSelectRibs() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Select Edge Ribs" ).Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				foreach ( var group in _edgeGroups )
+				{
+					var mesh = group.Key.Mesh;
+					if ( mesh is null )
+						continue;
+
+					mesh.FindEdgeIslands( group.Select( x => x.Handle ).ToArray(), out var edgeIslands );
+
+					foreach ( var edgeIsland in edgeIslands )
+					{
+						var numRibs = mesh.FindEdgeRibs( edgeIsland, out var leftEdgeRibs, out var rightEdgeRibs );
+						for ( var i = 0; i < numRibs; ++i )
+						{
+							var leftRib = leftEdgeRibs[i];
+							var rightRib = rightEdgeRibs[i];
+
+							foreach ( var rib in leftRib )
+								selection.Add( new MeshEdge( group.Key, rib ) );
+
+							foreach ( var rib in rightRib )
+								selection.Add( new MeshEdge( group.Key, rib ) );
+						}
+					}
+				}
+			}
+		}
+
+		private bool CanSelectRing()
+		{
+			return _edges.Length != 0;
+		}
+
+		[Shortcut( "mesh.select-ring", "G", typeof( SceneViewPanel ) )]
+		private void SelectRing()
+		{
+			if ( !CanSelectRing() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Select Edge Ring" ).Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				foreach ( var hEdge in _edges )
+				{
+					if ( !hEdge.IsValid )
+						continue;
+
+					hEdge.Component.Mesh.FindEdgeRing( hEdge.Handle, out var edgeRing );
+					foreach ( var hNewEdge in edgeRing )
+						selection.Add( new MeshEdge( hEdge.Component, hNewEdge ) );
+				}
+			}
+		}
+
+		private bool CanSelectLoop()
+		{
+			return _edges.Length != 0;
+		}
+
+		[Shortcut( "mesh.select-loop", "L", typeof( SceneViewPanel ) )]
+		private void SelectLoop()
+		{
+			if ( !CanSelectLoop() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Select Edge Loop" ).Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				selection.Clear();
+
+				foreach ( var group in _edgeGroups )
+				{
+					group.Key.Mesh.FindEdgeLoopForEdges( group.Select( x => x.Handle ).ToArray(), out var edgeLoop );
+					foreach ( var hNewEdge in edgeLoop )
+						selection.Add( new MeshEdge( group.Key, hNewEdge ) );
+				}
+			}
+		}
+
+		private bool CanSelectPath()
+		{
+			return _edges.Length == 2 && _edges[0].Component == _edges[1].Component;
+		}
+
+		[Shortcut( "mesh.select-path", "CTRL+L", typeof( SceneViewPanel ) )]
+		private void SelectPath()
+		{
+			if ( !CanSelectPath() )
+				return;
+
+			var path = FindShortestEdgePath( _edges[0], _edges[1] );
+			if ( path is null || path.Count == 0 )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Select Edge Path" ).Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				foreach ( var edge in path )
+					selection.Add( edge );
+			}
+		}
+
+		[Shortcut( "mesh.snap-edge-to-edge", "I", typeof( SceneViewPanel ) )]
+		private void SnapEdgeToEdge()
+		{
+			if ( _edges.Length != 2 )
+				return;
+
+			var edgeA = _edges[0];
+			if ( !edgeA.IsValid() )
+				return;
+
+			var edgeB = _edges[1];
+			if ( !edgeB.IsValid() )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Snap Edges" )
+				.WithComponentChanges( [edgeA.Component, edgeB.Component] )
+				.Push() )
+			{
+				var meshA = edgeA.Component.Mesh;
+				var meshB = edgeB.Component.Mesh;
+
+				meshB.GetEdgeVertices( edgeB.Handle, out var hVertexA, out var hVertexB );
+				var targetPosA = edgeB.Transform.PointToWorld( meshB.GetVertexPosition( hVertexA ) );
+				var targetPosB = edgeB.Transform.PointToWorld( meshB.GetVertexPosition( hVertexB ) );
+				var edgeDirB = targetPosB - targetPosA;
+
+				meshA.GetEdgeVertices( edgeA.Handle, out hVertexA, out hVertexB );
+				var currentPosA = edgeA.Transform.PointToWorld( meshA.GetVertexPosition( hVertexA ) );
+				var currentPosB = edgeA.Transform.PointToWorld( meshA.GetVertexPosition( hVertexB ) );
+				var edgeDirA = currentPosB - currentPosA;
+
+				if ( edgeDirA.Dot( edgeDirB ) < 0 )
+					(targetPosA, targetPosB) = (targetPosB, targetPosA);
+
+				meshA.SetVertexPosition( hVertexA, edgeA.Transform.PointToLocal( targetPosA ) );
+				meshA.SetVertexPosition( hVertexB, edgeA.Transform.PointToLocal( targetPosB ) );
+			}
+		}
+
+		[Shortcut( "mesh.hard-normals", "H", typeof( SceneViewPanel ) )]
+		void HardNormals()
+		{
+			SetNormals( PolygonMesh.EdgeSmoothMode.Hard );
+		}
+
+		[Shortcut( "mesh.soft-normals", "J", typeof( SceneViewPanel ) )]
+		void SoftNormals()
+		{
+			SetNormals( PolygonMesh.EdgeSmoothMode.Soft );
+		}
+
+		[Shortcut( "mesh.default-normals", "K", typeof( SceneViewPanel ) )]
+		void DefaultNormals()
+		{
+			SetNormals( PolygonMesh.EdgeSmoothMode.Default );
+		}
+		private bool CanArch()
+		{
+			return _edges.Any( x => x.IsOpen );
+		}
+
+		[Shortcut( "mesh.edge-arch-tool", "Y", typeof( SceneViewPanel ) )]
+		void OpenEdgeArchTool()
+		{
+			if ( !CanArch() )
+				return;
+
+			var edgeGroups = new List<EdgeArchEdges>();
+
+			foreach ( var group in _edgeGroups )
+			{
+				var component = group.Key;
+				var mesh = component.Mesh;
+
+				var originalMesh = new PolygonMesh();
+				originalMesh.Transform = mesh.Transform;
+				originalMesh.MergeMesh( mesh, Transform.Zero, out _, out var newEdges, out _ );
+
+				var openEdges = group
+					.Where( x => x.IsOpen )
+					.Select( x => newEdges[x.Handle].Index )
+					.ToList();
+
+				if ( openEdges.Count > 0 )
+				{
+					edgeGroups.Add( new EdgeArchEdges
+					{
+						Component = component,
+						Mesh = originalMesh,
+						Edges = openEdges
+					} );
+				}
+			}
+
+			if ( edgeGroups.Count == 0 )
+				return;
+
+			var tool = new EdgeArchTool( edgeGroups.ToArray() );
+			tool.Manager = _tool.Manager;
+			_tool.CurrentTool = tool;
+		}
+
+		[Shortcut( "mesh.grow-selection", "KP_ADD", typeof( SceneViewPanel ) )]
+		private void GrowSelection()
+		{
+			if ( _edges.Length == 0 ) return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Grow Selection" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				var newEdges = new HashSet<MeshEdge>();
+
+				foreach ( var edge in _edges )
+				{
+					if ( !edge.IsValid() )
+						continue;
+
+					newEdges.Add( edge );
+				}
+
+				foreach ( var edge in _edges )
+				{
+					if ( !edge.IsValid() )
+						continue;
+
+					var mesh = edge.Component.Mesh;
+
+					mesh.GetEdgeVertices( edge.Handle, out var vertexA, out var vertexB );
+
+					mesh.GetEdgesConnectedToVertex( vertexA, out var edgesA );
+					mesh.GetEdgesConnectedToVertex( vertexB, out var edgesB );
+
+					foreach ( var adjacentEdge in edgesA.Concat( edgesB ) )
+					{
+						if ( adjacentEdge.IsValid )
+							newEdges.Add( new MeshEdge( edge.Component, adjacentEdge ) );
+					}
+				}
+
+				selection.Clear();
+				foreach ( var edge in newEdges )
+				{
+					if ( edge.IsValid() )
+						selection.Add( edge );
+				}
+			}
+		}
+
+		[Shortcut( "mesh.shrink-selection", "KP_MINUS", typeof( SceneViewPanel ) )]
+		private void ShrinkSelection()
+		{
+			if ( _edges.Length == 0 ) return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			using ( SceneEditorSession.Active.UndoScope( "Shrink Selection" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				var selection = SceneEditorSession.Active.Selection;
+				var edgesToKeep = new HashSet<MeshEdge>();
+
+				foreach ( var edge in _edges )
+				{
+					if ( !edge.IsValid() )
+						continue;
+
+					var mesh = edge.Component.Mesh;
+					mesh.GetEdgeVertices( edge.Handle, out var vertexA, out var vertexB );
+
+					mesh.GetEdgesConnectedToVertex( vertexA, out var edgesA );
+					bool allEdgesASelected = edgesA.All( e =>
+						_edges.Any( selectedEdge => selectedEdge.Component == edge.Component && selectedEdge.Handle == e )
+					);
+
+					mesh.GetEdgesConnectedToVertex( vertexB, out var edgesB );
+					bool allEdgesBSelected = edgesB.All( e =>
+						_edges.Any( selectedEdge => selectedEdge.Component == edge.Component && selectedEdge.Handle == e )
+					);
+
+					if ( allEdgesASelected && allEdgesBSelected )
+					{
+						edgesToKeep.Add( edge );
+					}
+				}
+
+				selection.Clear();
+				foreach ( var edge in edgesToKeep )
+				{
+					if ( edge.IsValid() )
+						selection.Add( edge );
+				}
+			}
+		}
+
+		[Shortcut( "mesh.snap-to-grid", "CTRL+B", typeof( SceneViewPanel ) )]
+		private void SnapToGrid()
+		{
+			if ( _edges.Length == 0 )
+				return;
+
+			using var scope = SceneEditorSession.Scope();
+
+			var grid = EditorScene.GizmoSettings.GridSpacing;
+			if ( grid <= 0 )
+				return;
+
+			using ( SceneEditorSession.Active.UndoScope( "Snap Edges To Grid" )
+				.WithComponentChanges( _components )
+				.Push() )
+			{
+				foreach ( var group in _edges.GroupBy( e => e.Component ) )
+				{
+					var component = group.Key;
+					var mesh = component.Mesh;
+
+					var uniqueVertices = new HashSet<VertexHandle>();
+
+					foreach ( var edge in group )
+					{
+						mesh.GetVerticesConnectedToEdge(
+							edge.Handle,
+							out var hA,
+							out var hB
+						);
+
+						uniqueVertices.Add( hA );
+						uniqueVertices.Add( hB );
+					}
+
+					foreach ( var hVertex in uniqueVertices )
+					{
+						var world = new MeshVertex( component, hVertex ).PositionWorld;
+
+						world = new Vector3(
+							MathF.Round( world.x / grid ) * grid,
+							MathF.Round( world.y / grid ) * grid,
+							MathF.Round( world.z / grid ) * grid
+						);
+
+						var local = component.WorldTransform.PointToLocal( world );
+						mesh.SetVertexPosition( hVertex, local );
+					}
+				}
+			}
+		}
+
+		[Shortcut( "mesh.frame-selection", "SHIFT+A", typeof( SceneViewPanel ) )]
+		private void FrameSelection()
+		{
+			if ( _edges.Length == 0 )
+				return;
+
+			var points = new List<Vector3>();
+
+			foreach ( var edge in _edges )
+			{
+				var mesh = edge.Component.Mesh;
+
+				mesh.GetVerticesConnectedToEdge(
+					edge.Handle,
+					out var hA,
+					out var hB
+				);
+
+				points.Add( new MeshVertex( edge.Component, hA ).PositionWorld );
+				points.Add( new MeshVertex( edge.Component, hB ).PositionWorld );
+			}
+
+			SelectionFrameUtil.FramePoints( points );
+		}
+	}
+}

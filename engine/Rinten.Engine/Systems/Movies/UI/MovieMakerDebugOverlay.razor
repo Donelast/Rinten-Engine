@@ -1,0 +1,19 @@
+@using Rinten;
+@using Rinten.UI;
+@inherits PanelComponent
+
+<root>
+	<div class="title">@Position.ToString("mm':'ss':'ff")</div>
+</root>
+
+@code
+{
+
+	[Property] public Rinten.MovieMaker.MoviePlayer Player { get; set; }
+
+
+    System.TimeSpan Position => System.TimeSpan.FromSeconds( Player?.PositionSeconds ?? 0 );
+
+    //the hash determines if the system should be rebuilt. If it changes, it will be rebuilt
+    protected override int BuildHash() => System.HashCode.Combine( Player, Position );
+}

@@ -1,0 +1,56 @@
+@namespace Editor.Preferences
+@attribute [Title( "General" ), Icon( "tune" ), Order( 0 )]
+@attribute [Description( "Which code editor opens your files, and what the editor does when you press play." )]
+@using Editor.CodeEditors
+@inherits PreferencesPage
+
+<root class="preferences-page">
+	<div class="body" @ref="Body">
+		<label class="section-header">Code</label>
+		<div @ref="editorHost"></div>
+
+		<div class="custom-editor" @ref="customHost">
+			<label class="section-header">Custom Settings</label>
+			<div @ref="customSheetHost"></div>
+		</div>
+
+		<label class="section-header">Play</label>
+		<div @ref="playHost"></div>
+	</div>
+</root>
+
+@code
+{
+	Panel editorHost;
+	Panel customHost;
+	Panel customSheetHost;
+	Panel playHost;
+
+	protected override void OnBuild()
+	{
+		AddSheet( editorHost ).AddProperty( () => CodeEditor.Current );
+
+		var custom = AddSheet( customSheetHost );
+		custom.AddProperty( () => CustomCodeEditorSettings.ExecutablePath );
+		custom.AddProperty( () => CustomCodeEditorSettings.OpenFileArgs );
+		custom.AddProperty( () => CustomCodeEditorSettings.OpenSolutionArgs );
+
+		var play = AddSheet( playHost );
+		play.AddProperty( () => EditorPreferences.ClearConsoleOnPlay );
+		play.AddProperty( () => EditorPreferences.FullScreenOnPlay );
+		play.AddProperty( () => EditorPreferences.FastHotload );
+
+		SyncCustomEditor();
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		SyncCustomEditor();
+	}
+
+	//The custom editor's own settings, shown only while it is the one chosen. Read off
+	//the setting rather than off the control: it is a static the whole editor shares.
+	void SyncCustomEditor() => customHost?.SetClass( "hidden", CodeEditor.Current is not CustomCodeEditor );
+}

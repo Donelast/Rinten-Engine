@@ -1,0 +1,204 @@
+﻿//Editor theme: variables only, prepended to every editor sheet; rules go in design.scss
+
+//── accent & meaning ──────────────────────────────────────────────────────────
+
+$primary: #8db53e;
+$blue: #9a9dff;
+$green: #8db53e;
+$red: #fb5a5a;
+$yellow: #e6db74;
+
+//Kept beside theme.json's Pink, which has had it all along while the sheets had nowhere to say it and wrote the hex in by hand.
+$pink: #df9194;
+
+$multiple-values: #525252;
+
+//Backings for a row that means something: a prefab override, a warning, an error. Dark enough that white text still reads on them.
+$blue-dark: darken( $blue, 0.45 );
+$red-dark: darken( $red, 0.6 );
+$yellow-dark: darken( $yellow, 0.65 );
+
+//── grounds ── Two greys: header dark (caption, tabs, seams) and panel light under docks
+//Must match WindowBackground and SurfaceBackground in theme.json
+
+$header-background: #1f1f1f;
+$panel-background: #333333;
+
+//── what the theme settles for the design tokens ──────────────────────────────
+
+$accent: $primary;
+$edge-focus: rgba( $primary, 0.7 );
+$font: Inter;
+$font-mono: Roboto Mono;
+
+//Fill for something switched on: the accent, not the tokens' white wash
+$on: rgba( $primary, 0.18 );
+
+//The window's clear colour is read out of _tokens.scss by code (WindowCaption.Ground),
+//so the token's own $window-ground is kept equal to $header-background there.
+$window-ground: $header-background;
+$panel-ground: $panel-background;
+
+//── surfaces ──────────────────────────────────────────────────────────────────
+
+$window-background: $header-background;
+$surface-background: $panel-background;
+$surface-light-background: #444444;
+$sidebar-background: #2a2a2a;
+$widget-background: #2a2a2a;
+$button-background: #444444;
+$selected-background: #505a3c;
+$status-bar-background: #2a2a2a;
+
+//The open tab is the panel it opens, so the two join without a line between them.
+$tab-background: $panel-background;
+
+//── ink ───────────────────────────────────────────────────────────────────────
+
+$text: #ffffff;
+$text-control: #ffffff;
+$text-light: #9e9e9e;
+$text-link: $primary;
+$text-disabled: #999999;
+$text-highlight: #ffffff;
+$text-dark: #000000;
+
+//── chrome ────────────────────────────────────────────────────────────────────
+
+$border: #3e3e3e;
+$border-light: #484848;
+$base: #202020;
+$base-alt: #2a2a2a;
+
+//── metrics ─────────────────────────────────────────────────────────────────── A row and a corner each have three
+//names because sheets were written against all three. Aliased rather than repeated: they drifted apart once already.
+
+//Row height, same as a tree row; must match RowHeight and ControlHeight in theme.json
+$row: 22px;
+$row-height: $row;
+$control-row-height: $row;
+
+//A row of a list rather than a row of controls: shorter, because a list is read down and a control row is reached into. Kept beside
+//Theme.ListRowHeight, which a pooled list needs in code to work out which rows its window can reach - the two must agree or the rows overlap.
+$list-row-height: 22px;
+
+$control-radius: 4px;
+$radius-2: $control-radius;
+
+//Splitter width everywhere; must match Theme.SeparatorWidth in theme.json
+$separator-width: 4px;
+
+//Splitter colour: header dark at rest, lighter on hover; mirrored in theme.json
+$separator-color: $header-background;
+$separator-hover-color: #282828;
+
+$font-family: $font;
+
+$vertical-gap: 4px;
+$horizontal-gap: 4px;
+
+//── spacing ── Closer means more related: inside control < between rows < name/value < cards
+
+//Parts of one control: X and its number, R and its value.
+$gap-inside: 2px;
+
+//One row of properties and the next. Four since the rows came down to twenty-two (10-07): at two, a sheet of them ran together into one block.
+$gap-row: 4px;
+
+//Controls standing side by side in a row: the three fields of a vector.
+$gap-items: 4px;
+
+//A property's name and its field.
+$gap-label: 8px;
+
+//From a card's side to what is in it - the one left edge.
+$pad-card: 8px;
+
+//From a card's top and bottom to its first and last row.
+$pad-card-y: 6px;
+
+//One card and the next, one group and the next: where a thing ends.
+$gap-section: 6px;
+
+//The panel's own edge to the cards on it.
+$pad-panel: 4px;
+
+//── control ───────────────────────────────────────────────────────────────────
+
+$control-border: 1px solid $border;
+$control-border-bold: 2px solid $border;
+//Control text a step above the name size; $type-micro in tokens is the floor
+$control-text-size: 12px;
+$control-text-size-small: 10px;
+$control-background: #1f1f1f;
+$control-background-light: #323232;
+$control-text-padding: 2px 6px 2px 6px;
+
+//── readings ────────────────────────────────────────────────────────────────── What a measured number is saying: the profiler's heat, the memory dock's
+//growth, a size worth noticing. Lighter than the meaning colours above, because these are small digits on a dark row rather than a filled button.
+
+$reading-alarm: #ff6b57;
+$reading-warn: #ffc759;
+$reading-cool: #9edbff;
+$reading-good: #8cd99a;
+$reading-loud: #ff8cd9;
+
+//── lists ── Shared banded-list colours, stepping up from the panel grey
+
+$list-background: $panel-background;
+$list-row-odd: transparent;
+$list-row-even: rgba( 255, 255, 255, 0.01 );
+$list-row-hover: $surface-light-background;
+$list-row-selected: $selected-background;
+$list-row-pressed: $base;
+
+//── hierarchy ── Scene tree uses the dark sunken background, unlike other lists
+
+$hierarchy-background: $sunken;
+
+//── popup ─────────────────────────────────────────────────────────────────────
+
+$popup-background: #2a2a2a;
+//Edged the way a window over the editor is - see the frame in the tokens: the border is the dark band,
+//and the light hairline rides outside it as a shadow, after the soft one so it is not dimmed by it.
+$popup-border-color: $frame-gap;
+$popup-border: 1px solid $popup-border-color;
+$popup-radius: $control-radius;
+$popup-shadow: $shadow-window, 0px 0px 0px 1px $frame-line;
+
+//── console ─────────────────────────────────────────────────────────────────── What the editor has said, and the stack behind whichever line
+//was clicked. A line's level is its colour and nothing else - no icon, no indent - so these are the whole of what the log means at a glance.
+
+$console-message: $ink-dim;
+$console-trace: $ink-faint;
+$console-warning: $yellow;
+$console-error: $red;
+$console-command: $green;
+
+$console-gutter: $sidebar-background;
+$console-gutter-text: $ink-faint;
+
+//Console line states: hover (faintest, full line), current, and current under hover
+$console-line-hover: rgba( 255, 255, 255, 0.08 );
+$console-line-current: $list-row-hover;
+$console-line-current-hover: lighten( $console-line-current, 0.2 );
+$console-line-picked: $list-row-selected;
+$console-line-picked-hover: lighten( $console-line-picked, 0.2 );
+
+//One frame of a stack trace, by whose code it is: yours, the engine's, an action graph's, or nowhere in particular. The wash
+//under a frame is its own colour turned right down, because a frame is a block of two lines rather than a word in a sentence.
+
+$stack-own: $green;
+$stack-own-place: rgba( $green, 0.65 );
+$stack-own-wash: rgba( $green, 0.1 );
+
+$stack-engine: rgba( $reading-cool, 0.75 );
+$stack-engine-place: rgba( $reading-cool, 0.45 );
+$stack-engine-wash: rgba( $reading-cool, 0.05 );
+
+$stack-action: $yellow;
+$stack-action-place: rgba( $yellow, 0.6 );
+$stack-action-wash: rgba( $yellow, 0.08 );
+
+$stack-nowhere: $ink-off;
+$stack-nowhere-wash: $veil;

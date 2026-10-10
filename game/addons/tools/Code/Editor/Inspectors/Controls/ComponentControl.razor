@@ -1,0 +1,147 @@
+@using System
+@using Rinten.UI
+
+@namespace Editor.Inspectors
+
+@attribute [CustomEditor( typeof( Component ) )]
+@attribute [StyleSheet( "ComponentControl.razor.scss" )]
+
+@inherits BaseControl
+
+<root>
+	<div class="row @ValueClass @( EyeDropperActive ? "active" : null )" @ref="RowHost">
+		<label class="value" @onclick="@StartEyeDropper">@DisplayText</label>
+		<ToolbarButton Icon="colorize" ToolTip="@PickerToolTip" Disabled="@IsReadOnly" OnPressed="@StartEyeDropper" />
+	</div>
+</root>
+
+@code
+{
+	public override bool SupportsMultiEdit => true;
+
+	internal Panel RowHost { get; private set; }
+
+	string PickerToolTip => Property is null ? "Pick component" : $"Pick {Property.DisplayName}";
+
+	string DisplayText
+	{
+		get
+		{
+			if ( Property is null ) return "None";
+			if ( Property.IsMultipleDifferentValues ) return "Multiple Values";
+
+			var component = Property.GetValue<Component>();
+			if ( !component.IsValid() )
+				return PropertyTypeName is { } name ? $"None ({name})" : "None";
+
+			return component.GameObject.IsValid()
+				? $"{component.GetType().Name} on {component.GameObject.Name}"
+				: component.GetType().Name;
+		}
+	}
+
+	string ValueClass
+	{
+		get
+		{
+			if ( Property is null ) return "none";
+			if ( Property.IsMultipleDifferentValues ) return "multiple";
+
+			return Property.GetValue<Component>().IsValid() ? "set" : "none";
+		}
+	}
+
+	string PropertyTypeName
+	{
+		get
+		{
+			if ( Property is null ) return null;
+			return EditorTypeLibrary.GetType( Property.PropertyType )?.Name ?? Property.PropertyType.Name;
+		}
+	}
+
+	bool EyeDropperActive => EyeDropperTool.TargetProperty == Property;
+
+	public override bool AcceptEditorDrops => !IsReadOnly;
+
+	public override DropAction OnEditorDragHover( Widget.DragEvent ev )
+	{
+		var accept = GetMatching( ev.Data ).IsValid();
+		SetClass( "drop-target", accept );
+		return accept ? DropAction.Link : DropAction.Ignore;
+	}
+
+	public override void OnEditorDragLeave() => SetClass( "drop-target", false );
+
+	public override void OnEditorDragDrop( Widget.DragEvent ev )
+	{
+		if ( Property is null || IsReadOnly ) return;
+
+		if ( !GetMatching( ev.Data ).IsValid() ) return;
+
+		Property.Parent?.NoteStartEdit( Property );
+		Property.SetValue( GetMatching( ev.Data ) );
+		Property.Parent?.NoteFinishEdit( Property );
+	}
+
+	Component GetMatching( DragData data )
+	{
+		if ( Property is null || data is null ) return default;
+
+		var type = Property.PropertyType;
+
+		if ( data.OfType( type ).FirstOrDefault() is Component direct && direct.IsValid() )
+			return direct;
+
+		foreach ( var go in data.OfType<GameObject>() )
+		{
+			var comp = go.Components.Get( type, FindMode.EverythingInSelf );
+			if ( comp.IsValid() ) return comp;
+		}
+
+		return default;
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( !EditorDrag.Active && HasClass( "drop-target" ) )
+			SetClass( "drop-target", false );
+	}
+
+	protected override int BuildHash()
+	{
+		var hc = new HashCode();
+		hc.Add( Property?.GetValue<Component>() );
+		hc.Add( Property?.IsMultipleDifferentValues );
+		hc.Add( EyeDropperActive );
+		return hc.ToHashCode();
+	}
+
+	public override void OnPropertyContextMenu( Menu menu )
+	{
+		if ( Property is null ) return;
+
+		var component = Property.GetValue<Component>();
+		if ( component.IsValid() && component.GameObject.IsValid() )
+			menu.AddOption( "Find in Scene", "search", () => EditorUtility.FindInScene( component ) );
+
+		menu.AddOption( "Clear", "backspace", Clear ).Enabled = !IsReadOnly;
+	}
+
+	void StartEyeDropper()
+	{
+		if ( Property is null || IsReadOnly ) return;
+		Property.Parent?.NoteStartEdit( Property );
+		EyeDropperTool.SetTargetProperty( Property );
+		EyeDropperTool.OnBackToLastTool = () => Property.Parent?.NoteFinishEdit( Property );
+	}
+
+	void Clear()
+	{
+		Property.Parent?.NoteStartEdit( Property );
+		Property.SetValue<Component>( null );
+		Property.Parent?.NoteFinishEdit( Property );
+	}
+}

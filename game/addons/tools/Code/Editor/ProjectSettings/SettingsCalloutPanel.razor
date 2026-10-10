@@ -1,0 +1,14 @@
+@namespace Editor.ProjectSettingsUI
+@attribute [StyleSheet( "SettingsCalloutPanel.razor.scss" )]
+@inherits Panel
+
+<root class="@(Warning ? "warning" : "info")">
+	<label class="icon material-icon">@(Warning ? "warning" : "info")</label>
+	<label class="text" IsRich="true">@Html</label>
+</root>
+
+@code
+{
+	public string Html { get; set; } = "";
+	public bool Warning { get; set; }
+}

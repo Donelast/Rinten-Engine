@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A project's code: making its compilers and building them, a package's code archives, a server's, the solution a project opens in. Everything of the engine that names the C# compiler, apart from the engine so that a build
+       which never compiles - a web page above all - carries no compiler: Roslyn was a third of the page's AOT image. The engine reaches it through ProjectCompiling, which whatever compiles installs - see CodeCompiling.Install. -->
+
+  <PropertyGroup>
+    <VersionPrefix>1.0.1</VersionPrefix>
+    <TargetFramework>net10.0</TargetFramework>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AssemblyName>Rinten.Code</AssemblyName>
+    <RootNamespace>Rinten</RootNamespace>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <NoWarn>1701;1702;1591</NoWarn>
+    <OutputPath>..\..\game\bin\managed</OutputPath>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rinten.Engine\Rinten.Engine.csproj" />
+    <ProjectReference Include="..\Rinten.Compiling\Rinten.Compiling.csproj" />
+    <ProjectReference Include="..\Rinten.SolutionGenerator\Rinten.SolutionGenerator.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0-2.final" />
+    <!-- The editor's fast hotload patches method bodies with it - see ILHotload. -->
+    <PackageReference Include="MonoMod.RuntimeDetour" Version="25.3.3" />
+  </ItemGroup>
+
+</Project>

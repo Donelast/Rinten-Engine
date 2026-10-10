@@ -1,0 +1,14 @@
+{
+  "Shader": "",
+  "Tint": "1,1,1,1",
+  "ColorMap": "materials/dev/grid.png",
+  "Normal": "",
+  "RoughMetalAmbient": "",
+  "Emission": "",
+  "Roughness": 0.85,
+  "Metalness": 0,
+  "EmissionStrength": 0,
+  "TwoSided": false,
+  "Blend": "Opaque",
+  "AlphaCutoff": 0.5
+}

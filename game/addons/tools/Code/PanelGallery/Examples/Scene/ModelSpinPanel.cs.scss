@@ -1,0 +1,9 @@
+ModelSpinPanel,
+.model-spin
+{
+	flex-shrink: 0;
+	width: 200px;
+	height: 200px;
+	border-radius: $radius-2;
+	overflow: hidden;
+}

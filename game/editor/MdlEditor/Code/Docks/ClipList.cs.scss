@@ -1,0 +1,61 @@
+//The animation clips: a filter and two switches across the top, and every clip the graph's skeleton has under them. The well the
+//clips stand on is design.scss's .well, the banding is its .list-row, and the icon font is its .material-icon - none is restated here.
+
+.clip-list
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+}
+
+.clip-row
+{
+	flex-direction: row;
+	align-items: center;
+	width: 100%;
+	height: $list-row-height;
+	padding: 0 4px;
+	font-family: $font-family;
+	font-size: $type-body;
+	cursor: pointer;
+
+	//Green where the graph already uses this clip, so a glance says what is spoken for and what is spare.
+	> .icon
+	{
+		flex-shrink: 0;
+		width: 22px;
+		color: $primary;
+	}
+
+	> .name
+	{
+		flex-shrink: 0;
+		color: rgba( $text-control, 0.8 );
+	}
+
+	//Where it came from, after the name and quieter than it: two clips of the same name in different folders are told apart by this and nothing else.
+	> .path
+	{
+		padding-left: 6px;
+		font-size: $type-small;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		color: rgba( $text-control, 0.36 );
+	}
+
+	&.referenced > .icon { color: rgba( $green, 0.9 ); }
+
+	&:hover
+	{
+		background-color: rgba( $selected-background, 0.25 );
+
+		> .name { color: rgba( $text-control, 0.9 ); }
+	}
+
+	&.selected
+	{
+		background-color: $selected-background;
+
+		> .name { color: rgba( $text-control, 0.9 ); }
+	}
+}

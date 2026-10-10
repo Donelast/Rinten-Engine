@@ -1,0 +1,31 @@
+//The picker's saturation/value square. The colour in it is the renderer's - see ColorSvArea.razor - so what is here is its frame and the handle.
+ColorSvArea.control
+{
+	position: relative;
+	width: 100%;
+	aspect-ratio: 1;
+	flex-shrink: 0;
+	border-radius: $control-radius;
+	cursor: pointer;
+	pointer-events: all;
+	overflow: visible;
+
+	> .handle
+	{
+		position: absolute;
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		border: 2px solid white;
+		box-shadow: 0 1px 4px rgba( 0, 0, 0, 0.6 );
+		transform: translate( -50%, -50% );
+		pointer-events: none;
+	}
+
+	//Held: a little bigger, so what is being dragged is plain.
+	&.dragging > .handle
+	{
+		width: 18px;
+		height: 18px;
+	}
+}

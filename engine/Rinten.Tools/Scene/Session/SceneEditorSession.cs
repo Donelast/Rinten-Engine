@@ -1,0 +1,628 @@
+﻿using Facepunch.ActionGraphs;
+using Rinten.ActionGraphs;
+using System;
+using System.Diagnostics;
+using System.IO;
+
+namespace Editor;
+
+/// <summary>A SceneEditorSession holds a Scene that is open in the editor. It creates a widget, has a selection and undo system.</summary>
+public partial class SceneEditorSession : Scene.ISceneEditorSession
+{
+	/// <summary>All open editor sessions</summary>
+	public static List<SceneEditorSession> All { get; } = new();
+
+	internal static SceneEditorSession Playing => All.FirstOrDefault( x => x.GameSession is not null );
+
+	/// <summary>The editor session that is currently active</summary>
+	public static SceneEditorSession Active
+	{
+		get;
+		private set
+		{
+			if ( field == value ) return;
+
+			field = value;
+			field?.UpdateEditorTitle();
+		}
+	}
+
+	//scenes that have been edited, but waiting for a set interval to react just to debounce changes.
+	private static HashSet<SceneEditorSession> editedScenes = new();
+
+	/// <summary>Returns true if this session is editing a prefab</summary>
+	public bool IsPrefabSession => this is PrefabEditorSession;
+
+	public Scene Scene { get; private set; }
+
+	internal Widget SceneDock { get; set; }
+
+	/// <summary>Should we call <see cref="Scene.EditorTick"/> while this session is visible?</summary>
+	public bool ShouldUpdate { get; set; } = true;
+
+	protected SceneEditorSession( Scene scene )
+	{
+		ArgumentNullException.ThrowIfNull( scene );
+
+		Scene = scene;
+		Scene.Editor = this;
+
+		All.Add( this );
+
+		InitUndo();
+		timeSinceSavedState = 0;
+		reloadHash = scene.ReloadHash;
+
+		//Every session gets its own view, the game included. It used to be built into the scene it was launched from, so starting a game took the
+		//scene away and you switched back and forth between the two. They are two things to look at, so they are two tabs, and the scene stays a scene.
+		CreateSceneDock();
+
+		//The scene is loaded by now, so this is the moment to look at what the last session left unwritten - and to put it back.
+		OpenHistory();
+
+		EditorEvent.Register( this );
+	}
+
+	//Create the scene view widget and open it as a tab in the central scene area
+	void CreateSceneDock()
+	{
+		SceneDock = EditorTypeLibrary.Create<Widget>( "SceneDock", new object[] { this } );
+		SceneDock.Name = $"SceneDock:{(Scene.Source?.ResourcePath ?? "untitled")}";
+
+		EditorWindow.SceneTabs.Open( this );
+
+		//Opening a scene shows it, and where it is shown depends on which workspace has the scene area - mapping when that is open, General otherwise
+		EditorWindow.FocusSceneWorkspace();
+
+		UpdateEditorTitle();
+	}
+
+	bool _destroyed;
+
+	public virtual void Destroy()
+	{
+		if ( _destroyed )
+			return;
+
+		//Whatever was edited and not yet written goes to the disk now. A tab being closed
+		//is not a question about saving any more - see SceneEditorSession.Autosave.
+		try
+		{
+			Checkpoint();
+			CloseHistory();
+		}
+		catch ( System.Exception e )
+		{
+			Log.Warning( e, $"Could not write scene '{Scene?.Name}' while closing it" );
+		}
+
+		_destroyed = true;
+
+		if ( GameSession is not null && Game.IsPlaying )
+			EditorScene.Stop();
+
+		//If this is the active scene switch away to a sibling
+		if ( this == Active )
+		{
+			Active = null;
+
+			var index = All.IndexOf( this );
+			if ( index >= 0 && All.Count > 1 )
+			{
+				if ( index > 0 ) index--;
+				else index++;
+
+				Active = All[index];
+			}
+		}
+
+		All.Remove( this );
+		EditorEvent.Unregister( this );
+
+		//remove the tab before destroying its scene view
+		EditorWindow?.SceneTabs?.Remove( this );
+
+		Scene?.Destroy();
+		Scene = null;
+
+		GameSession?.Destroy();
+		GameSession = null;
+
+		SceneDock?.Destroy();
+		SceneDock = default;
+	}
+
+	/// <summary>Makes this scene active and brings it to the front</summary>
+	public void MakeActive( bool bringToFront = true )
+	{
+		Active = this;
+
+		if ( bringToFront && EditorWindow is not null )
+		{
+			BringToFront();
+		}
+	}
+
+	/// <summary>Bring this scene tab to the front</summary>
+	public void BringToFront()
+	{
+		EditorWindow?.SceneTabs?.MakeCurrent( this );
+
+		UpdateEditorTitle();
+	}
+
+	RealTimeSince timeSinceSavedState;
+	int reloadHash;
+
+	public void Tick()
+	{
+		//If this is an editor scene, tick it to flush deleted objects etc
+		Scene.ProcessDeletes();
+
+		//A setting that decides how the scene's world is built changed - the physics mode - so the scene is rebuilt from itself into
+		//a new one. Not while playing: that would rebuild the running game's scene under it. The change is picked up once play stops.
+		var hash = Scene.ReloadHash;
+		if ( !IsPlaying && hash != reloadHash )
+		{
+			reloadHash = hash;
+			Scene.Reload();
+		}
+
+		//Save camera state to disk
+		if ( timeSinceSavedState > 1.0f )
+		{
+			timeSinceSavedState = 0;
+			EditorEvent.Run( "scene.session.save" );
+		}
+	}
+
+	internal void UpdateEditorTitle()
+	{
+		if ( !SceneDock.IsValid() )
+			return;
+
+		var name = Scene.Name.Trim();
+		if ( WorkIsOnlyInMemory ) name += "*";
+
+		EditorWindow?.UpdateEditorTitle( name );
+
+		if ( SceneDock is not null )
+		{
+			//The game gets its own name rather than its scene's: it is opened from a scene that already has a
+			//dock of that name, and two docks sharing one name are one dock as far as saved layout is concerned.
+			SceneDock.Name = this is GameEditorSession
+				? "SceneDock:game"
+				: $"SceneDock:{(Scene.Source?.ResourcePath ?? "untitled")}";
+
+			if ( this is GameEditorSession )
+			{
+				//The game is the game, whichever scene it was started from.
+				SceneDock.SetWindowIcon( "play_arrow" );
+				SceneDock.WindowTitle = "Game";
+			}
+			else if ( IsPrefabSession )
+			{
+				SceneDock.SetWindowIcon( "home_repair_service" );
+				SceneDock.WindowTitle = $"Prefab: {name}";
+			}
+			else
+			{
+				SceneDock.SetWindowIcon( "grid_4x4" );
+				SceneDock.WindowTitle = name;
+			}
+
+			EditorWindow?.SceneTabs?.UpdateTitle( this );
+		}
+	}
+
+	protected virtual void OnEdited()
+	{
+
+	}
+
+	//What this session writes to the disk, made from the scene as it stands.
+	protected virtual GameResource ToResource() => Scene.CreateSceneFile();
+
+	static RealTimeSince timeSinceLastUpdatePrefabs;
+
+	//Notifies edited sessions once editing stops, since prefab propagation is slow
+	internal static void ProcessSceneEdits()
+	{
+		if ( timeSinceLastUpdatePrefabs < 0.1 ) return;
+		timeSinceLastUpdatePrefabs = 0;
+
+		foreach ( var session in editedScenes.ToArray() )
+		{
+			if ( !session.EditsHaveSettled ) continue;
+
+			//Taken off before rather than after: passing an edit on dirties other sessions, and those belong on the list it is being taken off.
+			editedScenes.Remove( session );
+
+			session.OnEdited();
+		}
+	}
+
+	//Whether this session is waiting to be told its edits are over.
+	internal bool WantsPropagating => editedScenes.Contains( this );
+
+	/// <summary>Pushes the active scene to the current scope What the editor is looking at, which is the game while one is playing - see <see cref="Showing"/>.</summary>
+	public static SceneEditorSession Current => Active?.Showing;
+
+	/// <summary>Pushes the scene the editor is showing for a scope - use with <c>using</c>.</summary>
+	public static ScenePushScope Scope()
+	{
+		return Current.Scene.Push();
+	}
+
+	[Obsolete]
+	void Scene.ISceneEditorSession.AddSelectionUndo()
+	{
+		PushUndoSelection();
+	}
+
+	public Action<BBox> OnFrameTo { get; set; }
+
+	/// <summary>Zoom the scene to view this bbox</summary>
+	public virtual void FrameTo( in BBox box )
+	{
+		BringToFront();
+		OnFrameTo?.Invoke( box );
+	}
+
+	bool unsavedChanges;
+
+	/// <summary>True if this session is editing a scene opened from a mount. Mounted scenes live at a read-only mount:// path, so they can't be saved and never report unsaved changes.</summary>
+	public bool IsMounted => Rinten.Mounting.MountUtility.IsMountPath( Scene?.Source?.ResourcePath );
+
+	public bool HasUnsavedChanges
+	{
+		get => unsavedChanges && !IsMounted;
+		set
+		{
+			//Each edit delays the checkpoint; only edits (not saves) queue the session for propagation
+			if ( value )
+			{
+				editedScenes.Add( this );
+				sinceEdited = 0;
+			}
+
+			if ( unsavedChanges == value )
+				return;
+
+			unsavedChanges = value;
+			UpdateEditorTitle();
+		}
+	}
+
+	BaseFileSystem Scene.ISceneEditorSession.TransientFilesystem => FileSystem.Transient;
+
+	public void Reload()
+	{
+		if ( Scene.Source is null )
+			return;
+
+		InitUndo();
+		Scene.Load( Scene.Source );
+
+		Selection.Clear();
+	}
+
+	//The interface's shape, kept as its own method rather than as a default argument: an optional parameter makes a different signature, and a different signature does not implement an interface.
+	/// <summary>Writes the scene where it came from, or asks where when there is nowhere.</summary>
+	public void Save( bool saveAs ) => Save( saveAs, background: false );
+
+	public void Save( bool saveAs, bool background )
+	{
+		//Mounted scenes live at a read-only mount:// path - they can't be saved or saved as.
+		if ( IsMounted )
+			return;
+
+		bool isPrefab = Scene is PrefabScene;
+		string extension = isPrefab ? "prefab" : "scene";
+		string fileType = isPrefab ? "Prefab" : "Scene";
+
+		var saveLocation = string.Empty;
+		if ( !saveAs && Scene.Source is not null && AssetSystem.FindByPath( Scene.Source.ResourcePath ) is Asset sourceAsset )
+		{
+			saveLocation = sourceAsset.AbsolutePath;
+		}
+		else
+		{
+			saveLocation = ProjectCookie.GetString( $"LastSaveLocation.{extension}", string.Empty );
+			if ( !Directory.Exists( saveLocation ) )
+			{
+				saveLocation = Project.Current.GetAssetsPath();
+			}
+
+			saveLocation = EditorUtility.SaveFileDialog( $"Save {fileType} As..", extension,
+				Path.Combine( saveLocation, $"untitled.{extension}" ) );
+			if ( saveLocation is null )
+				return;
+
+			if ( !saveLocation.NormalizeFilename( false ).StartsWith( Project.Current.GetAssetsPath().NormalizeFilename( false ) ) )
+			{
+				//enforce saving inside Assets/ - if it's outside, complain and let them retry
+				EditorUtility.DisplayDialog( $"Save Failed: Invalid location",
+					$"{fileType}s must be saved inside the Assets folder of your project", "Cancel", "Retry",
+					() => Save( true ) );
+				return;
+			}
+
+			ProjectCookie.SetString( $"LastSaveLocation.{extension}", Path.GetDirectoryName( saveLocation ) );
+		}
+
+		//This session's scene, not whichever one happens to be at the front. A checkpoint writes whatever
+		//was edited, and that is not always the scene being looked at - the event used to name the wrong one.
+		EditorEvent.Run( "scene.beforesave", Scene );
+
+		var asset = AssetSystem.CreateResource( extension, saveLocation );
+		Assert.NotNull( asset, $"Failed to CreateResource for {fileType} at {saveLocation}" );
+
+		//Timed apart, because they are two different pieces of work and they are made cheaper in opposite
+		//ways: making the resource is walking the scene, and writing it is turning the resource into text.
+		var making = Stopwatch.GetTimestamp();
+
+		GameResource resource = ToResource();
+
+		var writing = Stopwatch.GetTimestamp();
+
+		//A scene is not compiled - there is no second file beside it - so the asset system is not asked to make one.
+		asset.SaveToDisk( resource, compile: false, background: background );
+
+		LastResourceMilliseconds = Stopwatch.GetElapsedTime( making, writing ).TotalMilliseconds;
+		LastWriteMilliseconds = Stopwatch.GetElapsedTime( writing ).TotalMilliseconds;
+
+		//Update this scene's path
+		Scene.Source = resource;
+		Scene.Name = System.IO.Path.GetFileNameWithoutExtension( saveLocation );
+
+		HasUnsavedChanges = false;
+		EditorEvent.Run( "scene.saved", Scene );
+
+		UpdateEditorTitle();
+	}
+
+	/// <summary>Resolve a scene to an editor session. If it's a game scene, resolves the parent editor session.</summary>
+	public static SceneEditorSession Resolve( Scene scene )
+	{
+		if ( scene.Editor is SceneEditorSession session )
+		{
+			if ( session is GameEditorSession gs )
+				return gs.Parent; //we want the editor session, not the game session
+
+			return session;
+		}
+
+		return All.FirstOrDefault( x => x.Scene == scene );
+	}
+
+	/// <summary>Resolve a Component to an editor session.</summary>
+	public static Scene.ISceneEditorSession Resolve( Component component ) => Resolve( component?.GameObject );
+
+	/// <summary>Resolve a GameObject to an editor session.</summary>
+	public static Scene.ISceneEditorSession Resolve( GameObject go )
+	{
+		if ( go is null ) return null;
+
+		var session = go.Scene.Editor;
+		if ( session is null )
+		{
+			Log.Error( $"Failed to resolve session for GameObject: {go}" );
+		}
+
+		return session;
+	}
+
+	/// <summary>Resolve a scene file to an editor session.</summary>
+	public static SceneEditorSession Resolve( SceneFile sceneFile )
+	{
+		return All.FirstOrDefault( x => x is not null && !x.IsPrefabSession && x is not GameEditorSession
+			&& string.Equals( sceneFile.ResourcePath, x.Scene.Source?.ResourcePath, StringComparison.OrdinalIgnoreCase ) );
+	}
+
+	/// <summary>Resolve a prefab file to an editor session.</summary>
+	public static SceneEditorSession Resolve( PrefabFile prefabFile )
+	{
+		return All.FirstOrDefault( x => x is not null && x.IsPrefabSession && x is not GameEditorSession
+			&& string.Equals( prefabFile.ResourcePath, x.Scene.Source?.ResourcePath, StringComparison.OrdinalIgnoreCase ) );
+	}
+
+	/// <summary>Resolve an action graph source location to an editor session.</summary>
+	public static SceneEditorSession Resolve( ISourceLocation sourceLocation )
+	{
+		return sourceLocation switch
+		{
+			GameResourceSourceLocation { Resource: SceneFile sceneFile } => Resolve( sceneFile ),
+			GameResourceSourceLocation { Resource: PrefabFile prefabFile } => Resolve( prefabFile ),
+			_ => null
+		};
+	}
+
+	[Obsolete]
+	public void RecordChange( SerializedProperty property )
+	{
+	}
+
+	//Persist the list of open scenes so they can be reopened next session.
+	internal static void SaveOpenSessions()
+	{
+		var open = All
+			.Where( x => x is not GameEditorSession )
+			.Select( x => x.Scene.Source?.ResourcePath )
+			.Where( x => !string.IsNullOrEmpty( x ) )
+			.Distinct()
+			.ToArray();
+
+		ProjectCookie?.Set( "editor.openscenes", open );
+		ProjectCookie?.Set( "editor.activescene", Active?.Scene.Source?.ResourcePath );
+	}
+
+	//Reopen the scenes that were open last session. Falls back to the project's startup scene (or a blank scene) if there's nothing to restore.
+	internal static void RestoreOpenSessions()
+	{
+		foreach ( var path in ProjectCookie?.Get( "editor.openscenes", Array.Empty<string>() ) ?? [] )
+		{
+			CreateFromPath( path );
+		}
+
+		if ( All.Count == 0 )
+		{
+			var startupScene = Project.Current?.Config.GetMetaOrDefault<string>( "StartupScene", null );
+			var session = string.IsNullOrWhiteSpace( startupScene ) ? null : CreateFromPath( startupScene );
+			session ??= CreateDefault();
+			session.MakeActive();
+			return;
+		}
+
+		var activePath = ProjectCookie?.Get<string>( "editor.activescene", null );
+		var active = All.FirstOrDefault( x => x.Scene.Source?.ResourcePath == activePath ) ?? All[0];
+		active.MakeActive();
+	}
+
+	/// <summary>Make a new SceneEditorSession with a default scene</summary>
+	public static SceneEditorSession CreateDefault()
+	{
+		var scene = Scene.CreateEditorScene();
+		using var _ = scene.Push();
+
+		scene.Name = "Untitled Scene";
+
+		{
+			var go = scene.CreateObject();
+			go.Name = "Main Camera";
+			go.LocalTransform = new Transform( Vector3.Up * 2.54f + Vector3.Backward * 7.62f );
+			go.Components.Create<CameraComponent>();
+		}
+
+		{
+			var go = scene.CreateObject();
+			go.Name = "Directional Light";
+			go.LocalTransform = new Transform( Vector3.Up * 5.08f, Rotation.From( 80, 45, 0 ) );
+			go.Components.Create<DirectionalLight>();
+		}
+
+		return new SceneEditorSession( scene );
+	}
+
+	/// <summary>Opens an editor session from an existing scene or prefab</summary>
+	public static SceneEditorSession CreateFromPath( string path )
+	{
+		Resource resource;
+
+		using ( var _read = Rinten.Engine.Bootstrap.StartupTiming?.ScopeTimer( $"Scene {path}: Read" ) )
+		{
+			resource = ResourceLibrary.Get<Resource>( path );
+
+			//Not loaded yet? It might be a mounted scene/prefab.
+			resource ??= SceneFile.Load( path );
+			resource ??= PrefabFile.Load( path );
+		}
+
+		if ( resource is SceneFile sceneFile )
+		{
+			if ( SceneEditorSession.Resolve( sceneFile ) is SceneEditorSession existingSession )
+			{
+				existingSession.MakeActive();
+				return existingSession;
+			}
+
+			var openingScene = Scene.CreateEditorScene();
+			using var _ = openingScene.Push();
+
+			//Timed apart from reading the file: one is the disk and the deserializer, the other
+			//is every component of the level coming to life, and they are not the same problem.
+			var componentsBefore = GameObject.ComponentLoadMs;
+			var countBefore = GameObject.ComponentsLoaded;
+
+			using ( var _load = Rinten.Engine.Bootstrap.StartupTiming?.ScopeTimer( $"Scene {path}: Load" ) )
+			{
+				openingScene.Load( sceneFile );
+			}
+
+			Log.Info( $"scene {path}: {GameObject.ComponentsLoaded - countBefore} components read in " +
+				$"{GameObject.ComponentLoadMs - componentsBefore:F0} ms, the object tree in {Scene.RootsReadMs:F0} ms, " +
+				$"prefabs fetch {GameObject.PrefabFetchMs:F0} patch {GameObject.PrefabPatchMs:F0} remap {GameObject.PrefabRemapMs:F0} ms" );
+
+			var session = new SceneEditorSession( openingScene );
+			return session;
+		}
+
+		if ( resource is PrefabFile prefabFile )
+		{
+			if ( PrefabEditorSession.Resolve( prefabFile ) is PrefabEditorSession existingSession )
+			{
+				existingSession.MakeActive();
+				return existingSession;
+			}
+
+			var openingScene = PrefabScene.CreateForEditing();
+			using var _ = openingScene.Push();
+
+			openingScene.Load( prefabFile );
+
+			var session = new PrefabEditorSession( openingScene );
+			return session;
+		}
+
+		return null;
+	}
+
+	public IEnumerable<object> GetSelection()
+	{
+		foreach ( var obj in Selection )
+		{
+			yield return obj;
+		}
+	}
+
+	public Editor.SceneFolder GetSceneFolder()
+	{
+		if ( Scene?.Source?.ResourcePath == null )
+			return default;
+
+		if ( AssetSystem.FindByPath( Scene.Source.ResourcePath ) is Asset sourceAsset )
+		{
+			return new AssetFolderInstance( sourceAsset );
+		}
+
+		return default;
+	}
+}
+
+file class AssetFolderInstance : SceneFolder
+{
+	string _folder;
+	string _relativeFolder;
+	BaseFileSystem _fs;
+
+	public AssetFolderInstance( Asset sourceAsset )
+	{
+		var relativePath = sourceAsset.GetSourceFile( false );
+		var assetPath = sourceAsset.GetSourceFile( true );
+
+		var extension = System.IO.Path.GetExtension( assetPath ).Replace( ".", "_" );
+		_folder = System.IO.Path.ChangeExtension( assetPath, null );
+		_folder = $"{_folder}{extension}_data";
+
+		_relativeFolder = System.IO.Path.ChangeExtension( relativePath, null );
+		_relativeFolder = $"{_relativeFolder}{extension}_data".NormalizeFilename( false );
+
+		System.IO.Directory.CreateDirectory( _folder );
+
+		_fs = new LocalFileSystem( _folder );
+	}
+
+	~AssetFolderInstance()
+	{
+		MainThread.Queue( () => _fs?.Dispose() );
+	}
+
+	public override string WriteFile( string filename, byte[] data )
+	{
+		_fs.WriteAllBytes( filename, data );
+
+		if ( filename.StartsWith( '/' ) ) filename = filename[1..];
+
+		return System.IO.Path.Combine( _relativeFolder, filename ).NormalizeFilename( false );
+	}
+}

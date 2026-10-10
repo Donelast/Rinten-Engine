@@ -1,0 +1,61 @@
+//The recorder, along the foot of the preview: the buttons that drive it, how fast it plays back, and the scrubber through what was recorded.
+
+.recorder-toolbar
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 2px;
+	height: $row-height + 2px;
+	padding-top: 2px;
+	background-color: $surface-background;
+
+	//The strip is this bar's; the buttons in it are a toolbar's.
+	> .panel-toolbar
+	{
+		flex-shrink: 0;
+		height: $row-height;
+		padding: 0;
+		background-color: transparent;
+	}
+
+	//Red while it is recording, which is the one thing here that is a colour.
+	> .panel-toolbar > .record
+	{
+		color: $red;
+
+		&.active
+		{
+			background-color: $red;
+			color: $text;
+		}
+	}
+
+	> .speed
+	{
+		width: 64px;
+		flex-grow: 0;
+		flex-shrink: 0;
+		min-height: $row-height - 4px;
+	}
+
+	//The well the scrubber runs in, which is what makes it read as a timeline rather than as one more control in a row.
+	> .track
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-grow: 1;
+		min-width: 0;
+		height: 24px;
+		padding: 0 6px;
+		border-radius: 3px;
+		background-color: $control-background;
+
+		//The shape is design.scss's .toolbar-slider, which it wears; this is only how much of the well it takes and what it is a slider of.
+		> SliderControl
+		{
+			flex-grow: 1;
+			min-width: 0;
+		}
+	}
+}

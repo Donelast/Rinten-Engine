@@ -1,0 +1,221 @@
+//The editor's shared tree row; code sets only the indent and guide-line positions
+
+.tree-row
+{
+	position: relative;
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 4px;
+	height: $list-row-height;
+	margin: 0px $gap-items;
+	padding-right: $gap-items;
+	border: 1px solid transparent;
+	border-radius: $radius-1;
+	background-color: transparent;
+	color: $ink;
+	font-size: $type-body;
+	cursor: pointer;
+	pointer-events: all;
+
+	> .expander
+	{
+		flex-shrink: 0;
+		width: 14px;
+		font-size: 14px;
+		text-align: center;
+		color: $ink-faint;
+
+		&.invisible
+		{
+			opacity: 0;
+			pointer-events: none;
+		}
+	}
+
+	> .icon-slot
+	{
+		position: relative;
+		flex-shrink: 0;
+		width: 18px;
+		height: 18px;
+		align-items: center;
+		justify-content: center;
+
+		> .icon
+		{
+			font-size: 15px;
+			text-align: center;
+			color: $ink-dim;
+		}
+
+		> .overlay
+		{
+			position: absolute;
+			right: -3px;
+			bottom: -3px;
+			font-size: 9px;
+			color: $accent;
+		}
+	}
+
+	> .title
+	{
+		flex-shrink: 1;
+		min-width: 0;
+		color: $ink;
+		@include one-line;
+	}
+
+	> .count
+	{
+		flex-shrink: 0;
+		color: $ink-faint;
+	}
+
+	> .suffix
+	{
+		flex-shrink: 1;
+		min-width: 0;
+		font-size: $type-micro;
+		color: $ink-faint;
+		@include one-line;
+	}
+
+	//Whatever a row adds of its own, then its buttons, at the far end.
+	> .trailing
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 2px;
+		margin-left: auto;
+
+		> .actions
+		{
+			flex-direction: row;
+			align-items: center;
+			gap: 2px;
+
+			> .action
+			{
+				width: 18px;
+				font-size: 14px;
+				text-align: center;
+				color: $ink-faint;
+				opacity: 0.45;
+
+				&.on { opacity: 1; }
+				&:hover { color: $ink; opacity: 1; }
+			}
+		}
+	}
+
+	//A line down from the parent, a pixel wide, through the gap to the next row so the run is
+	//unbroken; on a parent's last child it stops at the middle. The tick turns it in towards the row.
+	> .guide
+	{
+		position: absolute;
+		top: 0px;
+		bottom: -2px;
+		width: 1px;
+		background-color: rgba( $ink, 0.14 );
+		pointer-events: none;
+
+		&.half { bottom: 50%; }
+	}
+
+	> .guide.tick
+	{
+		top: 50%;
+		bottom: auto;
+		width: 6px;
+		height: 1px;
+	}
+
+	//What is inside a folder stands on a plate - the ground a component's rows have in the inspector - from its
+	//glyph to its far end; the indent and the guide lines stay on the dock's ground, as do the root and its folders.
+	> .plate
+	{
+		position: absolute;
+		top: -1px;
+		bottom: -1px;
+		right: -1px;
+		border: 1px solid transparent;
+		border-radius: $radius-1;
+		pointer-events: none;
+		display: none;
+	}
+
+	&.inner > .plate
+	{
+		display: flex;
+		background-color: $base-alt;
+	}
+
+	&:hover { background-color: rgba( $ink, 0.05 ); }
+
+	//A row on a plate is lit on its plate, so it keeps its shape.
+	&.inner:hover { background-color: transparent; }
+	&.inner:hover > .plate { background-color: lighten( $base-alt, 0.06 ); }
+
+	&.selected
+	{
+		background-color: rgba( $accent, 0.2 );
+		border-color: rgba( $accent, 0.45 );
+	}
+
+	&.inner.selected
+	{
+		background-color: transparent;
+		border-color: transparent;
+
+		> .plate
+		{
+			background-color: rgba( $accent, 0.2 );
+			border-color: rgba( $accent, 0.45 );
+		}
+	}
+
+	//A heading over things: no plate, its name in small capitals in its own colour, how many it holds after it.
+	&.heading
+	{
+		background-color: transparent;
+
+		> .title,
+		> .count
+		{
+			font-size: $type-micro;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+		}
+	}
+
+	&.heading:hover { background-color: rgba( $ink, 0.03 ); }
+
+	//Switched off: the glyph and the name go faint, the buttons stay to switch it back.
+	&.dim > .icon-slot,
+	&.dim > .title,
+	&.dim > .count
+	{
+		opacity: 0.4;
+	}
+
+	&.drop-top { border-top-color: $accent; }
+	&.drop-bottom { border-bottom-color: $accent; }
+	&.drop-inside { background-color: rgba( $accent, 0.25 ); }
+
+	&.renaming > .title { opacity: 0; }
+
+	> .rename
+	{
+		position: absolute;
+		left: 44px;
+		right: 4px;
+		top: 2px;
+		bottom: 2px;
+		height: unset;
+		min-height: 0;
+	}
+}

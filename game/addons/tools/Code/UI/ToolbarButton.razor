@@ -1,0 +1,65 @@
+@using System
+@using Rinten.UI
+@namespace Editor
+@inherits Panel
+
+@* An icon you press - the brick every toolbar is made of. Nothing in here knows
+   about the editor: what it is called, what it does and whether it is lit are
+   handed in, and what it looks like is not here at all - it is in the editor's
+   own sheet, assets/styles/design.scss, under .toolbarbutton.
+
+   Meant for the base addon eventually, so a game gets it too - see EDITOR-STYLE.md.
+   It is here because the editor's own addon cannot see that one. *@
+
+<root class="toolbarbutton @StateClass" tooltip="@FullToolTip" onclick="@Press">
+	<i style="@TintStyle">@Icon</i>
+	@if ( CornerKey is not null )
+	{
+		<label class="key">@CornerKey</label>
+	}
+</root>
+
+@code
+{
+	//The icon drawn in the middle, by name.
+	public string Icon { get; set; }
+
+	//What the pointer says this does.
+	public string ToolTip { get; set; }
+
+	//Whether the thing this turns on is on.
+	public bool Active { get; set; }
+
+	//Whether it can be pressed at all.
+	public bool Disabled { get; set; }
+
+	//The icon's colour, where it says something the stylesheet cannot know - a stop button is red, an eject that is already ejected is green.
+	public Color? Tint { get; set; }
+
+	//What pressing it does.
+	public Action OnPressed { get; set; }
+
+	//Shortcut id for the same action; shown in the corner and tooltip, follows rebinds
+	public string Shortcut { get; set; }
+
+	private string Keys => string.IsNullOrEmpty( Shortcut ) ? null : EditorShortcuts.GetDisplayKeys( Shortcut );
+
+	//A combination does not fit in the corner; one key does.
+	private string CornerKey => Keys is { Length: > 0 and <= 2 } keys && !keys.Contains( '+' ) ? keys : null;
+
+	private string FullToolTip => string.IsNullOrEmpty( Keys ) ? ToolTip : $"{ToolTip} ({Keys})";
+
+	private string StateClass => (Active ? "active " : null) + (Disabled ? "disabled " : null) + (CornerKey is not null ? "keyed" : null);
+
+	//Tint only while plain, so active/disabled styles from the sheet are not overridden
+	private string TintStyle => Tint.HasValue && !Active && !Disabled ? $"color: {Tint.Value.Hex};" : null;
+
+	private void Press()
+	{
+		if ( Disabled ) return;
+
+		OnPressed?.Invoke();
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Icon, ToolTip, Active, Disabled, Tint, Keys );
+}

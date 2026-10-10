@@ -1,0 +1,43 @@
+GradientPreviewPanel
+{
+	height: 64px;
+	min-height: 64px;
+	flex-shrink: 0;
+	width: 100%;
+	cursor: default;
+	z-index: 1;
+	border-radius: $control-radius;
+	border: 1px solid $border;
+	overflow: hidden;
+	position: relative;
+
+	//Eyedropper: a crosshair while the panel hands out a colour on click.
+	&.picking
+	{
+		cursor: crosshair;
+	}
+
+	> .checker
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		pointer-events: none;
+		background-image: url( tools/checker.png );
+		background-repeat: repeat;
+		image-rendering: point;
+		background-size: 16px 16px;
+	}
+	> .fill
+	{
+		object-fit: fill;
+		position: absolute;
+		left: 0;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		pointer-events: none;
+	}
+}

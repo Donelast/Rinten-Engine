@@ -1,0 +1,6 @@
+@import "NumericFields.scss";
+
+VectorControl.control.no-background
+{
+	@include numeric-fields;
+}

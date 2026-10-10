@@ -1,0 +1,32 @@
+@namespace Editor.Preferences
+@attribute [Title( "Notifications" ), Icon( "notifications" ), Order( 2 )]
+@attribute [Description( "What the editor tells you about, and how long it stays on screen." )]
+@inherits PreferencesPage
+
+<root class="preferences-page">
+	<div class="body" @ref="Body">
+		<label class="section-header">Popups</label>
+		<div @ref="popupHost"></div>
+
+		<label class="section-header">Sounds</label>
+		<div @ref="soundHost"></div>
+	</div>
+</root>
+
+@code
+{
+	Panel popupHost;
+	Panel soundHost;
+
+	protected override void OnBuild()
+	{
+		var popups = AddSheet( popupHost );
+		popups.AddProperty( () => EditorPreferences.NotificationPopups );
+		popups.AddProperty( () => EditorPreferences.CompileNotifications );
+		popups.AddProperty( () => EditorPreferences.ErrorNotificationTimeout );
+
+		var sounds = AddSheet( soundHost );
+		sounds.AddProperty( () => EditorPreferences.NotificationSounds );
+		sounds.AddProperty( () => EditorPreferences.UndoSounds );
+	}
+}

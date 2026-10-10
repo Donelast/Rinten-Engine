@@ -1,0 +1,129 @@
+//The material being painted with and the nine nearest to hand, over the bottom left corner of the view. It lies on the picture, so it paints
+//no ground of its own: what shows between the squares is the scene. Only the squares take the mouse - the gaps let it through to the view.
+.material-palette
+{
+	flex-direction: row;
+	flex-shrink: 0;
+	align-items: flex-start;
+	padding: 4px;
+	gap: 4px;
+	pointer-events: none;
+
+	> .shelf
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		gap: 3px;
+		pointer-events: none;
+
+		> .shelf-row
+		{
+			flex-direction: row;
+			flex-shrink: 0;
+			gap: 3px;
+			pointer-events: none;
+		}
+	}
+}
+
+//One square: a slot is twenty-eight, the active one as tall as the two rows of slots beside it.
+.material-square
+{
+	position: relative;
+	flex-shrink: 0;
+	width: 28px;
+	height: 28px;
+	border-radius: 2px;
+	border: 1px solid transparent;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	pointer-events: all;
+
+	&.active-material
+	{
+		width: 59px;
+		height: 59px;
+	}
+
+	//The thumbnail, multiplied by the tint through background-tint - see MaterialSquare.
+	//Stretched rather than "contain", which the editor's UI renderer reads as a size of nothing.
+	> .picture
+	{
+		position: absolute;
+		left: 0px;
+		top: 0px;
+		width: 100%;
+		height: 100%;
+		border-radius: 2px;
+		background-size: 100% 100%;
+		background-repeat: no-repeat;
+		background-position: 0px 0px;
+		pointer-events: none;
+	}
+
+	//In the flow, the one thing in it, so the square centres it. Stretched over the square as the picture is, the glyph is a label
+	//the size of the square with its letter in the top left corner - centring the label's box does nothing for the letter inside it.
+	> .glyph
+	{
+		display: none;
+		flex-shrink: 0;
+		font-size: 13px;
+		color: rgba( 255, 255, 255, 0.35 );
+		pointer-events: none;
+	}
+
+	//Enough to be seen against the scene and no more.
+	&.empty
+	{
+		border-color: rgba( 255, 255, 255, 0.25 );
+		background-color: rgba( $window-ground, 0.5 );
+
+		> .picture { display: none; }
+		> .glyph { display: flex; }
+
+		&:hover
+		{
+			border-color: rgba( 255, 255, 255, 0.4 );
+			background-color: rgba( $window-ground, 0.7 );
+		}
+	}
+
+	//Kept row: same style as recent row but with a yellow background, so the rows still align
+	&.kept
+	{
+		background-color: rgba( #6b5a2a, 0.5 );
+
+		&.empty
+		{
+			background-color: rgba( #6b5a2a, 0.5 );
+
+			&:hover { background-color: rgba( #6b5a2a, 0.7 ); }
+		}
+	}
+
+	&:hover { border-color: $ink; }
+
+	//A material being carried over it that it would take.
+	&.drop-target
+	{
+		border-color: rgba( $green, 0.9 );
+		background-color: rgba( $green, 0.3 );
+	}
+
+	//The colour in the corner of the big square. A dark edge, so the chip has a border on any thumbnail it happens to be over.
+	> .tint
+	{
+		position: absolute;
+		left: 2px;
+		top: 2px;
+		width: 13px;
+		height: 13px;
+		border-radius: 2px;
+		border: 1px solid rgba( 0, 0, 0, 0.55 );
+		cursor: pointer;
+		pointer-events: all;
+
+		&:hover { border-color: $ink; }
+	}
+}

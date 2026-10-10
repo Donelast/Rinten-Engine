@@ -1,0 +1,102 @@
+EnumControl.control {
+  > .host {
+    width: 100%;
+    flex-grow: 1;
+    min-width: 0;
+
+    //Whatever sits in the slot - dropdown, button group, flags - spans the full width.
+    > * {
+      flex-grow: 1;
+      min-width: 0;
+    }
+
+    > .dropdown {
+      width: 100%;
+      min-height: $control-row-height;
+      padding: $control-text-padding;
+      padding-right: 28px;
+      background-color: $control-background;
+      border: $control-border;
+      border-radius: $control-radius;
+      color: $text-control;
+      gap: 4px;
+      justify-content: flex-start;
+      align-items: center;
+      transition: none;
+      font-size: 13px;
+
+      &:active {
+        background-color: $control-background;
+        transform: none;
+      }
+
+      &.open {
+        transition: none;
+      }
+
+      > .icon {
+        flex-shrink: 0;
+        font-size: $type-default;
+      }
+
+      > .button-right-column {
+        flex-grow: 1;
+        min-width: 0;
+        justify-content: flex-start;
+
+        > .button-label {
+          @include one-line;
+        }
+      }
+
+    }
+
+    > buttongroup {
+      width: 100%;
+      flex-direction: row;
+      gap: $vertical-gap;
+
+      > button {
+        flex: 1 1 100%;
+        justify-content: center;
+        align-items: center;
+        gap: 4px;
+        min-height: $control-row-height;
+        background-color: $control-background;
+        border: 1px solid $border;
+        border-radius: $control-radius;
+        color: $text-light;
+        font-size: 12px;
+        cursor: pointer;
+
+        &:hover:not(.active) {
+          color: $text-control;
+          background-color: $control-background-light;
+        }
+
+        &:active:not(.active) {
+          background-color: $control-background-light;
+          transform: none;
+        }
+
+        &.active {
+          background-color: $primary;
+          border-color: $primary;
+          color: $text;
+          pointer-events: none;
+        }
+      }
+
+      &.flags > button.active {
+        pointer-events: all;
+        cursor: pointer;
+      }
+    }
+  }
+}
+
+//Each button of a group has a third of the row or less, and the words on it were cut to a dot beside the icon. Where
+//a button has an icon, narrow, the icon is the button; one with only words keeps them. See WidthTiers for the classes.
+EnumControl.control.under-240 > .host > buttongroup > button.has-icon > .button-right-column {
+  display: none;
+}

@@ -1,0 +1,28 @@
+ParameterAccessorControl.control.no-background.multiple-rows
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-width: 0;
+	padding: 0;
+	align-self: stretch;
+
+	//Nothing to drive - no renderer behind it, or a model with no animation graph.
+	> .note
+	{
+		min-height: $control-row-height;
+		color: $text-light;
+		font-size: $control-text-size;
+	}
+}
+
+AnimationParameterList
+{
+	> .header
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+		margin-bottom: 4px;
+	}
+}

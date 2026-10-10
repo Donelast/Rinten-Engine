@@ -1,0 +1,99 @@
+﻿//The strip floats over the full-height graph so opening it doesn't resize the graph viewport
+
+.graph-workspace
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+
+	//The graph, or whichever page is standing in for it. What is in it says how it fills - a page and the graph view both grow on their own sheet's say-so.
+	> .page-host
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+	}
+
+	//The grab strip, sitting on top of the secondary panel. Its height is here and its distance from the bottom is the strip's height, which is code's.
+	> .handle
+	{
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: $separator-width;
+		z-index: 10;
+		cursor: ns-resize;
+		background-color: $separator-color;
+
+		&:hover { background-color: $separator-hover-color; }
+	}
+
+	> .secondary
+	{
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 10;
+		flex-direction: column;
+
+		//Nothing in the strip may spill onto the graph beneath it: at its smallest open height the placard is taller than the strip is.
+		overflow: hidden;
+
+		//Opaque: the graph runs on underneath it.
+		background-color: $window-background;
+
+		> .secondary-header
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			height: $row-height + 2px;
+			padding: 0 4px;
+			gap: 4px;
+			background-color: $surface-background;
+
+			> .chevron
+			{
+				flex-shrink: 0;
+				color: rgba( $text-control, 0.5 );
+			}
+
+			//Against the right edge, on the header's ground rather than a bar's.
+			> .panel-toolbar
+			{
+				margin-left: auto;
+				background-color: transparent;
+			}
+		}
+
+		//What the strip says while nothing with a second graph is selected.
+		> .empty
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			align-items: center;
+			justify-content: center;
+			gap: 6px;
+
+			> .glyph
+			{
+				font-size: 44px;
+				color: rgba( $text-control, 0.12 );
+			}
+
+			> .title
+			{
+				font-size: $type-small;
+				font-weight: 600;
+				color: rgba( $text-control, 0.55 );
+			}
+
+			> .hint
+			{
+				font-size: $type-micro;
+				color: rgba( $text-control, 0.3 );
+			}
+		}
+	}
+}

@@ -1,0 +1,12 @@
+//A preview square. It stretches the image to itself, so the field that puts it there does not have to remember to.
+ResourceThumbPanel
+{
+	> .thumb-image
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+	}
+}

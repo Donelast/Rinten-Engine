@@ -1,0 +1,92 @@
+@namespace Editor.SpriteEditor
+@using System
+@using Rinten.UI
+@using Editor.Inspectors
+@attribute [StyleSheet( "AnimationInspectorPanel.razor.scss" )]
+@inherits EditorPanel
+
+@* One control sheet over the selected animation. Its name is edited in the
+   animation list, so it is left off here. *@
+
+<root class="animation-inspector">
+	<div class="scroll">
+		<ControlSheet @ref="_sheet" />
+	</div>
+</root>
+
+@code
+{
+	public ISpriteDocument Document { get; set; }
+	public IAnimationSelection Selection { get; set; }
+
+	ControlSheet _sheet;
+	SerializedObject _target;
+	bool _wired;
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( _wired || Document is null || Selection is null || !_sheet.IsValid() ) return;
+		_wired = true;
+
+		_sheet.PropertyFilter = property => property.Name != nameof( Sprite.Animation.Name );
+
+		Selection.Changed += Retarget;
+		Document.Changed += OnDocumentChanged;
+
+		Retarget();
+	}
+
+	public override void OnDeleted()
+	{
+		base.OnDeleted();
+
+		if ( _target is not null ) _target.OnPropertyChanged -= OnPropertyChanged;
+		if ( !_wired ) return;
+
+		Selection.Changed -= Retarget;
+		Document.Changed -= OnDocumentChanged;
+	}
+
+	//Somebody else changed the sprite - frames added on the timeline, say - and
+	//the sheet shows those too. An edit made through this sheet is already on it.
+	void OnDocumentChanged( SpriteChange change )
+	{
+		if ( change.Source == this ) return;
+
+		Retarget();
+	}
+
+	void Retarget()
+	{
+		if ( _target is not null ) _target.OnPropertyChanged -= OnPropertyChanged;
+
+		_target = Selection.Selected?.GetSerialized();
+
+		if ( _target is not null ) _target.OnPropertyChanged += OnPropertyChanged;
+
+		_sheet.Target = _target;
+		_sheet.Rebuild();
+	}
+
+	void OnPropertyChanged( SerializedProperty property )
+	{
+		if ( property is null ) return;
+
+		Document.Commit( StepName( property ), coalesce: true, source: this );
+	}
+
+	//What the undo step is called. An edit inside a frame arrives as the frame's place in the list - "1" - which read as "Modify 1".
+	static string StepName( SerializedProperty property )
+	{
+		if ( property.Parent is SerializedCollection { ParentProperty: { } list } )
+		{
+			return list.Name == nameof( Sprite.Animation.Frames )
+				? $"Edit Frame {property.Name}"
+				: $"Edit {list.DisplayName} {property.Name}";
+		}
+
+		return $"Change {property.DisplayName}";
+	}
+}

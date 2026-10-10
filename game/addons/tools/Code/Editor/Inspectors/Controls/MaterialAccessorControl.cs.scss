@@ -1,0 +1,33 @@
+MaterialAccessorControl.control.no-background.multiple-rows
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-width: 0;
+	gap: 2px;
+	padding: 0;
+	align-self: stretch;
+
+	//Nothing to override - no renderer behind it, or a model with no materials.
+	> .note
+	{
+		min-height: $control-row-height;
+		color: $text-light;
+		font-size: $control-text-size;
+	}
+
+	> .material-index
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		min-height: $control-row-height;
+		gap: 2px;
+
+		> .toolbarbutton
+		{
+			flex-shrink: 0;
+			width: $control-row-height;
+			height: $control-row-height;
+		}
+	}
+}

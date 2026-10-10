@@ -1,0 +1,98 @@
+KeybindListPanel,
+.keybind-list
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	min-width: 0;
+	gap: 4px;
+
+	.keybind-group
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		width: 100%;
+		min-width: 0;
+
+		> .header
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 6px;
+			height: $row;
+			padding: 0px 6px;
+			border-radius: $radius-2;
+			color: $ink-dim;
+
+			> .chevron
+			{
+				flex-shrink: 0;
+				font-size: $type-large;
+				color: inherit;
+			}
+
+			> .title
+			{
+				flex-grow: 1;
+				min-width: 0;
+				font-size: 12px;
+				font-weight: 600;
+				color: inherit;
+			}
+
+			&:hover { color: $ink; }
+		}
+
+		> .body
+		{
+			flex-direction: column;
+			flex-shrink: 0;
+			width: 100%;
+			min-width: 0;
+			padding: 2px 0px 6px 0px;
+		}
+	}
+
+	.keybind-row
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+		min-height: $row;
+		padding: 2px 6px;
+		border-radius: $radius-1;
+
+		&.alt { background-color: $veil; }
+
+		&:hover { background-color: $veil-hover; }
+
+		> .name
+		{
+			flex-grow: 1;
+			flex-shrink: 1;
+			font-size: 12px;
+			color: $ink-dim;
+			@include one-line;
+		}
+
+		//A slot of its own width, said whether it says anything or not.
+		> .warning
+		{
+			flex: 0 0 16px;
+			justify-content: center;
+			font-size: $type-large;
+			color: $yellow;
+			pointer-events: all;
+		}
+
+		//The field's width lives here and nowhere else - the control inside fills it, so every row's field starts and ends in the same place.
+		> .keys
+		{
+			flex: 0 0 200px;
+			flex-direction: row;
+			min-width: 0;
+		}
+	}
+}

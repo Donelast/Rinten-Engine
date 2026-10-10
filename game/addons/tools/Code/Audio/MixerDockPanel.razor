@@ -1,0 +1,21 @@
+@using Rinten.Audio
+@namespace Editor.Audio
+@inherits Panel
+
+<root class="mixer-dock">
+	<MixerTreePanel @ref="tree" class="tree" />
+	<MixerDetailPanel class="detail" Mixer="@DetailMixer" />
+</root>
+
+@code
+{
+	MixerTreePanel tree;
+
+	Mixer DetailMixer => tree?.Selected.FirstOrDefault() ?? Mixer.Master;
+
+	protected override int BuildHash()
+	{
+		var selected = tree?.Selected.FirstOrDefault();
+		return HashCode.Combine( tree?.StructureRevision ?? 0, selected );
+	}
+}

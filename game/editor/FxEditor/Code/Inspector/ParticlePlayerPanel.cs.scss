@@ -1,0 +1,48 @@
+//What a particle is in a scene: the effect it plays, the way into the editor for it, and the parameters that effect left open.
+
+.particle-player
+{
+	flex-direction: column;
+	width: 100%;
+
+	> .buttons
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 8px 8px 8px;
+	}
+
+	> .parameters
+	{
+		flex-direction: column;
+		width: 100%;
+		border-top: 1px solid $separator-color;
+
+		> .header
+		{
+			flex-direction: row;
+			align-items: center;
+			gap: 8px;
+			padding: 6px 8px 2px 8px;
+
+			> .title
+			{
+				flex-grow: 1;
+				font-family: $font-family;
+				font-size: $type-micro;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: rgba( $text, 0.45 );
+			}
+		}
+
+		> .note
+		{
+			padding: 10px 8px;
+			font-family: $font-family;
+			font-size: $type-body;
+			color: rgba( $text, 0.35 );
+		}
+	}
+}

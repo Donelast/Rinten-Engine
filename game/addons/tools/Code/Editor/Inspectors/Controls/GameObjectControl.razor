@@ -1,0 +1,198 @@
+@using System
+@using Editor.AssetPickers
+@using Editor.TreeBrowser
+@using Rinten.UI
+
+@namespace Editor.Inspectors
+
+@attribute [CustomEditor( typeof( GameObject ) )]
+@attribute [StyleSheet( "GameObjectControl.razor.scss" )]
+
+@inherits BaseControl
+
+<root>
+	<div class="row @ValueClass @( EyeDropperActive ? "active" : null )">
+		<label class="value" @onclick="@OpenPicker">@DisplayText</label>
+		<ToolbarButton Icon="colorize" ToolTip="Pick from scene" Disabled="@IsReadOnly" OnPressed="@StartEyeDropper" />
+	</div>
+</root>
+
+@code
+{
+	public override bool SupportsMultiEdit => true;
+
+	string DisplayText
+	{
+		get
+		{
+			if ( Property is null ) return "None (GameObject)";
+			if ( Property.IsMultipleDifferentValues ) return "Multiple Values";
+
+			var go = Property.GetValue<GameObject>();
+			if ( !go.IsValid() ) return "None (GameObject)";
+			if ( go is PrefabScene ) return go.Name;
+			return BuildName( go );
+		}
+	}
+
+	string ValueClass
+	{
+		get
+		{
+			if ( Property is null ) return "none";
+			if ( Property.IsMultipleDifferentValues ) return "multiple";
+
+			var go = Property.GetValue<GameObject>();
+			if ( !go.IsValid() ) return "none";
+			if ( go is PrefabScene ) return "prefab";
+			return "scene";
+		}
+	}
+
+	bool EyeDropperActive => EyeDropperTool.TargetProperty == Property;
+
+	public override bool AcceptEditorDrops => !IsReadOnly;
+
+	public override DropAction OnEditorDragHover( Widget.DragEvent ev )
+	{
+		var accept = CanAcceptDrop( ev );
+		SetClass( "drop-target", accept );
+		return accept ? DropAction.Link : DropAction.Ignore;
+	}
+
+	public override void OnEditorDragLeave() => SetClass( "drop-target", false );
+
+	public override void OnEditorDragDrop( Widget.DragEvent ev )
+	{
+		if ( Property is null || IsReadOnly ) return;
+
+		if ( ev.Data.OfType<GameObject>().FirstOrDefault() is { } go )
+		{
+			Property.Parent?.NoteStartEdit( Property );
+			Property.SetValue( go );
+			Property.Parent?.NoteFinishEdit( Property );
+			return;
+		}
+
+		if ( ev.Data.HasFileOrFolder )
+		{
+			var asset = AssetSystem.FindByPath( ev.Data.Files.First() );
+			if ( asset?.AssetType.FileExtension == "prefab" )
+				ApplyPrefabAsset( asset );
+		}
+	}
+
+	static bool CanAcceptDrop( Widget.DragEvent ev )
+	{
+		if ( ev.Data.OfType<GameObject>().Any() )
+			return true;
+
+		if ( !ev.Data.HasFileOrFolder ) return false;
+
+		var asset = AssetSystem.FindByPath( ev.Data.Files.First() );
+		return asset?.AssetType.FileExtension == "prefab" && asset.TryLoadResource<PrefabFile>( out _ );
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( !EditorDrag.Active && HasClass( "drop-target" ) )
+			SetClass( "drop-target", false );
+	}
+
+	protected override int BuildHash()
+	{
+		var hc = new HashCode();
+		hc.Add( Property?.GetValue<GameObject>() );
+		hc.Add( Property?.IsMultipleDifferentValues );
+		hc.Add( EyeDropperActive );
+		return hc.ToHashCode();
+	}
+
+	public override void OnPropertyContextMenu( Menu menu )
+	{
+		if ( Property is null ) return;
+
+		var go = Property.GetValue<GameObject>();
+
+		if ( go is PrefabScene prefab )
+		{
+			var asset = AssetSystem.FindByPath( prefab.Source.ResourcePath );
+
+			if ( asset is not null && !asset.IsProcedural )
+				menu.AddOption( "Open in Editor", "edit", () => asset.OpenInEditor() );
+
+			if ( asset is not null )
+				menu.AddOption( "Find in Asset Browser", "search", () => TreeAssetBrowser.OpenTo( asset ) );
+		}
+		else if ( go.IsValid() )
+		{
+			menu.AddOption( "Find in Scene", "search", () => EditorUtility.FindInScene( go ) );
+		}
+
+		menu.AddOption( "Clear", "backspace", Clear ).Enabled = !IsReadOnly;
+	}
+
+	static string BuildName( GameObject go )
+	{
+		if ( !go.IsValid() ) return "None (GameObject)";
+
+		if ( go.Parent.IsValid() && go.Parent is not Rinten.Scene )
+			return $"{BuildName( go.Parent )} > {go.Name}";
+
+		return go.Name;
+	}
+
+	void StartEyeDropper()
+	{
+		if ( Property is null || IsReadOnly ) return;
+		Property.Parent?.NoteStartEdit( Property );
+		EyeDropperTool.SetTargetProperty( Property );
+		EyeDropperTool.OnBackToLastTool = () => Property.Parent?.NoteFinishEdit( Property );
+	}
+
+	void OpenPicker()
+	{
+		if ( Property is null || IsReadOnly ) return;
+
+		var go = Property.GetValue<GameObject>();
+		var resource = ( go as PrefabScene )?.Source;
+		var asset = resource is not null ? AssetSystem.FindByPath( resource.ResourcePath ) : null;
+
+		Property.Parent?.NoteStartEdit( Property );
+
+		var picker = AssetPicker.Create( null, AssetType.Find( "prefab", false ) );
+		picker.Title = "Select GameObject/Prefab";
+		picker.OnAssetHighlighted = o => UpdateFromAsset( o.FirstOrDefault() );
+		picker.OnAssetPicked = assets =>
+		{
+			if ( assets.Length > 0 ) UpdateFromAsset( assets[0] );
+			Property.Parent?.NoteFinishEdit( Property );
+		};
+		picker.Show();
+		picker.SetSelection( asset );
+	}
+
+	void UpdateFromAsset( Asset asset )
+	{
+		if ( asset is null || !asset.TryLoadResource( out PrefabFile prefabFile ) ) return;
+		Property.SetValue( SceneUtility.GetPrefabScene( prefabFile ) );
+		Property.Parent?.NoteChanged( Property );
+	}
+
+	void ApplyPrefabAsset( Asset asset )
+	{
+		if ( asset is null || !asset.TryLoadResource( out PrefabFile prefabFile ) ) return;
+		Property.Parent?.NoteStartEdit( Property );
+		Property.SetValue( SceneUtility.GetPrefabScene( prefabFile ) );
+		Property.Parent?.NoteFinishEdit( Property );
+	}
+
+	void Clear()
+	{
+		Property.Parent?.NoteStartEdit( Property );
+		Property.SetValue<GameObject>( null );
+		Property.Parent?.NoteFinishEdit( Property );
+	}
+}

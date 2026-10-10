@@ -1,0 +1,125 @@
+DateTimeEditorPanel.datetime-editor-panel
+{
+	flex-direction: column;
+	gap: 2px;
+	pointer-events: all;
+	width: 100%;
+
+	> .header
+	{
+		flex-direction: row;
+		gap: 2px;
+		padding: 8px;
+		align-items: stretch;
+		background-color: $control-background;
+		min-height: $control-row-height;
+		opacity: 0.5;
+
+		> .header-label-host
+		{
+			cursor: pointer;
+			flex-grow: 1;
+			justify-content: center;
+			align-items: center;
+			min-height: $control-row-height;
+
+			> .header-label
+			{
+				pointer-events: none;
+			}
+		}
+
+		//Shown in place of the label while the value is being typed.
+		> .header-entry
+		{
+			flex-grow: 1;
+		}
+	}
+
+	> .calendar
+	{
+		flex-direction: column;
+		gap: 2px;
+		width: 100%;
+
+		.cell
+		{
+			flex-grow: 1;
+			flex-shrink: 1;
+			flex-basis: 0;
+			min-width: 0;
+		}
+
+		> .weekdays
+		{
+			flex-direction: row;
+			width: 100%;
+			gap: 2px;
+
+			> .weekday
+			{
+				justify-content: center;
+				align-items: center;
+				min-height: 20px;
+				white-space: nowrap;
+			}
+		}
+
+		> .weeks
+		{
+			width: 100%;
+			flex-direction: column;
+			gap: 2px;
+
+			> .week
+			{
+				flex-direction: row;
+				width: 100%;
+				gap: 2px;
+			}
+		}
+
+		.day-cell
+		{
+			justify-content: center;
+			align-items: center;
+			min-height: $control-row-height;
+			border-radius: $control-radius;
+			cursor: pointer;
+
+			> .label
+			{
+				white-space: nowrap;
+				text-align: center;
+			}
+
+			&:hover:not(.selected)
+			{
+				background-color: $control-background-light;
+			}
+
+			&.selected
+			{
+				background-color: $primary;
+				color: $text;
+			}
+		}
+	}
+
+	> .time
+	{
+		flex-direction: row;
+		gap: 2px;
+		padding-top: 3px;
+
+		> .control
+		{
+			max-width: 80px;
+		}
+	}
+
+	&.date-only > .time
+	{
+		display: none;
+	}
+}

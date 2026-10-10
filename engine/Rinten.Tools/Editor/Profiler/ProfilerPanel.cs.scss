@@ -1,0 +1,58 @@
+//Profiler layout; rows and header are the shared PanelListRow/PanelListHeader styles
+
+.profiler
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+
+	font-family: $font;
+
+	//The ground a banded row is transparent over: the same as the hierarchy sits on.
+	background-color: $list-background;
+}
+
+.profiler > .body
+{
+	position: relative;
+	flex-grow: 1;
+	min-height: 0;
+}
+
+.profiler-list
+{
+	width: 100%;
+	height: 100%;
+}
+
+//The search box is a toolbar's height rather than a form's.
+.panel-toolbar TextField
+{
+	height: 20px;
+	width: 160px;
+	padding: 0px 8px;
+	font-size: $type-small;
+
+	.mark { font-size: $type-body; margin-right: 5px; }
+}
+
+//A top-level span is the frame's own shape; the rest is detail under it.
+.profiler-row.top > .head > .name
+{
+	font-weight: 600;
+	color: $ink;
+}
+
+//The column being read is the one the heat is about.
+.profiler-row .time { color: $ink-dim; }
+
+.profiler-row.hot > .bar > .fill { background-color: $reading-alarm; }
+.profiler-row.warm > .bar > .fill { background-color: $reading-warn; }
+.profiler-row.cool > .bar > .fill { background-color: $reading-cool; }
+
+.profiler-row.hot .time { color: $reading-alarm; }
+.profiler-row.warm .time { color: $reading-warn; }
+.profiler-row.cool .time { color: $reading-cool; }
+
+//Enough allocation to be the reason a frame stalled.
+.profiler-row.loud .alloc { color: $reading-warn; }

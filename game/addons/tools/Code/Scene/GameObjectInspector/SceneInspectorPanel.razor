@@ -1,0 +1,64 @@
+@namespace Editor.Inspectors
+@inherits InspectorPanel
+@attribute [Inspector( typeof( Scene ) )]
+
+<root class="scene-inspector">
+	<div class="scroll" @ref="Scroll">
+
+		<div class="inspector-head scene-header">
+			<div class="top-row">
+				<label class="icon material-icon">perm_media</label>
+				@if ( NameProperty is not null )
+				{
+					<StringControl Property="@NameProperty" />
+				}
+			</div>
+			<div class="fields column" @ref="Fields"></div>
+		</div>
+
+	</div>
+</root>
+
+@code
+{
+	//Laid out the way the inspector lays out a GameObject: the scene's name and its settings
+	//under no heading in the first card, and a card for each heading the rest are filed under.
+	Panel Scroll;
+	Panel Fields;
+
+	private SerializedProperty NameProperty => SerializedObject?.GetProperty( nameof( GameObject.Name ) );
+
+	public SceneInspectorPanel( SerializedObject so ) : base( so )
+	{
+	}
+
+	protected override int BuildHash() => HashCode.Combine( SerializedObject );
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( !firstTime || SerializedObject is null ) return;
+
+		InspectorCard.Lay( Fields, Scroll, SerializedObject.Where( IsSceneProperty ), "scene" );
+	}
+
+	//The sheet under the header is for the scene's own settings - what is marked [Property], as on a component - not
+	//the GameObject it happens to also be, nor the plumbing (Id, IsProxy, Directory, SceneWorld...) that is only public.
+	static bool IsSceneProperty( SerializedProperty property )
+	{
+		if ( !property.HasAttribute<PropertyAttribute>() || property.HasAttribute<HideAttribute>() ) return false;
+		if ( property.Name == nameof( GameObject.Name ) ) return false;
+		if ( property.Name == nameof( GameObject.Scene ) ) return false;
+		if ( property.Name == nameof( GameObject.Transform ) ) return false;
+		if ( property.Name == nameof( GameObject.IsRoot ) ) return false;
+		if ( property.Name == nameof( GameObject.Root ) ) return false;
+		if ( property.Name == nameof( GameObject.EnabledToken ) ) return false;
+		if ( property.Name == nameof( GameObject.Components ) ) return false;
+		if ( property.Name == nameof( GameObject.Enabled ) ) return false;
+		if ( property.Name == nameof( GameObject.Parent ) ) return false;
+		if ( property.Name == nameof( GameObject.IsStatic ) ) return false;
+		if ( property.Name == nameof( GameObject.Tags ) ) return false;
+		return true;
+	}
+}

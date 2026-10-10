@@ -1,0 +1,60 @@
+//The preview block under a sound event's properties: a bar, then the circle.
+SoundRadiusPanel
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 4px;
+	padding: 8px;
+	margin-top: 4px;
+	border-top: 1px solid $border;
+
+	> .bar
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+
+		> .title
+		{
+			color: $ink;
+			font-weight: 600;
+		}
+
+		> .hint
+		{
+			flex-grow: 1;
+			min-width: 0;
+			color: $ink-dim;
+			font-size: $type-small;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+			overflow: hidden;
+		}
+	}
+
+	//A fixed height under the properties, which keep the rest of the page and scroll in it; the circle fits whichever of the two sides is shorter.
+	> .field
+	{
+		position: relative;
+		flex-shrink: 0;
+		height: 220px;
+		border-radius: $control-radius;
+		background-color: $control-background;
+		border: 1px solid $border;
+		overflow: hidden;
+		pointer-events: all;
+		cursor: pointer;
+
+		//Beside the top of the line up to the edge.
+		> .radius
+		{
+			position: absolute;
+			top: 4px;
+			left: 50%;
+			margin-left: 6px;
+			color: $ink-dim;
+			font-size: $type-small;
+			pointer-events: none;
+		}
+	}
+}

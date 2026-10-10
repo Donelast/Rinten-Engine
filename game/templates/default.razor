@@ -1,0 +1,17 @@
+@using Rinten;
+@using Rinten.UI;
+@inherits PanelComponent
+@namespace Rinten
+
+<root>
+	<div class="title">@MyStringValue</div>
+</root>
+
+@code
+{
+
+	[Property, TextArea] public string MyStringValue { get; set; } = "Hello World!";
+
+	//the hash determines if the system should be rebuilt. If it changes, it will be rebuilt
+	protected override int BuildHash() => System.HashCode.Combine( MyStringValue );
+}

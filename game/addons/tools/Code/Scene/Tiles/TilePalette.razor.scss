@@ -1,0 +1,62 @@
+//A tile set's sheet with its grid over it - see TilePalette.razor.
+.tile-palette
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	padding: 4px;
+	font-family: $font;
+	pointer-events: all;
+
+	> .empty
+	{
+		padding: 12px 4px;
+		font-size: $type-body;
+		color: $ink;
+		opacity: 0.6;
+	}
+
+	> .sheet
+	{
+		position: relative;
+		flex-shrink: 0;
+		width: 100%;
+		background-size: 100% 100%;
+		background-repeat: no-repeat;
+		image-rendering: pixelated;
+		border-radius: $radius-1;
+		background-color: rgba( 0, 0, 0, 0.25 );
+
+		> .cell
+		{
+			position: absolute;
+			border: 1px solid rgba( 255, 255, 255, 0.06 );
+			cursor: pointer;
+
+			&:hover
+			{
+				border-color: rgba( 255, 255, 255, 0.7 );
+			}
+
+			&.solid
+			{
+				border-bottom: 2px solid rgba( 255, 120, 90, 0.8 );
+			}
+
+			&.oneway
+			{
+				border-top: 2px solid rgba( 120, 200, 255, 0.9 );
+			}
+
+			&.animated
+			{
+				border-right: 2px solid rgba( 255, 220, 90, 0.9 );
+			}
+
+			&.selected
+			{
+				border: 2px solid $accent;
+				background-color: rgba( 255, 255, 255, 0.12 );
+			}
+		}
+	}
+}

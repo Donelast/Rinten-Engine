@@ -1,0 +1,79 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace Rinten.SolutionGenerator;
+
+public class ProjectInfo
+{
+	public string Name { get; set; }
+	public string PackageIdent { get; set; }
+	public string Path { get; set; }
+	public string Type { get; set; }
+	public string CsprojPath { get; set; }
+	public string Guid { get; set; }
+	public bool IsEditorProject { get; set; }
+	public bool IsUnitTestProject { get; set; }
+	public string RintenProjectFilePath { get; set; }
+	public Compiler.Configuration Settings { get; set; }
+
+	public string Folder { get; set; }
+
+	public List<string> References { get; set; } = new List<string>
+	{
+		"Rinten.System.dll",
+		"Rinten.Engine.dll",
+		"Rinten.Filesystem.dll",
+		"Rinten.Reflection.dll",
+		"Rinten.Mounting.dll",
+		"Microsoft.AspNetCore.Components.dll",
+	};
+
+	public List<string> PackageReferences { get; set; } = new List<string>();
+
+	public List<string> GlobalStatic { get; set; } = new List<string>();
+	public List<string> GlobalUsing { get; set; } = new List<string>();
+	public List<string> IncludeFiles { get; set; } = new();
+	public List<string> IgnoreFiles { get; set; } = new();
+
+	public ProjectInfo( string type, string packageIdent, string name, string path, Compiler.Configuration settings )
+	{
+		Type = type;
+		Name = name;
+		Path = path;
+		PackageIdent = packageIdent;
+		CsprojPath = System.IO.Path.Combine( Path, Name + ".csproj" );
+		Guid = GetHashFromProjectName( Name );
+		Settings = settings;
+	}
+
+	private string GetHashFromProjectName( string name )
+	{
+		var r = new Random( name.FastHash() );
+		var guidseed = new byte[16];
+		r.NextBytes( guidseed );
+
+		var Guid = new Guid( guidseed );
+
+		return Guid.ToString( "B" ).ToUpper();
+	}
+
+	public IEnumerable<ProjectInfo> GetDependencies( Dictionary<string, ProjectInfo> allProjects )
+	{
+		if ( Name == "base" )
+			yield break;
+
+		var seen = new HashSet<ProjectInfo>();
+
+		if ( !allProjects.TryGetValue( "base", out ProjectInfo p ) || !seen.Add( p ) )
+			yield break;
+
+		yield return p;
+
+		foreach ( var e in p.GetDependencies( allProjects ) )
+		{
+			if ( seen.Add( e ) )
+				yield return e;
+		}
+
+	}
+}

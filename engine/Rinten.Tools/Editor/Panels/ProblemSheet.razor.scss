@@ -1,0 +1,180 @@
+//The card that says what stopped the editor - a failed build, a failed open - over the same blur as the launcher. It
+//wears the window frame EditorModal does, and is wider: its body is a list of file:line messages that want the room.
+
+ProblemSheet,
+.problem-sheet
+{
+	flex-direction: column;
+	gap: 8px;
+	width: 760px;
+	max-width: 90%;
+	max-height: 85%;
+	padding: 16px;
+	pointer-events: all;
+
+	background-color: $panel-ground;
+
+	@include frame;
+
+	> .head
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+		flex-shrink: 0;
+
+		> .badge
+		{
+			flex-shrink: 0;
+			width: 32px;
+			height: 32px;
+			align-items: center;
+			justify-content: center;
+			border-radius: $radius-2;
+			background-color: $veil-down;
+
+			> i
+			{
+				font-family: Material Icons;
+				font-size: 20px;
+				color: $red;
+			}
+		}
+
+		> .titles
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			flex-shrink: 1;
+
+			> .title
+			{
+				font-size: $type-default;
+				font-weight: 600;
+				color: $ink;
+			}
+
+			> .count
+			{
+				font-size: $type-small;
+				color: $ink-faint;
+			}
+		}
+	}
+
+	> .message
+	{
+		flex-shrink: 0;
+		font-size: $type-body;
+		line-height: 1.4;
+		white-space: pre-wrap;
+		color: $ink-dim;
+	}
+
+	//The problems, on the dark of a field: a row each, the file under the message.
+	> .list
+	{
+		flex-direction: column;
+		flex-shrink: 1;
+		min-height: 60px;
+		max-height: 380px;
+		overflow: scroll;
+		padding: 4px;
+		border-radius: $radius-2;
+		background-color: $window-ground;
+
+		> .row
+		{
+			flex-direction: row;
+			align-items: flex-start;
+			flex-shrink: 0;
+			gap: 8px;
+			padding: 6px 8px;
+			border-radius: $radius-1;
+
+			&.can-open
+			{
+				cursor: pointer;
+
+				&:hover { background-color: $veil-hover; }
+				&:active { background-color: $veil-down; }
+			}
+
+			> .severity
+			{
+				flex-shrink: 0;
+				font-family: Material Icons;
+				font-size: 16px;
+
+				&.is-error { color: $red; }
+				&.is-warning { color: $gold; }
+			}
+
+			> .text
+			{
+				flex-direction: column;
+				flex-grow: 1;
+				flex-shrink: 1;
+				gap: 2px;
+
+				> .what
+				{
+					font-size: $type-body;
+					color: $ink;
+					white-space: pre-wrap;
+				}
+
+				> .where
+				{
+					font-family: $font-mono;
+					font-size: $type-small;
+					color: $ink-faint;
+				}
+			}
+		}
+
+		> .more
+		{
+			flex-shrink: 0;
+			padding: 6px 8px;
+			font-size: $type-small;
+			color: $ink-faint;
+		}
+	}
+
+	//An exception, as it was thrown.
+	> .details
+	{
+		flex-shrink: 1;
+		min-height: 60px;
+		max-height: 380px;
+		overflow: scroll;
+		padding: 8px;
+		border-radius: $radius-2;
+		background-color: $window-ground;
+		font-family: $font-mono;
+		font-size: $type-small;
+		white-space: pre-wrap;
+		color: $ink-dim;
+	}
+
+	//Copy and open at the left, the ways past it at the right.
+	> .actions
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 8px;
+		margin-top: 8px;
+
+		> .spacer { flex-grow: 1; }
+
+		> .btn { min-width: 80px; }
+
+		> .btn.is-disabled
+		{
+			opacity: 0.5;
+			pointer-events: none;
+		}
+	}
+}

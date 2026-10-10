@@ -1,0 +1,273 @@
+@using System
+@using Editor.AssetPickers
+@using Editor.TreeBrowser
+@using Rinten.UI
+
+@namespace Editor.Inspectors
+
+@attribute [CustomEditor( ForInterface = true )]
+@attribute [StyleSheet( "InterfaceControl.razor.scss" )]
+
+@inherits BaseControl
+
+<root>
+	<div class="row @ValueClass @( EyeDropperActive ? "active" : null )" @ref="RowHost">
+		<label class="value" @onclick="@OnValueClick">@DisplayText</label>
+		<ToolbarButton Icon="colorize" ToolTip="@PickerToolTip" Disabled="@IsReadOnly" OnPressed="@StartEyeDropper" />
+	</div>
+</root>
+
+@code
+{
+	public override bool SupportsMultiEdit => true;
+
+	internal Panel RowHost { get; private set; }
+
+	string PickerToolTip => Property is null ? "Pick value" : $"Pick {Property.DisplayName}";
+
+	string DisplayText
+	{
+		get
+		{
+			if ( Property is null ) return "None";
+			if ( Property.IsMultipleDifferentValues ) return "Multiple Values";
+
+			var value = GetValue();
+			if ( value is null ) return NoneLabel;
+
+			return FormatValue( value );
+		}
+	}
+
+	string NoneLabel => PropertyTypeName is { } name ? $"None ({name})" : "None";
+
+	string PropertyTypeName
+	{
+		get
+		{
+			if ( Property is null ) return null;
+			return EditorTypeLibrary.GetType( Property.PropertyType )?.Name ?? Property.PropertyType.Name;
+		}
+	}
+
+	string ValueClass
+	{
+		get
+		{
+			if ( Property is null ) return "none";
+			if ( Property.IsMultipleDifferentValues ) return "multiple";
+
+			return GetValue() is not null ? "set" : "none";
+		}
+	}
+
+	bool UsesAssetPicker => Property is not null
+		&& Property.PropertyType.IsInterface
+		&& !Property.PropertyType.IsAssignableFrom( typeof( GameObject ) )
+		&& !Property.PropertyType.IsAssignableFrom( typeof( Component ) )
+		&& Property.PropertyType.IsAssignableFrom( typeof( Resource ) );
+
+	bool EyeDropperActive => EyeDropperTool.TargetProperty == Property;
+
+	public override bool AcceptEditorDrops => !IsReadOnly;
+
+	public override DropAction OnEditorDragHover( Widget.DragEvent ev )
+	{
+		var accept = GetMatching( ev.Data ) is not null;
+		SetClass( "drop-target", accept );
+		return accept ? DropAction.Link : DropAction.Ignore;
+	}
+
+	public override void OnEditorDragLeave() => SetClass( "drop-target", false );
+
+	public override void OnEditorDragDrop( Widget.DragEvent ev )
+	{
+		if ( Property is null || IsReadOnly ) return;
+
+		var value = GetMatching( ev.Data );
+		if ( value is null ) return;
+
+		Property.Parent?.NoteStartEdit( Property );
+		Property.SetValue( value );
+		Property.Parent?.NoteFinishEdit( Property );
+	}
+
+	object GetMatching( DragData data )
+	{
+		if ( Property is null || data is null ) return null;
+
+		var type = Property.PropertyType;
+
+		if ( data.OfType( type ).FirstOrDefault() is { } direct && Matches( direct ) )
+			return direct;
+
+		foreach ( var go in data.OfType<GameObject>() )
+		{
+			if ( Matches( go ) ) return go;
+
+			var comp = go.Components.Get( type, FindMode.EverythingInSelf );
+			if ( Matches( comp ) ) return comp;
+		}
+
+		var asset = AssetFrom( data );
+		if ( asset is null || !CanAssignAsset( asset ) ) return null;
+
+		var resource = asset.LoadResource<GameResource>();
+		return Matches( resource ) ? resource : null;
+	}
+
+	bool Matches( object value )
+	{
+		if ( value is null ) return false;
+		if ( !Property.PropertyType.IsInstanceOfType( value ) ) return false;
+		if ( value is IValid valid && !valid.IsValid() ) return false;
+		return true;
+	}
+
+	static Asset AssetFrom( DragData data )
+	{
+		if ( data is null ) return null;
+
+		if ( data.OfType<Asset>().FirstOrDefault() is { IsDeleted: false } carried )
+			return carried;
+
+		if ( !string.IsNullOrWhiteSpace( data.Text )
+			&& !data.Text.Contains( '\n' )
+			&& AssetSystem.FindByPath( data.Text ) is { IsDeleted: false } named )
+			return named;
+
+		if ( !data.HasFileOrFolder ) return null;
+
+		return AssetSystem.FindByPath( data.FileOrFolder );
+	}
+
+	bool CanAssignAsset( Asset asset )
+	{
+		if ( Property is null || asset is null ) return false;
+		if ( !asset.AssetType.IsGameResource ) return false;
+		return asset.AssetType.ResourceType.IsAssignableTo( Property.PropertyType );
+	}
+
+	object GetValue()
+	{
+		if ( Property is null || Property.IsMultipleDifferentValues ) return null;
+		return Property.GetValue<object>( null );
+	}
+
+	static string FormatValue( object value )
+	{
+		switch ( value )
+		{
+			case GameObject go:
+				return go.Name;
+			case Component comp:
+				return comp.GameObject.IsValid()
+					? $"{comp.GetType().Name} on {comp.GameObject.Name}"
+					: comp.GetType().Name;
+			case Resource resource:
+				return resource.ResourceName;
+			default:
+				return value.ToString();
+		}
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( !EditorDrag.Active && HasClass( "drop-target" ) )
+			SetClass( "drop-target", false );
+	}
+
+	protected override int BuildHash()
+	{
+		var hc = new HashCode();
+		hc.Add( GetValue() );
+		hc.Add( Property?.IsMultipleDifferentValues );
+		hc.Add( EyeDropperActive );
+		return hc.ToHashCode();
+	}
+
+	public override void OnPropertyContextMenu( Menu menu )
+	{
+		if ( Property is null ) return;
+
+		if ( UsesAssetPicker )
+			menu.AddOption( "Select Asset", "dvr", OpenPicker ).Enabled = !IsReadOnly;
+		else
+			menu.AddOption( "Pick from Scene", "colorize", StartEyeDropper ).Enabled = !IsReadOnly;
+
+		var value = GetValue();
+		if ( value is Resource resource )
+		{
+			var asset = AssetSystem.FindByPath( resource.ResourcePath );
+			if ( asset is not null )
+				menu.AddOption( "Find in Asset Browser", "search", () => TreeAssetBrowser.OpenTo( asset ) );
+		}
+		else if ( value is GameObject go && go.IsValid() )
+		{
+			menu.AddOption( "Find in Scene", "search", () => EditorUtility.FindInScene( go ) );
+		}
+		else if ( value is Component comp && comp.IsValid() )
+		{
+			menu.AddOption( "Find in Scene", "search", () => EditorUtility.FindInScene( comp ) );
+		}
+
+		menu.AddSeparator();
+		menu.AddOption( "Clear", "backspace", Clear ).Enabled = !IsReadOnly;
+	}
+
+	void OnValueClick()
+	{
+		if ( UsesAssetPicker )
+			OpenPicker();
+		else
+			StartEyeDropper();
+	}
+
+	void StartEyeDropper()
+	{
+		if ( Property is null || IsReadOnly ) return;
+		Property.Parent?.NoteStartEdit( Property );
+		EyeDropperTool.SetTargetProperty( Property );
+		EyeDropperTool.OnBackToLastTool = () => Property.Parent?.NoteFinishEdit( Property );
+	}
+
+	void OpenPicker()
+	{
+		if ( Property is null || IsReadOnly ) return;
+
+		var resource = GetValue() as Resource;
+		var asset = resource is not null ? AssetSystem.FindByPath( resource.ResourcePath ) : null;
+		var assetType = AssetType.FromType( resource.IsValid() ? resource.GetType() : Property.PropertyType );
+
+		Property.Parent?.NoteStartEdit( Property );
+
+		var picker = AssetPicker.Create( null, assetType );
+		picker.Title = $"Select {Property.DisplayName}";
+		picker.OnAssetHighlighted = o => UpdateFromAsset( o.FirstOrDefault() );
+		picker.OnAssetPicked = o =>
+		{
+			if ( o.Length > 0 ) UpdateFromAsset( o[0] );
+			Property.Parent?.NoteFinishEdit( Property );
+		};
+		picker.Show();
+		picker.SetSelection( asset );
+	}
+
+	void UpdateFromAsset( Asset asset )
+	{
+		if ( asset is null || !CanAssignAsset( asset ) ) return;
+
+		var resource = asset.LoadResource<GameResource>();
+		Property.SetValue( resource );
+		Property.Parent?.NoteChanged( Property );
+	}
+
+	void Clear()
+	{
+		Property.Parent?.NoteStartEdit( Property );
+		Property.SetValue<object>( null );
+		Property.Parent?.NoteFinishEdit( Property );
+	}
+}

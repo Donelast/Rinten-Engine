@@ -1,0 +1,9 @@
+//Three angle fields filling the row they are the editor for.
+RotationControl.control.no-background
+{
+	//The angle fields can wrap in a narrow inspector.
+	height: auto;
+	min-height: $control-row-height;
+	flex-grow: 1;
+	min-width: 0;
+}

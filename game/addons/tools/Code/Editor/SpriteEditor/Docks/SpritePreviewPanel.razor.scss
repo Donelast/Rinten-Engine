@@ -1,0 +1,22 @@
+//The preview: a bar with the filter toggle, and the picture filling the rest.
+
+.sprite-preview
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+
+	> .bar
+	{
+		flex-direction: row;
+		justify-content: flex-end;
+		flex-shrink: 0;
+		padding: 2px 4px;
+	}
+
+	> .view
+	{
+		flex-grow: 1;
+		min-height: 0;
+	}
+}

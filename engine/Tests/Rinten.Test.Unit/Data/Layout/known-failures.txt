@@ -1,0 +1,6 @@
+# Browser fixtures the engine does not reproduce yet. Each line pins a case to the SHA-256 of its
+# exact mismatch report; the case is tolerated only while it fails in that recorded way. Starting
+# to pass, or failing differently, fails the run. Record with RINTEN_LAYOUT_RECORD_KNOWN_FAILURES
+# and review every changed line before it lands.
+#
+# case = SIGNATURE

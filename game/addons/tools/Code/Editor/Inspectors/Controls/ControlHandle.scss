@@ -1,0 +1,77 @@
+@mixin control-shell
+{
+	flex-grow: 1;
+	flex-basis: 0;
+	min-width: 0;
+	flex-direction: row;
+	align-items: stretch;
+	background-color: $control-background;
+	border: 1px solid $border;
+	border-radius: $control-radius;
+	overflow: hidden;
+}
+
+@mixin control-prefix
+{
+	> .prefix
+	{
+		flex-direction: row;
+		width: $row-height;
+		min-width: $row-height;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		margin-right: 0;
+		border-right: $control-border;
+
+		> .label
+		{
+			font-weight: 500;
+			font-size: 11px;
+		}
+
+		//A handle with something to drag says so: the pointer that changes over it is the only hint the grip is there at all.
+		&.draggable
+		{
+			cursor: ew-resize;
+		}
+
+		&.draggable:hover
+		{
+			background-color: $control-background-light;
+		}
+
+		&.dragging
+		{
+			background-color: $control-background-light;
+		}
+	}
+
+	&.readonly > .prefix.draggable
+	{
+		cursor: default;
+		background-color: transparent;
+	}
+
+	//The X/Y/Z handle shrinks then hides before the number does; see WidthTiers for the classes
+	&.under-60 > .prefix
+	{
+		width: 14px;
+		min-width: 14px;
+	}
+
+	&.under-40 > .prefix
+	{
+		display: none;
+	}
+}
+
+@mixin control-field
+{
+	> .field
+	{
+		flex-grow: 1;
+		min-width: 0;
+		min-height: $control-row-height;
+	}
+}

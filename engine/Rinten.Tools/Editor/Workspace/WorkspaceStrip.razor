@@ -1,0 +1,231 @@
+@namespace Editor
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Rinten.UI
+
+@inherits Panel
+
+@* Tool strip in the menu bar: General, pinned tools, then other open ones; + pins another *@
+
+<root class="workspace-strip">
+	@foreach ( var slot in _slots )
+	{
+		var workspace = Find( slot.Title );
+		var count = workspace?.Documents?.Count ?? 0;
+
+		<div class="tool @( IsCurrent( workspace ) ? "current" : null ) @( workspace is not null ? "open" : null )"
+			tooltip="@slot.Tip"
+			onclick="@( () => Press( slot ) )"
+			onrightclick="@( () => ShowMenu( slot ) )"
+			onmiddleclick="@( () => CloseSlot( slot ) )">
+			<i>@slot.Icon</i>
+
+			@if ( count > 0 )
+			{
+				<div class="count">@( count > 99 ? "99" : count.ToString() )</div>
+			}
+		</div>
+	}
+
+	<div class="tool add" tooltip="Pin a tool to the strip" onclick="@ShowAddMenu">
+		<i>add</i>
+	</div>
+</root>
+
+@code
+{
+	//Pinned tool titles in order; bump the number when the default changes
+	const string PinnedCookie = "editor.toolstrip.pinned.2";
+
+	static readonly string[] DefaultPinned = { "Mapping", "Model Editor", "Material Editor", "FX Editor", "UI Editor", "Movie Maker" };
+
+	//A tool that can stand on the strip, and how it is opened when it is not
+	record Tool( string Title, string Icon, string Description, Action Open );
+
+	//One square on the strip
+	record Slot( string Title, string Icon, string Tip, Action Open );
+
+	readonly List<EditorWorkspace> _workspaces = new();
+	readonly List<Slot> _slots = new();
+	List<string> _pinned;
+	float _width;
+
+	/// <summary>The widget this strip sits in; menus open from it.</summary>
+	internal WorkspaceTabBar Host { get; init; }
+
+	/// <summary>Run when the squares end somewhere else along the bar.</summary>
+	internal Action Resized { get; init; }
+
+	public WorkspaceStrip()
+	{
+		//Out of the assembly - see EditorStyles; [StyleSheet] looks in a filesystem that has no editor sheets
+		EditorStyles.Apply( this, "WorkspaceStrip.razor.scss" );
+	}
+
+	List<string> Pinned => _pinned ??= EditorCookie.Get( PinnedCookie, DefaultPinned.ToList() );
+
+	WorkspaceArea Area => WorkspaceArea.Current;
+
+	static IEnumerable<Tool> AllTools()
+	{
+		yield return new Tool( "Mapping", "hardware", "The scene laid out for building it", () => EditorMainWindow.Current?.OpenMapping() );
+
+		foreach ( var app in EditorTypeLibrary.GetAttributes<EditorAppAttribute>().OrderBy( x => x.Title ) )
+			yield return new Tool( app.Title, app.Icon, app.Description, app.OpenFromMenu );
+	}
+
+	static string Tip( string title, string description ) => string.IsNullOrWhiteSpace( description ) ? title : $"{title} - {description}";
+
+	EditorWorkspace Find( string title ) => _workspaces.FirstOrDefault( x => x.IsValid() && x.Title == title );
+
+	bool IsCurrent( EditorWorkspace workspace ) => workspace is not null && Area.IsValid() && Area.IsCurrent( workspace );
+
+	/// <summary>Show these workspaces, in this order.</summary>
+	internal void SetTabs( IEnumerable<EditorWorkspace> workspaces )
+	{
+		_workspaces.Clear();
+		_workspaces.AddRange( workspaces );
+
+		Rebuild();
+	}
+
+	internal void Rebuild()
+	{
+		_slots.Clear();
+
+		var tools = AllTools().ToList();
+		var shown = new HashSet<EditorWorkspace>();
+
+		//The ones that cannot close - General - before everything
+		foreach ( var workspace in _workspaces.Where( x => !x.CanClose ) )
+		{
+			_slots.Add( new Slot( workspace.Title, workspace.Icon, workspace.Title, null ) );
+			shown.Add( workspace );
+		}
+
+		foreach ( var title in Pinned )
+		{
+			if ( tools.FirstOrDefault( x => x.Title == title ) is not { } tool ) continue;
+
+			_slots.Add( new Slot( tool.Title, tool.Icon, Tip( tool.Title, tool.Description ), tool.Open ) );
+
+			if ( Find( title ) is { } open ) shown.Add( open );
+		}
+
+		foreach ( var workspace in _workspaces.Where( x => !shown.Contains( x ) ) )
+		{
+			var tool = tools.FirstOrDefault( x => x.Title == workspace.Title );
+			_slots.Add( new Slot( workspace.Title, workspace.Icon, Tip( workspace.Title, tool?.Description ), tool?.Open ) );
+		}
+
+		StateHasChanged();
+	}
+
+	void SetPinned( string title, bool pinned )
+	{
+		if ( pinned == Pinned.Contains( title ) ) return;
+
+		if ( pinned ) Pinned.Add( title );
+		else Pinned.Remove( title );
+
+		EditorCookie.Set( PinnedCookie, Pinned );
+		Rebuild();
+	}
+
+	//Its workspace to the front, or the tool opened
+	void Press( Slot slot )
+	{
+		if ( Find( slot.Title ) is { } workspace ) Area?.MakeCurrent( workspace );
+		else slot.Open?.Invoke();
+	}
+
+	void CloseSlot( Slot slot )
+	{
+		if ( Find( slot.Title ) is { CanClose: true } workspace )
+			Area?.Close( workspace );
+	}
+
+	void ShowMenu( Slot slot )
+	{
+		var workspace = Find( slot.Title );
+
+		//General is always there and always open: nothing to pin or close
+		if ( workspace is { CanClose: false } ) return;
+
+		var menu = new ContextMenu( Host );
+
+		if ( workspace is null && slot.Open is not null )
+			menu.AddOption( "Open", "open_in_new", slot.Open );
+
+		if ( Pinned.Contains( slot.Title ) )
+			menu.AddOption( "Unpin", "push_pin", () => SetPinned( slot.Title, false ) );
+		else
+			menu.AddOption( "Pin", "push_pin", () => SetPinned( slot.Title, true ) );
+
+		if ( workspace is not null )
+			menu.AddOption( "Close", "close", () => Area?.Close( workspace ) );
+
+		menu.OpenAtCursor( false );
+	}
+
+	//Every tool, ticked where it is pinned: picking one pins or unpins it
+	void ShowAddMenu()
+	{
+		var menu = new ContextMenu( Host );
+
+		foreach ( var tool in AllTools() )
+		{
+			var title = tool.Title;
+
+			menu.AddOption( new Option()
+			{
+				Text = title,
+				Icon = tool.Icon,
+				Checkable = true,
+				Checked = Pinned.Contains( title ),
+				Toggled = on => SetPinned( title, on ),
+				ToolTip = tool.Description,
+			} );
+		}
+
+		menu.OpenAtCursor( false );
+	}
+
+	/// <summary>How far along the host widget the squares reach, in its pixels.</summary>
+	internal float ContentWidth => _width;
+
+	public override void FinalLayout( Vector2 offset )
+	{
+		base.FinalLayout( offset );
+
+		var right = Box.Rect.Left;
+
+		foreach ( var child in Children )
+			right = MathF.Max( right, child.Box.Rect.Right );
+
+		var width = MathF.Round( (right - Box.Rect.Left) * ScaleFromScreen );
+
+		if ( width == _width ) return;
+
+		_width = width;
+		Resized?.Invoke();
+	}
+
+	protected override int BuildHash()
+	{
+		var hash = new HashCode();
+
+		foreach ( var slot in _slots )
+		{
+			var workspace = Find( slot.Title );
+
+			hash.Add( slot );
+			hash.Add( workspace is not null );
+			hash.Add( IsCurrent( workspace ) );
+			hash.Add( workspace?.Documents?.Count ?? 0 );
+		}
+
+		return hash.ToHashCode();
+	}
+}

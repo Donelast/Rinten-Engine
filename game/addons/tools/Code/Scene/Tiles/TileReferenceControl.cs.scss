@@ -1,0 +1,76 @@
+//A tile picked off a tile set - see TileReferenceControl.cs.
+TileReferenceControl.control
+{
+	flex-grow: 1;
+	min-width: 0;
+	cursor: pointer;
+
+	> .field
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-grow: 1;
+		min-width: 0;
+		min-height: $control-row-height;
+		padding: 1px 6px 1px 2px;
+		background-color: $control-background;
+		border: $control-border;
+		border-radius: $control-radius;
+		gap: 6px;
+
+		> .picture
+		{
+			flex-shrink: 0;
+			width: 22px;
+			height: 22px;
+			background-repeat: no-repeat;
+			image-rendering: pixelated;
+		}
+
+		> .name
+		{
+			flex-grow: 1;
+			min-width: 0;
+			color: $text-control;
+			font-size: $control-text-size;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		&.empty > .name { color: $multiple-values; }
+	}
+}
+
+TileReferencePopup.popup-panel
+{
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	background-color: $popup-background;
+	border: $popup-border;
+	border-radius: $control-radius;
+	width: 380px;
+
+	> .sets
+	{
+		flex-direction: row;
+		flex-wrap: wrap;
+		gap: 4px;
+
+		> .chip
+		{
+			padding: 2px 8px;
+			min-height: 22px;
+			align-items: center;
+			border-radius: $control-radius;
+			background-color: $control-background;
+			cursor: pointer;
+
+			> label { pointer-events: none; font-size: $control-text-size; color: $text-control; }
+
+			&:hover { background-color: $list-row-hover; }
+			&.selected { background-color: $accent; }
+		}
+	}
+}

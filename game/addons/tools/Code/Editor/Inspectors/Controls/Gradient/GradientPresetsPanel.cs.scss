@@ -1,0 +1,75 @@
+GradientPresetsPanel
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+
+	> .grid
+	{
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-content: flex-start;
+		flex-grow: 1;
+		padding: 8px;
+		gap: 5px;
+		overflow-y: scroll;
+		background-color: $control-background;
+		border-radius: $control-radius;
+	}
+}
+GradientPresetItem
+{
+	width: 68px;
+	height: 38px;
+	min-width: 68px;
+	min-height: 38px;
+	border-radius: 4px;
+	cursor: pointer;
+	flex-shrink: 0;
+	overflow: hidden;
+	position: relative;
+	background-image: url( tools/checker.png );
+	background-repeat: repeat;
+	image-rendering: point;
+	background-size: 16px 16px;
+	box-shadow: 0 0 0 2px rgba( $accent, 0.55 );
+
+	//The gradient bitmap is one pixel tall, so it has to be stretched to the item. Left at its own size it draws as a single line over the checkerboard.
+	> image
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		object-fit: fill;
+		pointer-events: none;
+	}
+
+	> .plus
+	{
+		pointer-events: none;
+	}
+	&:hover
+	{
+		box-shadow: 0 0 0 2px $text;
+	}
+	&.add
+	{
+		background-image: none;
+		background-color: rgba( $green, 0.3 );
+		box-shadow: none;
+		justify-content: center;
+		align-items: center;
+		> .plus
+		{
+			font-size: 20px;
+			color: $green;
+			text-align: center;
+		}
+		&:hover
+		{
+			background-color: rgba( $green, 0.5 );
+		}
+	}
+}

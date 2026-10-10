@@ -1,0 +1,2074 @@
+//Shared world-shader bindings: set 0 material, set 1 frame (bones, camera, lights, shadow atlases)
+
+//The world draw push block, declared once; define ENGINE_WORLD_PUSH before including this
+#ifdef ENGINE_WORLD_PUSH
+
+//The engine vertex every world draw reads; bound by location only, normal/tangent unpacked lazily
+#include "vertex_frame.slang"
+
+struct VIn
+{
+	[[vk::location(0)]] float3 position;
+
+	//Per-corner vertex tint (location 1), always bound, so faces can differ in colour within a material
+	[[vk::location(1)]] float4 colour;
+
+	//The normal, the tangent and the bitangent's handedness in one word.
+	[[vk::location(2)]] uint frame;
+
+	[[vk::location(3)]] float4 texCoord0;
+
+	//The second set, which is where a mesh keeps the unwrap its lightmap was baked into. Meshes without one
+	//leave it at nothing and fall back to the first set, exactly as the bake does - see lightmap_bake.shader.
+	[[vk::location(4)]] float4 texCoord1;
+
+	//The unit normal out of the frame word.
+	property float3 normal
+	{
+		get { return VertexFrameNormal( frame ); }
+		set { frame = VertexFrameEncode( newValue, VertexFrameTangent( frame ) ); }
+	}
+
+	//The unit tangent, the bitangent's handedness in w.
+	property float4 tangent
+	{
+		get { return VertexFrameTangent( frame ); }
+		set { frame = VertexFrameEncode( VertexFrameNormal( frame ), newValue ); }
+	}
+
+#ifdef SKINNED
+	[[vk::location(6)]] uint4 bones;
+	[[vk::location(7)]] float4 weights;
+#endif
+
+#ifdef MORPHED
+	//Where this vertex's blend shape deltas start, and how many it has.
+	[[vk::location(8)]] uint2 morphRun;
+#endif
+};
+
+#ifdef CLUSTER
+
+//Drawn as a cluster, a draw's own numbers come out of the instance the cluster belongs to rather than out of the push
+//block - cluster_main.slang fills these before either of the surface's stages runs. The push carries the pass's numbers.
+[[vk::push_constant]]
+cbuffer Push
+{
+	row_major float4x4 g_visNamed;
+	float4 g_visSpare0;
+	float4 g_visSpare1;
+	float4 g_visSpare2;
+	float4 g_visSpare3;
+};
+
+static row_major float4x4 g_modelToWorld;
+static float4 g_tint;
+static float4 g_object;
+static float4 g_draw0;
+static float4 g_draw1;
+
+#elif defined( INSTANCED )
+
+//Drawn as one of a run of copies - see instanced_surface.slang, which fills these from the bone ring before
+//either of the surface's stages runs. The push carries the pass's own numbers, as it does for a cluster.
+[[vk::push_constant]]
+cbuffer Push
+{
+	row_major float4x4 g_passNamed;
+	float4 g_passSpare0;
+	float4 g_passSpare1;
+	float4 g_passSpare2;
+	float4 g_passSpare3;
+};
+
+static row_major float4x4 g_modelToWorld;
+static float4 g_tint;
+static float4 g_object;
+static float4 g_draw0;
+static float4 g_draw1;
+
+#else
+
+[[vk::push_constant]]
+cbuffer Push
+{
+	row_major float4x4 g_modelToWorld;
+
+	//The colour this draw is multiplied by. The material's own Tint is read into it as well, so there is one tint and not two.
+	float4 g_tint;
+
+	//Where this draw sits in the baked atlas: scale in xy, offset in zw. A scale of nothing means it has no chart and nothing was baked for it.
+	float4 g_object;
+
+	//And the numbers the draw set for itself - what a shader declared with Attribute( … ) reads out of these. Eight floats, which
+	//is what is left of the block; the engine writes them in the order the shader declared them. See CoreShaderParams.DrawSlots.
+	float4 g_draw0;
+	float4 g_draw1;
+};
+
+#endif
+#endif
+
+#include "frame_data.slang"
+#include "picture_size.slang"
+
+//The numbers a material carries. Declared here for a shader that declares none of its own; a shader with a PARAMETERS block
+//gets this written for it instead, with a slot per number it asked for, and says so with this define - see CoreShaderParams.
+#ifndef ENGINE_MATERIAL_BLOCK
+
+struct MaterialParams
+{
+	float4 surface; //roughness, metalness, emission, alpha cutoff
+};
+
+[[vk::binding(4,0)]] ConstantBuffer<MaterialParams> g_material;
+
+#endif
+
+[[vk::binding(0,0)]] Sampler2D g_color;
+[[vk::binding(1,0)]] Sampler2D g_normal;
+//Binding 2 belongs to passes; the portable frame uses it for the material's first extra texture
+[[vk::binding(3,0)]] Sampler2D g_emission;
+
+#ifdef PORTABLE
+[[vk::binding(2,0)]] Sampler2D g_third;
+#endif
+
+#ifdef WEBGL
+//A uniform block where WebGL has no storage buffers - the 128 matrices a draw's
+//bones are, eight kilobytes of the sixteen WebGL promises - and read as ever.
+struct BoneBlock
+{
+	float4x4 bones[128];
+};
+
+[[vk::binding(0,1)]] ConstantBuffer<BoneBlock> g_boneBlock;
+
+#define g_bones g_boneBlock.bones
+#else
+[[vk::binding(0,1)]] StructuredBuffer<float4x4> g_bones;
+#endif
+
+#ifdef INSTANCED
+
+//How many matrices one copy's numbers take in the ring: the world matrix, and one more holding the four float4s the push block would have carried.
+static const uint InstanceMatrices = 2u;
+
+//Per-copy instance numbers from the ring skinned draws use for bones; the two never overlap
+void InstanceNumbers( uint copy )
+{
+	float4x4 world = g_bones[( copy * InstanceMatrices )];
+	float4x4 rest = g_bones[( copy * InstanceMatrices ) + 1u];
+
+	g_modelToWorld = world;
+	g_tint = rest[0];
+	g_object = rest[1];
+	g_draw0 = rest[2];
+	g_draw1 = rest[3];
+}
+
+#endif
+
+#ifdef MORPHED
+
+//What one blend shape does to one vertex. Matches the on-disk MorphDelta.
+struct MorphDelta
+{
+	uint morph;
+	float3 position;
+	float3 normal;
+};
+
+//Loop bounds for morphs so a bad vertex attribute can't hang the GPU
+static const uint MorphsPerVertex = 64;
+static const uint MorphsPerObject = 256;
+
+//How far each of this object's shapes is pushed, out of the frame's scratch at an offset of its own - the same arrangement the bones arrive by.
+[[vk::binding(6,1)]] StructuredBuffer<float> g_morphWeights;
+
+//And the deltas, which belong to the model rather than to the frame, so they come in at set 2 with the draw that reads them. Read as bytes
+//and unpacked by hand: the struct is twenty-eight bytes on disk and a float3 in a structured buffer is not promised to be packed that way.
+[[vk::binding(0,2)]] ByteAddressBuffer g_morphDeltas;
+
+//MorphDelta byte layout; must match sbc::assets::MorphDelta (checked by ModelMorphLayoutTests)
+static const uint MorphDeltaStride = 28;
+static const uint MorphDeltaPosition = 4;
+static const uint MorphDeltaNormal = 16;
+
+//One delta, out of the bytes the model was compiled with.
+MorphDelta LoadMorphDelta( uint index )
+{
+	uint at = index * MorphDeltaStride;
+
+	MorphDelta delta;
+	delta.morph = g_morphDeltas.Load( at );
+	delta.position = asfloat( g_morphDeltas.Load3( at + MorphDeltaPosition ) );
+	delta.normal = asfloat( g_morphDeltas.Load3( at + MorphDeltaNormal ) );
+
+	return delta;
+}
+
+#endif
+
+//Which debug view this frame is drawn in, or nought for the ordinary one. The numbers are SceneCameraDebugMode's, so what the editor's menu offers
+//and what a shader answers to are the same list. Uniform across the frame, so the branch below costs a predicted jump rather than divergence.
+int DebugView() { return int( g_frame[0].viewInfo.x ); }
+
+//Debug view colours; a distinct colour per culled instance, magenta for no instance
+float3 CullingColour( uint id )
+{
+	if ( id == 0 ) return float3( 1.0, 0.0, 1.0 );
+
+	//By copy, not by triangle - the low seven bits are the triangle.
+	uint h = ( id >> 7 ) * 2654435761u;
+	h ^= h >> 13;
+	h *= 0x5bd1e995u;
+	h ^= h >> 15;
+
+	return float3( float( h & 255u ), float( ( h >> 8 ) & 255u ), float( ( h >> 16 ) & 255u ) ) / 255.0 * 0.85 + 0.15;
+}
+
+float3 DebugSurface( int view, float3 albedo, float3 normal, float roughness,
+	float metalness, float occlusion, float2 uv, uint id,
+	float3 diffuseLit, float3 specularLit, float3 shaded )
+{
+	switch ( view )
+	{
+		case 60: return CullingColour( id );
+		//Full bright: the colour map as it is, with no light in it at all.
+		case 1: return albedo;
+
+		//The two halves of the lighting, apart. What a light does to a surface is these
+		//added together, and which of them is wrong is not something the sum can be asked.
+		case 2: return diffuseLit;
+		case 3: return specularLit;
+
+		//Where the texture is, as colour: red across, green down, and the tiling visible as the ramp starting over.
+		case 6: return float3( frac( uv ), 0.0 );
+
+		case 10: return albedo;
+		case 12: return float3( roughness, roughness, roughness );
+		case 13: return float3( metalness, metalness, metalness );
+		case 14: return float3( occlusion, occlusion, occlusion );
+
+		//The normal after the map has had its say, in world space, in the usual half-and-half encoding: flat ground is pale blue-green.
+		case 21: return normal * 0.5 + 0.5;
+
+		default: return shaded;
+	}
+}
+
+#include "skin_blend.slang"
+
+//Four weighted bones, clamped to the 128 the draw's descriptor covers - blended as the palette says, matrices or dual quaternions: see skin_blend.slang.
+//A zero-weight slot is not fetched: unused links often sit at 255, and that index is a lost device on this driver even multiplied by zero.
+float4x4 SkinAt( uint4 bones, float4 weights )
+{
+	float4x4 first = g_bones[min( bones.x, 127u )];
+
+	return SkinBlend( first,
+		weights.y > 0.0 ? g_bones[min( bones.y, 127u )] : first,
+		weights.z > 0.0 ? g_bones[min( bones.z, 127u )] : first,
+		weights.w > 0.0 ? g_bones[min( bones.w, 127u )] : first,
+		weights );
+}
+
+//The tangent re-orthogonalised against the normal - or, for a mesh that carries none (an OBJ, a
+//generated grid), one made up perpendicular to it, so the frame never normalises nothing into NaN.
+float3 TangentAgainst( float3 n, float3 tangent )
+{
+	float3 t = tangent - ( n * dot( n, tangent ) );
+	if ( dot( t, t ) > 1e-12 ) return normalize( t );
+	return normalize( cross( n, abs( n.y ) < 0.999 ? float3( 0.0, 1.0, 0.0 ) : float3( 1.0, 0.0, 0.0 ) ) );
+}
+
+//Portable frame draws straight to screen: no texture table, no occlusion, lights in the block
+#ifndef PORTABLE
+//Every picture the device has, indexed rather than bound. Lightmaps and voxel
+//palettes both pick a slot per sample, so the table lives here with the frame.
+[[vk::binding(0,3)]] Sampler2D g_textures[];
+
+//What the surfaces darken by: the picture named "Occlusion" a pass drew after the depth pre-pass - see AmbientOcclusion - by its place in the table,
+//which the drawer writes into viewInfo.y once it exists. Nought, and settings.x with it, where nobody drew one - see CoreSceneRenderer.LayOcclusion.
+#define g_occlusionMap g_textures[uint( g_frame[0].viewInfo.y )]
+
+
+
+//Frame lights buffer: 16-float header (count first), then 20 floats per light
+[[vk::binding(7,1)]] ByteAddressBuffer g_lightData;
+#else
+//Portable stand-in for the occlusion picture that reads white, so full-frame surfaces still build
+struct NoOcclusion
+{
+	float4 SampleLevel( float2 uv, float level ) { return 1.0; }
+	float4 Sample( float2 uv ) { return 1.0; }
+};
+
+static NoOcclusion g_occlusionMap;
+#endif
+
+//How many lights this frame has.
+uint LightCount()
+{
+#ifdef PORTABLE
+	return uint( max( EYE_FRAME( camera ).w, 0.0 ) );
+#else
+	return g_lightData.Load( 0 );
+#endif
+}
+
+//Whether this frame kept a picture of the world's depth after the pre-pass - a DepthPicture on the camera - for a surface to read what is behind it.
+bool HasDepthBehind()
+{
+#ifdef PORTABLE
+	//No table of pictures in the portable frame to have kept one in.
+	return false;
+#else
+	return g_frame[0].viewInfo.z > 0.0;
+#endif
+}
+
+//The depth of the opaque world at a point on the screen, as the pre-pass wrote it: nought at the near plane,
+//one at the far and where nothing was drawn. `screen` is SV_Position.xy. One where the frame kept no picture.
+float DepthBehind( float2 screen )
+{
+#ifdef PORTABLE
+	return 1.0;
+#else
+	if ( g_frame[0].viewInfo.z <= 0.0 ) return 1.0;
+
+	float2 uv = screen / g_frame[0].settings.yz;
+
+	//Frame-uniform, like the sky's table below - see SkyTableAt.
+	return g_textures[uint( g_frame[0].viewInfo.z )].SampleLevel( uv, 0.0 ).r;
+#endif
+}
+
+//Where that depth is, in the world.
+float3 WorldBehind( float2 screen, float depth )
+{
+	float2 uv = screen / g_frame[0].settings.yz;
+	float4 clip = float4( ( uv * 2.0 ) - 1.0, depth, 1.0 );
+	float4 world = mul( clip, EYE_FRAME( clipToWorld ) );
+
+	return world.xyz / world.w;
+}
+
+//Withheld light terms from the kind's fraction: .1 no diffuse, .2 no specular, .3 neither
+uint LightWithholds( Light light )
+{
+	return uint( round( frac( light.colour.w ) * 10.0 ) );
+}
+
+//Which channel of the baked mask holds a light's shadow of the still world, out of the hundredths of its kind word:
+//one more than the channel, nought for none - see Light.Baked and CoreSceneRenderer.MaskChannelOf. -1 where none does.
+int LightMaskChannel( Light light )
+{
+	uint hundredths = uint( round( frac( light.colour.w ) * 100.0 ) );
+	return int( hundredths % 10u ) - 1;
+}
+
+Light LightAt( uint index )
+{
+#ifdef PORTABLE
+	return g_frame[0].lights[min( index, 15u )];
+#else
+	uint at = 64 + ( index * 80 );
+
+	//Load only colour and direction here; lamp-only fields are loaded in LightLamp inside its branch
+	Light one;
+	one.colour = asfloat( g_lightData.Load4( at + 16 ) );
+	one.direction = asfloat( g_lightData.Load4( at + 32 ) );
+
+	one.position = float4( 0.0, 0.0, 0.0, 0.0 );
+	one.cone = float4( 0.0, 0.0, 0.0, 0.0 );
+	one.shape = float4( 1.0, 0.0, 0.0, 0.0 );
+
+	return one;
+#endif
+}
+
+//The three a lamp needs on top of what every light carries - see LightAt.
+void LightLamp( uint index, inout Light one )
+{
+#ifndef PORTABLE
+	uint at = 64 + ( index * 80 );
+
+	one.position = asfloat( g_lightData.Load4( at ) );
+	one.cone = asfloat( g_lightData.Load4( at + 48 ) );
+	one.shape = asfloat( g_lightData.Load4( at + 64 ) );
+#endif
+}
+
+//Which lights a pixel has to walk: the cell of the grid it falls in, or all of them where the frame built no grid - see CoreLights.
+struct LightWalk
+{
+	//How many to walk.
+	uint count;
+
+	//Where its cell's list starts, in words; nothing where there is no cell.
+	uint first;
+
+	bool celled;
+};
+
+LightWalk LightsHere( float2 screen, float viewDepth )
+{
+	LightWalk walk;
+	walk.count = LightCount();
+	walk.first = 0;
+	walk.celled = false;
+
+#ifndef PORTABLE
+	if ( kGridOn == 0 ) return walk;
+
+	uint cellsX = g_lightData.Load( 4 );
+	if ( cellsX == 0 ) return walk;
+
+	uint cellsY = g_lightData.Load( 8 );
+	uint cellsZ = g_lightData.Load( 12 );
+	uint perCell = g_lightData.Load( 16 );
+	uint cellsAt = g_lightData.Load( 20 );
+	float near = asfloat( g_lightData.Load( 24 ) );
+	float scale = asfloat( g_lightData.Load( 28 ) );
+
+	if ( cellsY == 0 || cellsZ == 0 || near <= 0.0 ) return walk;
+
+	//How wide a cell is, out of the header rather than written down here: the grid is cut by CoreLights.TileSize
+	//and this is the one place that has to agree with it. Sixteen where a block was written before that word was.
+	uint tile = max( g_lightData.Load( 40 ), 1u );
+
+	//Along the depth in the logarithm, which is how the cull cut it.
+	uint cx = min( uint( max( screen.x, 0.0 ) ) / tile, cellsX - 1 );
+	uint cy = min( uint( max( screen.y, 0.0 ) ) / tile, cellsY - 1 );
+	uint cz = min( uint( max( log( max( viewDepth, near ) / near ) * scale, 0.0 ) ), cellsZ - 1 );
+
+	uint at = cellsAt + ( ( cx + ( cy * cellsX ) + ( cz * cellsX * cellsY ) ) * ( perCell + 1 ) );
+
+	walk.count = min( g_lightData.Load( at * 4 ), perCell );
+	walk.first = at + 1;
+	walk.celled = true;
+#endif
+
+	return walk;
+}
+
+//The number of the light at one step of that walk.
+uint LightHere( LightWalk walk, uint step )
+{
+#ifdef PORTABLE
+	return step;
+#else
+	return walk.celled ? g_lightData.Load( ( walk.first + step ) * 4 ) : step;
+#endif
+}
+
+//Decals follow the lights in the same buffer; each is an oriented box projected along minus z
+
+//One decal, as CoreDecals.Pack laid it out.
+struct Decal
+{
+	float3 axisX; float overWidth;
+	float3 axisY; float overHeight;
+	float3 axisZ; float overDepth;
+	float3 centre; float attenuation;
+
+	float4 tint;
+
+	float colourMix;
+	float emission;
+	float parallax;
+	float coverage;
+
+	//Where its pictures sit in g_textures, and nought for none.
+	uint colourMap;
+	uint normalMap;
+	uint rmoMap;
+	uint heightMap;
+	uint emissionMap;
+
+	//Which of them come back from a sample decoded from sRGB though they hold data - one bit each in
+	//the order above - and so have to be encoded again to get the stored number back. See DecalData.
+	uint srgb;
+
+	float coverageRange;
+
+	//How far from the centre the box reaches at most - its half diagonal.
+	float radius;
+};
+
+//How many decals this frame has.
+uint DecalCount()
+{
+#ifdef PORTABLE
+	return 0u;
+#else
+	return g_lightData.Load( 32 );
+#endif
+}
+
+//Where the centre of one decal is and how far it reaches, which is all a pixel outside it needs to read - see DecalAt for the rest.
+float4 DecalReach( uint index )
+{
+#ifdef PORTABLE
+	return float4( 0.0, 0.0, 0.0, 0.0 );
+#else
+	uint at = ( g_lightData.Load( 36 ) + ( index * 32u ) ) * 4u;
+
+	return float4( asfloat( g_lightData.Load3( at + 48 ) ), asfloat( g_lightData.Load( at + 124 ) ) );
+#endif
+}
+
+//One of them.
+Decal DecalAt( uint index )
+{
+	Decal one;
+
+#ifdef PORTABLE
+	one.axisX = float3( 1.0, 0.0, 0.0 ); one.overWidth = 0.0;
+	one.axisY = float3( 0.0, 1.0, 0.0 ); one.overHeight = 0.0;
+	one.axisZ = float3( 0.0, 0.0, 1.0 ); one.overDepth = 0.0;
+	one.centre = float3( 0.0, 0.0, 0.0 ); one.attenuation = 0.0;
+	one.tint = float4( 1.0, 1.0, 1.0, 1.0 );
+	one.colourMix = 1.0; one.emission = 0.0; one.parallax = 0.0; one.coverage = 1.0;
+	one.colourMap = 0u; one.normalMap = 0u; one.rmoMap = 0u; one.heightMap = 0u; one.emissionMap = 0u;
+	one.srgb = 0u;
+	one.coverageRange = 0.0;
+	one.radius = 0.0;
+#else
+	uint at = ( g_lightData.Load( 36 ) + ( index * 32u ) ) * 4u;
+
+	float4 x = asfloat( g_lightData.Load4( at ) );
+	float4 y = asfloat( g_lightData.Load4( at + 16 ) );
+	float4 z = asfloat( g_lightData.Load4( at + 32 ) );
+	float4 c = asfloat( g_lightData.Load4( at + 48 ) );
+	float4 mix = asfloat( g_lightData.Load4( at + 80 ) );
+	uint4 maps = g_lightData.Load4( at + 96 );
+	uint4 more = g_lightData.Load4( at + 112 );
+
+	one.axisX = x.xyz; one.overWidth = x.w;
+	one.axisY = y.xyz; one.overHeight = y.w;
+	one.axisZ = z.xyz; one.overDepth = z.w;
+	one.centre = c.xyz; one.attenuation = c.w;
+
+	one.tint = asfloat( g_lightData.Load4( at + 64 ) );
+
+	one.colourMix = mix.x;
+	one.emission = mix.y;
+	one.parallax = mix.z;
+	one.coverage = mix.w;
+
+	one.colourMap = maps.x;
+	one.normalMap = maps.y;
+	one.rmoMap = maps.z;
+	one.heightMap = maps.w;
+
+	one.emissionMap = more.x;
+	one.srgb = more.y;
+	one.coverageRange = asfloat( more.z );
+	one.radius = asfloat( more.w );
+#endif
+
+	return one;
+}
+
+//A sample of one of a decal's pictures, or the stand-in where it has none.
+float4 DecalSample( uint map, float2 uv, float2 dx, float2 dy, float4 instead )
+{
+#ifdef PORTABLE
+	return instead;
+#else
+	if ( map == 0u ) return instead;
+	return g_textures[NonUniformResourceIndex( map )].SampleGrad( uv, dx, dy );
+#endif
+}
+
+//Re-encodes a data map the device sRGB-decoded (runtime-generated maps only)
+float3 DecalData( float3 decoded, bool encode )
+{
+	if ( !encode ) return decoded;
+
+	float3 low = decoded * 12.92;
+	float3 high = 1.055 * pow( max( decoded, 0.0 ), 1.0 / 2.4 ) - 0.055;
+
+	//One for a channel low enough to be on the straight part of the curve.
+	float3 straight = step( decoded, 0.0031308 );
+
+	return lerp( high, low, straight );
+}
+
+//A shader's extra texture, read bindlessly by index from the material; index 0 means use Default
+struct EngineTexture
+{
+	float4 where;   //x which picture in the table; nought for none
+	float4 instead; //what to read where there is none
+
+	bool Exists() { return where.x >= 0.5; }
+
+#ifdef PORTABLE
+	//No table here: the one picture of these a material may bind is in its third slot, and
+	//named by one - see CoreResources.PictureNumber. Any other is nought, and reads its default.
+	float4 Sample( float2 uv ) { return Exists() ? g_third.Sample( uv ) : instead; }
+	float4 SampleBias( float2 uv, float bias ) { return Exists() ? g_third.SampleBias( uv, bias ) : instead; }
+	float4 SampleLevel( float2 uv, float level ) { return Exists() ? g_third.SampleLevel( uv, level ) : instead; }
+	float4 SampleGrad( float2 uv, float2 dx, float2 dy ) { return Exists() ? g_third.SampleGrad( uv, dx, dy ) : instead; }
+#else
+	float4 Sample( float2 uv )
+	{
+		if ( !Exists() ) return instead;
+
+		return g_textures[NonUniformResourceIndex( uint( where.x ) )].Sample( uv );
+	}
+
+	float4 SampleBias( float2 uv, float bias )
+	{
+		if ( !Exists() ) return instead;
+
+		return g_textures[NonUniformResourceIndex( uint( where.x ) )].SampleBias( uv, bias );
+	}
+
+	float4 SampleLevel( float2 uv, float level )
+	{
+		if ( !Exists() ) return instead;
+
+		return g_textures[NonUniformResourceIndex( uint( where.x ) )].SampleLevel( uv, level );
+	}
+
+	float4 SampleGrad( float2 uv, float2 dx, float2 dy )
+	{
+		if ( !Exists() ) return instead;
+
+		return g_textures[NonUniformResourceIndex( uint( where.x ) )].SampleGrad( uv, dx, dy );
+	}
+#endif
+};
+
+//Shared sampling entry with the upscaler's mip bias (viewInfo.w), so textures stay sharp
+#ifdef PORTABLE
+float MipBias() { return 0.0; }
+float4 SampleUv( Sampler2D t, float2 uv ) { return t.Sample( uv ); }
+float4 SampleUv( EngineTexture t, float2 uv ) { return t.Sample( uv ); }
+float2 UvDx( float2 uv ) { return ddx( uv ); }
+float2 UvDy( float2 uv ) { return ddy( uv ); }
+#else
+float MipBias() { return g_frame[0].viewInfo.w; }
+float4 SampleUv( Sampler2D t, float2 uv ) { return t.SampleBias( uv, MipBias() ); }
+float4 SampleUv( EngineTexture t, float2 uv ) { return t.SampleBias( uv, MipBias() ); }
+float2 UvDx( float2 uv ) { return ddx( uv ) * exp2( MipBias() ); }
+float2 UvDy( float2 uv ) { return ddy( uv ) * exp2( MipBias() ); }
+#endif
+//Mip level computed manually from UV derivatives, since WGSL and GLSL ES 3.0 lack a LOD query
+float LevelOf( Sampler2D t, float2 uv )
+{
+#ifdef PORTABLE
+	float2 texels = float2( PictureSize( t ) );
+	float2 across = ddx( uv ) * texels;
+	float2 down = ddy( uv ) * texels;
+
+	//Nothing takes the log of nought: a step of no length is the finest level.
+	return 0.5 * log2( max( max( dot( across, across ), dot( down, down ) ), 1.0e-12 ) );
+#else
+	return t.CalculateLevelOfDetail( uv );
+#endif
+}
+
+bool HasSky()
+{
+	return g_frame[0].zenith.a > 0.5;
+}
+
+//Ambient light: sky or probe light blended toward the scene's flat ambient by its alpha
+float3 SceneAmbient( float3 around )
+{
+	return lerp( around, g_frame[0].ambient.rgb, g_frame[0].ambient.a );
+}
+
+//Whether that sky has a sun in it, which is what nearly all of its colour comes from.
+bool HasSun()
+{
+	return g_frame[0].sunDirection.w > 0.0;
+}
+
+//Whether that sun casts a shadow at all - its Shadows box. Off, it lights everything it faces, and neither map is baked or read - see SunShadow.
+bool SunCasts()
+{
+	return g_frame[0].sunEye.w > 0.5;
+}
+
+//The three colours, and nothing else: zenith above, ground below, horizon between. What the sky was before it had a sun to answer to, and what it
+//still is in a frame without one - a material preview, a bake of a scene nobody put a light in. A sky with no sun has no time of day to be at.
+float3 SkyGradientOf( float height )
+{
+	float3 upper = lerp( g_frame[0].horizon.rgb, g_frame[0].zenith.rgb, saturate( height ) );
+	float3 lower = lerp( g_frame[0].horizon.rgb, g_frame[0].ground.rgb, saturate( -height ) );
+	return lerp( lower, upper, saturate( height * 0.5 + 0.5 ) );
+}
+
+float3 SkyGradient( float3 direction ) { return SkyGradientOf( direction.y ); }
+
+//Sun colour after atmospheric extinction by sun height; computed once a frame on the CPU
+float3 SunLight()
+{
+	return g_frame[0].sunLight.rgb;
+}
+
+//Night amount from sun height (0 day, 1 night); uniform, so branching on it is cheap
+float NightFactor()
+{
+	return g_frame[0].sunLight.a;
+}
+
+//How many samples the table holds across each of its two numbers - see VkDevice.SkyTableSide, which sizes the picture the card draws it into.
+static const float SkyTableSide = 64.0;
+
+#ifdef PORTABLE
+//Portable frame's sky table as a sampled picture, so filtering is one hardware sample
+[[vk::binding(5,1)]] Sampler2D g_skyTable;
+#endif
+
+//Sky table UV: x sun cosine, y sqrt of height; must match sky_surface.slang
+float2 SkyTableUv( float3 direction )
+{
+	float up = saturate( direction.y * 0.5 + 0.5 );
+
+	float2 at = float2( saturate( dot( direction, g_frame[0].sunDirection.xyz ) ), sqrt( up ) );
+
+	//Onto the texel centres: nought is the first, one the last.
+	return ( at * ( SkyTableSide - 1.0 ) + 0.5 ) / SkyTableSide;
+}
+
+//Reads the sky table for a direction, false if the frame has none; shared by ambient and reflections
+bool SkyTableAt( float3 direction, out float3 colour )
+{
+	colour = float3( 0.0, 0.0, 0.0 );
+
+#ifndef PORTABLE
+	uint table = uint( g_frame[0].settings.w );
+
+	if ( kSkyTableOn == 0 || table == 0 ) return false;
+
+	//Not NonUniformResourceIndex: the table index is frame-uniform, so it's a scalar load
+	colour = g_textures[table].SampleLevel( SkyTableUv( direction ), 0.0 ).rgb;
+
+	return true;
+#else
+	float4 read = g_skyTable.SampleLevel( SkyTableUv( direction ), 0.0 );
+
+	//One in the alpha is a table that was drawn - see sky_surface.slang, which writes it. A device that
+	//has not drawn one reads nought out of a cleared picture, and the caller falls back on the gradient.
+	if ( read.a < 0.5 ) return false;
+
+	colour = read.rgb;
+
+	return true;
+#endif
+}
+
+//Sky ambient for a normal, read from the sky table so each sky's maths stays in its own shader
+float3 SkyAmbient( float3 normal )
+{
+	float3 held;
+
+	if ( SkyTableAt( normal, held ) ) return held;
+
+	//The three colours the scene's sky was set to and nothing else: a frame with no table is a preview, a bake, a scene whose sky never drew.
+	return SkyGradientOf( normal.y );
+}
+
+//Sky colour for reflections and distant fog, from the table; no sun disc, moon, stars or clouds
+float3 SkyDrawn( float3 direction )
+{
+	float3 sky;
+
+	if ( SkyTableAt( direction, sky ) ) return sky;
+
+	return SkyGradientOf( direction.y );
+}
+
+#ifndef PORTABLE
+//Every picture the device has, as depth to compare against: the same table as g_textures, read through the sampler a shadow map was put in it with
+//- see VkTextures.ShadowMapCreate. A drawer's shadow maps are its own, so the frame block says where they are rather than a binding of the frame.
+[[vk::binding(0,3)]] Sampler2DArrayShadow g_shadowMaps[];
+
+//And the same maps read as plain depth - no compare - through their second place in the table, for
+//how far in front of a point what shades it stands; see VkTextures.ShadowMapCreate and ShadowBlocker.
+[[vk::binding(0,3)]] Sampler2DArray g_depthMaps[];
+#endif
+
+//The sun's pages as CoreSunPages lays them out: texels a page, pages a level across, and how far from the eye a level may be read in its own
+//pages - ReachPages there, which this has to agree with, or a tap at the edge of a level lands on the slot holding the far side of its torus.
+static const float SunPageTexels = 32.0;
+static const float SunPageGrid = 64.0;
+static const float SunReachPages = 30.875;
+
+//And the map of what moves: texels a zone across.
+static const float MoverTexels = 1024.0;
+
+//Shadow receiver step back along the light, in map texels; slopes are handled per tap instead
+static const float ShadowBiasTexels = 1.0;
+
+//How far the sun's reads step off the surface, in texels of the level read: out past the four texels a compared tap reads about its middle.
+static const float SunLiftTexels = 2.0;
+
+//One hard shadow compare (1 lit), against the receiver's plane via slope to avoid self-shadow streaks
+float ShadowSharp( uint map, float3 at, float compare, float2 slope )
+{
+#ifdef PORTABLE
+	return 1.0;
+#else
+	return g_shadowMaps[map].SampleCmpLevelZero( at, compare - ( 0.5 * ( abs( slope.x ) + abs( slope.y ) ) ) );
+#endif
+}
+
+//The widest a shadow's edge spreads each side of where it falls, in texels of the map read - as far as ShadowEdge looks.
+static const float ShadowSoftestTexels = 2.0;
+
+//Five taps detect a shadow edge; when they agree, that's the final lit value and filtering is skipped
+bool ShadowEdge( uint map, float3 at, float compare, float texel, float2 slope, out float lit )
+{
+#ifdef PORTABLE
+	lit = 1.0;
+	return false;
+#else
+	compare -= 0.5 * ( abs( slope.x ) + abs( slope.y ) );
+	float reach = ShadowSoftestTexels;
+
+	float a = g_shadowMaps[map].SampleCmpLevelZero( at + float3( -reach * texel, -reach * texel, 0.0 ), compare - ( reach * ( slope.x + slope.y ) ) );
+	float b = g_shadowMaps[map].SampleCmpLevelZero( at + float3( reach * texel, -reach * texel, 0.0 ), compare + ( reach * ( slope.x - slope.y ) ) );
+	float c = g_shadowMaps[map].SampleCmpLevelZero( at + float3( -reach * texel, reach * texel, 0.0 ), compare + ( reach * ( slope.y - slope.x ) ) );
+	float d = g_shadowMaps[map].SampleCmpLevelZero( at + float3( reach * texel, reach * texel, 0.0 ), compare + ( reach * ( slope.x + slope.y ) ) );
+	float e = g_shadowMaps[map].SampleCmpLevelZero( at, compare );
+
+	float least = min( min( min( a, b ), min( c, d ) ), e );
+	float most = max( max( max( a, b ), max( c, d ) ), e );
+
+	lit = least;
+	return most - least >= 0.001;
+#endif
+}
+
+//PCSS blocker search: average occluder depth over 16 texels; negative when nothing blocks
+float ShadowBlocker( uint depthMap, float3 at, float compare, float texel, float2 slope )
+{
+#ifdef PORTABLE
+	return -1.0;
+#else
+	float margin = 0.5 * ( abs( slope.x ) + abs( slope.y ) );
+	float sum = 0.0;
+	float found = 0.0;
+
+	[unroll]
+	for ( uint i = 0u; i < 4u; i++ )
+	{
+		float2 o = float2( ( i & 1u ) != 0u ? 1.0 : -1.0, ( i & 2u ) != 0u ? 1.0 : -1.0 );
+		float4 d = g_depthMaps[depthMap].Gather( at + float3( o * texel, 0.0 ) );
+		float4 hit = step( d, ( compare + dot( o, slope ) - margin ).xxxx );
+
+		sum += dot( hit, d );
+		found += dot( hit, 1.0.xxxx );
+	}
+
+	return found > 0.5 ? sum / found : -1.0;
+#endif
+}
+
+//PCSS filter: 4x4 compared taps spread `soft` texels each side; under half a texel use ShadowSharp
+float ShadowFilter( uint map, float3 at, float compare, float texel, float2 slope, float soft )
+{
+#ifdef PORTABLE
+	return 1.0;
+#else
+	if ( soft < 0.5 ) return ShadowSharp( map, at, compare, slope );
+
+	compare -= 0.5 * ( abs( slope.x ) + abs( slope.y ) );
+
+	//Weighed one, three, three, one each way: the taps furthest out count least, so the edge fades into what ShadowEdge's five said
+	//where they agree - equal weights stopped a step short of it, a faint stair where the filter ended and the early answer began.
+	static const float weights[4] = { 1.0, 3.0, 3.0, 1.0 };
+
+	float apart = soft / 1.5;
+	float lit = 0.0;
+
+	[unroll]
+	for ( uint j = 0u; j < 4u; j++ )
+	{
+		[unroll]
+		for ( uint i = 0u; i < 4u; i++ )
+		{
+			float2 o = ( float2( float( i ), float( j ) ) - 1.5 ) * apart;
+			lit += weights[i] * weights[j] * g_shadowMaps[map].SampleCmpLevelZero( at + float3( o * texel, 0.0 ), compare + dot( o, slope ) );
+		}
+	}
+
+	return lit / 64.0;
+#endif
+}
+
+//One tap of the same map, for a point that is not on a surface. A point in the air has no plane for the taps to lie along and nothing to step
+//off - and what a volume asks the map is asked eight times along every ray and weighted into one number. See VolumeFog, the only caller.
+float ShadowTap( uint map, float3 at, float compare )
+{
+#ifdef PORTABLE
+	return 1.0;
+#else
+	return g_shadowMaps[map].SampleCmpLevelZero( at, compare );
+#endif
+}
+
+//Sun visibility (1 lit) from still-world pages and movers map; step off along the geometric normal
+#ifdef PORTABLE
+//The portable frame's sun: one map, the device's own, bound where the full frame binds nothing
+//- see CorePortableSun, which draws it and writes what this reads into the words the pages use.
+[[vk::binding(2,1)]] Sampler2DShadow g_sunShadow;
+
+//How much of the sun reaches a point out of that map - SunShadow's answer in the portable frame, with the same step off the
+//surface and the same one compared tap held off the receiver's plane, over one square instead of levels - see ShadowSharp.
+float PortableSunShadow( float3 world, float3 normal, float3 step )
+{
+	float side = g_frame[0].sunPages.x;
+	float texels = g_frame[0].sunPages.y;
+	float zScale = g_frame[0].sunPages.w;
+
+	if ( side <= 0.0 || texels <= 0.0 ) return 1.0;
+
+	float texelWorld = side / texels;
+
+	float4 at = mul( float4( world + ( step * ( texelWorld * 1.5 ) ), 1.0 ), g_frame[0].sunToPages );
+	float2 uv = ( at.xy * 0.5 ) + 0.5;
+
+	//GL draws its pictures bottom row first, so what it wrote at the top of the light's view is at the bottom of the map - see the GLSL translation.
+#ifdef WEBGL
+	uv.y = 1.0 - uv.y;
+#endif
+
+	float edge = 2.0 / texels;
+	if ( any( uv < edge ) || any( uv > 1.0 - edge ) ) return 1.0;
+
+	//The receiver's plane down the light, as the pages have it: the matrix's across and up are two over the side, its along the depth's own scale.
+	float3 facing = mul( float4( normal, 0.0 ), g_frame[0].sunToPages ).xyz;
+	float3 metres = float3( facing.xy * ( side * 0.5 ), facing.z / max( zScale, 1e-8 ) );
+	float2 tilt = metres.xy / max( -metres.z, 0.1 );
+
+	float perTexel = texelWorld * zScale;
+	float2 slope = tilt * perTexel;
+
+#ifdef WEBGL
+	slope.y = -slope.y;
+#endif
+
+	float compare = at.z - ( ShadowBiasTexels * perTexel ) - ( 0.5 * ( abs( slope.x ) + abs( slope.y ) ) );
+
+	return g_sunShadow.SampleCmpLevelZero( uv, compare );
+}
+#endif
+
+//The sun's angular radius, as its tangent: a quarter of a degree and a little, the sun as it is. An edge spreads each side by this
+//much for every metre the receiver stands behind what shades it - five millimetres. Not a setting: the sun's size is the sun's.
+static const float SunSourceTan = 0.004651;
+
+//The sun's edge as wide as the sun makes it: sharp where a receiver stands on its caster, five millimetres wider
+//each side for every metre it stands behind it - see SunSourceTan, ShadowEdge, ShadowBlocker and ShadowFilter.
+float SunSoft( uint map, uint depthMap, float3 tap, float compare, float texel, float2 slope, float texelWorld, float zScale )
+{
+	if ( depthMap == 0u ) return ShadowSharp( map, tap, compare, slope );
+
+	float lit;
+	if ( !ShadowEdge( map, tap, compare, texel, slope, lit ) ) return lit;
+
+	float blocker = ShadowBlocker( depthMap, tap, compare, texel, slope );
+	float behind = blocker < 0.0 ? 0.0 : ( compare - blocker ) / max( zScale, 1e-8 );
+	float soft = clamp( behind * SunSourceTan / texelWorld, 0.0, ShadowSoftestTexels );
+
+	return ShadowFilter( map, tap, compare, texel, slope, soft );
+}
+
+//One level of the sun's pages about a point - SunShadow's read.
+float SunLevel( uint level, float3 world, float3 step, float2 tilt, bool wide, float page0, float zFrom, float zScale )
+{
+	float page = page0 * exp2( float( level ) );
+	float texelWorld = page / SunPageTexels;
+
+	float3 lifted = mul( float4( world + ( step * ( texelWorld * SunLiftTexels ) ), 1.0 ), g_frame[0].sunToPages ).xyz;
+
+	//The level's span divided out, and nothing else: the sampler repeats, and the level is a torus - a tile lives in its slot modulo the grid.
+	float2 uv = lifted.xy / ( page * SunPageGrid );
+
+	//A texel of this level, into its depth - the bias and the plane's step both.
+	float perTexel = texelWorld * zScale;
+
+	float compare = ( ( lifted.z - zFrom ) * zScale ) - ( ShadowBiasTexels * perTexel );
+	float3 tap = float3( uv, float( level ) );
+
+	return wide
+		? SunSoft( uint( g_frame[0].sunMaps.x ), uint( g_frame[0].sunDepth.x ), tap, compare,
+			1.0 / ( SunPageTexels * SunPageGrid ), tilt * perTexel, texelWorld, zScale )
+		: ShadowTap( uint( g_frame[0].sunMaps.x ), tap, compare );
+}
+
+float SunShadow( float3 world, float3 normal, float3 step, bool wide = true, bool stillWorld = true )
+{
+	if ( !SunCasts() ) return 1.0;
+
+#if defined( PORTABLE ) && defined( DEPTH_ONLY )
+	//A stage drawing into the map may not read it: the frame's set holds the map it is drawing into.
+	return 1.0;
+#elif defined( PORTABLE )
+	return PortableSunShadow( world, normal, step );
+#endif
+
+	float3 at = mul( float4( world, 1.0 ), g_frame[0].sunToPages ).xyz;
+	float2 fromEye = abs( at.xy - g_frame[0].sunEye.xy );
+	float away = max( fromEye.x, fromEye.y );
+
+	float page0 = g_frame[0].sunPages.x;
+	uint levels = uint( g_frame[0].sunPages.y );
+	uint whole = uint( g_frame[0].sunEye.z );
+	float zFrom = g_frame[0].sunPages.z;
+	float zScale = g_frame[0].sunPages.w;
+	float reach0 = page0 * SunReachPages;
+
+	//The finest level that reaches this far from the eye, and of those the first every page of which has been baked.
+	uint level = away <= reach0 ? 0u : uint( ceil( log2( away / reach0 ) ) );
+	while ( level < levels && ( whole & ( 1u << level ) ) == 0u ) level++;
+
+	//The receiver's plane down the light: how much deeper it lies a metre across the maps and a metre up them -
+	//see ShadowSharp. Held off the grazing edge, where it runs to infinity and the light is all but gone anyway.
+	float3 facing = mul( float4( normal, 0.0 ), g_frame[0].sunToPages ).xyz;
+	float2 tilt = facing.xy / max( -facing.z, 0.1 );
+	float vis = 1.0;
+
+	//Not where the still world's shadow is the bake's mask, read beside this by the caller - see BakedShadow. The pages may still be there, for the fog.
+	if ( !stillWorld ) level = levels;
+
+	if ( level < levels )
+	{
+		vis = SunLevel( level, world, step, tilt, wide, page0, zFrom, zScale );
+	}
+
+	//Movers map only when drawn this frame and the point is inside its square with room for the taps
+	float side = g_frame[0].moverZone.z;
+
+	if ( kMoversOn != 0 && side > 0.0 )
+	{
+		float texelWorld = side / MoverTexels;
+		float3 lifted = mul( float4( world + ( step * ( texelWorld * SunLiftTexels ) ), 1.0 ), g_frame[0].sunToPages ).xyz;
+		float2 uv = ( lifted.xy - g_frame[0].moverZone.xy ) / side;
+		float edge = 4.0 / MoverTexels;
+
+		if ( all( uv > edge ) && all( uv < 1.0 - edge ) )
+		{
+			float perTexel = texelWorld * zScale;
+
+			float compare = ( ( lifted.z - zFrom ) * zScale ) - ( ShadowBiasTexels * perTexel );
+			float3 tap = float3( uv, 0.0 );
+
+			vis = min( vis, wide
+				? SunSoft( uint( g_frame[0].sunMaps.y ), uint( g_frame[0].sunDepth.y ), tap, compare, 1.0 / MoverTexels, tilt * perTexel, texelWorld, zScale )
+				: ShadowTap( uint( g_frame[0].sunMaps.y ), tap, compare ) );
+		}
+	}
+
+	return vis;
+}
+
+//The same, stepped off along the normal - what every surface wants.
+float SunShadow( float3 world, float3 normal )
+{
+	return SunShadow( world, normal, normal );
+}
+
+#ifndef PORTABLE
+#include "screen_trace.slang"
+#endif
+
+//Screen-space reflection for water and glass, traced here since they draw after the SSR pass
+float4 ScreenReflected( float3 world, float3 normal, float3 away )
+{
+#ifdef PORTABLE
+	return 0.0.xxxx;
+#else
+	uint chain = uint( g_frame[0].screenTrace.x );
+	uint scene = uint( g_frame[0].screenTrace.y );
+	if ( chain == 0u || scene == 0u ) return 0.0.xxxx;
+
+	float3 camera = EYE_FRAME( camera ).xyz;
+	float lift = 0.02 + ( 0.002 * length( world - camera ) );
+
+	//The opaque world's depth at its own size where the frame kept it, for the last word on where the ray met something; no normals to hand mid-pass.
+	uint fine = g_frame[0].viewInfo.z > 0.0 ? uint( g_frame[0].viewInfo.z ) : 0u;
+
+	ScreenHit hit = ScreenTrace( chain, fine, 0u, world + ( normal * lift ), away,
+		EYE_FRAME( worldToClip ), EYE_FRAME( clipToWorld ), camera, 64 );
+
+	if ( !hit.found ) return 0.0.xxxx;
+
+	return float4( g_textures[NonUniformResourceIndex( scene )].SampleLevel( hit.uv, 0.0 ).rgb, hit.fade );
+#endif
+}
+
+//Sun shadow level debug view: colour per level, texel grid lines, darker in shadow
+float3 SunLevelView( float3 world, float3 normal )
+{
+#ifdef PORTABLE
+	return float3( 0.5, 0.5, 0.5 );
+#else
+	if ( !SunCasts() ) return float3( 0.5, 0.5, 0.5 );
+
+	float3 at = mul( float4( world, 1.0 ), g_frame[0].sunToPages ).xyz;
+	float2 fromEye = abs( at.xy - g_frame[0].sunEye.xy );
+	float away = max( fromEye.x, fromEye.y );
+
+	float page0 = g_frame[0].sunPages.x;
+	uint levels = uint( g_frame[0].sunPages.y );
+	uint whole = uint( g_frame[0].sunEye.z );
+	float reach0 = page0 * SunReachPages;
+
+	uint level = away <= reach0 ? 0u : uint( ceil( log2( away / reach0 ) ) );
+	while ( level < levels && ( whole & ( 1u << level ) ) == 0u ) level++;
+
+	if ( level >= levels ) return float3( 0.5, 0.5, 0.5 );
+
+	static const float3 colours[8] =
+	{
+		float3( 1.0, 0.25, 0.2 ), float3( 1.0, 0.6, 0.15 ), float3( 0.95, 0.9, 0.2 ), float3( 0.3, 0.85, 0.3 ),
+		float3( 0.2, 0.85, 0.9 ), float3( 0.25, 0.45, 1.0 ), float3( 0.7, 0.35, 1.0 ), float3( 0.95, 0.95, 0.95 ),
+	};
+
+	//The level's texel grid where the point lies: a line a texel, a pixel wide whatever the texel's
+	//size, faded out where the lines would crowd closer than three pixels and only fill the surface in.
+	float texelWorld = page0 * exp2( float( level ) ) / SunPageTexels;
+	float2 grid = at.xy / texelWorld;
+	float2 perPixel = fwidth( grid );
+	float2 stripe = saturate( 1.0 - ( abs( frac( grid + 0.5 ) - 0.5 ) / max( perPixel, 1e-5 ) ) );
+	//Each way on its own: a floor seen low has its texels many pixels across and a fraction of one deep, and the lines across stay worth drawing.
+	float2 fade = saturate( 1.0 - ( perPixel * 3.0 ) );
+	float lines = max( stripe.x * fade.x, stripe.y * fade.y );
+
+	float lit = SunShadow( world, normal );
+
+	return colours[min( level, 7u )] * ( 0.35 + ( 0.65 * lit ) ) * ( 1.0 - ( 0.6 * lines ) );
+#endif
+}
+
+//Lamp shadow map layout constants; must match CoreLampMaps
+static const float LampLayerTexels = 2048.0;
+static const float LampGuardTexels = 4.0;
+
+//How far a lamp's read steps off the surface, and its bias, in texels of a face five hundred and twelve across, whatever size
+//the face is: in metres, not in its own texels. With a texel halved, the floor a lamp grazes shadowed itself in stripes.
+static const float LampSteadyTexels = 512.0;
+static const float LampLiftTexels = 1.5;
+static const float LampBiasTexels = 1.0;
+static const float LampNear = 0.05;
+
+//The square a lamp's face looks down `forward` with: across and up. CoreSunPages.LightAxes makes the same two from the same direction - the world's up
+//unless the face runs near it, then the world's forward - and the projection a face was drawn with is built from them, so the two must not disagree.
+void LampAxes( float3 forward, out float3 right, out float3 up )
+{
+	float3 along = abs( forward.y ) < 0.9 ? float3( 0.0, 1.0, 0.0 ) : float3( 0.0, 0.0, -1.0 );
+	right = normalize( cross( along, forward ) );
+	up = normalize( cross( forward, right ) );
+}
+
+#ifndef PORTABLE
+//Lamp shadow from one map, softened by the lamp's source width (light.cone.y), PCSS-style
+float LampLit( uint map, uint depthMap, float3 at, float compare, float texel, float2 slope, Light light,
+	float along, float far, float b, float texelWorld )
+{
+	if ( depthMap == 0u ) return ShadowSharp( map, at, compare, slope );
+
+	float lit;
+	if ( !ShadowEdge( map, at, compare, texel, slope, lit ) ) return lit;
+
+	//What shades it, back out of the depth the face holds into metres down it.
+	float blocker = ShadowBlocker( depthMap, at, compare, texel, slope );
+	float blockerAlong = blocker < 0.0 ? along : b / max( ( far / ( far - LampNear ) ) - blocker, 1e-6 );
+	float soft = max( light.cone.y, 0.0 ) * ( along - blockerAlong ) / max( blockerAlong, LampNear ) / texelWorld;
+
+	return ShadowFilter( map, at, compare, texel, slope, clamp( soft, 0.0, ShadowSoftestTexels ) );
+}
+#endif
+
+//Lamp visibility (1 lit) from its cube faces; face chosen for the stepped lookup point
+float LampShadow( float3 world, float3 normal, float3 step, Light light, float distance )
+{
+#ifdef PORTABLE
+	return 1.0;
+#else
+	float first = light.cone.z;
+	uint map = uint( g_frame[0].sunMaps.w );
+	if ( first < 0.0 || map == 0u ) return 1.0;
+
+	bool spot = light.colour.w > 1.5;
+
+	//How far across a face is a metre out: one for ninety degrees, the cone's half-angle's tangent for a spot - clamped as CoreLampMaps clamps it.
+	float outer = clamp( light.cone.x, 0.17364818, 0.9998 );
+	float halfTan = spot ? sqrt( 1.0 - ( outer * outer ) ) / outer : 1.0;
+	uint sizeClass = uint( light.cone.w );
+	float size = LampLayerTexels / float( 1u << sizeClass );
+	float fit = ( size - ( 2.0 * LampGuardTexels ) ) / size;
+
+	float texelWorld = 2.0 * max( distance, LampNear ) * halfTan / ( size * fit );
+	float steadyWorld = texelWorld * size / LampSteadyTexels;
+	float3 d = world + ( step * ( steadyWorld * LampLiftTexels ) ) - light.position.xyz;
+
+	float3 forward = light.direction.xyz;
+	uint face = 0u;
+
+	if ( !spot )
+	{
+		//Down the largest of the three axes, in the order the faces are laid.
+		float3 extent = abs( d );
+
+		if ( extent.x >= extent.y && extent.x >= extent.z ) { forward = float3( sign( d.x ), 0.0, 0.0 ); face = d.x > 0.0 ? 0u : 1u; }
+		else if ( extent.y >= extent.z ) { forward = float3( 0.0, sign( d.y ), 0.0 ); face = d.y > 0.0 ? 2u : 3u; }
+		else { forward = float3( 0.0, 0.0, sign( d.z ) ); face = d.z > 0.0 ? 4u : 5u; }
+	}
+
+	float along = dot( d, forward );
+	if ( along <= LampNear ) return 1.0;
+
+	float3 right;
+	float3 up;
+	LampAxes( forward, right, up );
+
+	float2 uv = ( float2( dot( d, right ), dot( d, up ) ) * ( fit / ( halfTan * along ) ) * 0.5 ) + 0.5;
+
+	//Where the face is in the map: the lamp's first square and the face's place after it, counted layer by layer, each layer cut into squares of its size.
+	uint perRow = 1u << sizeClass;
+	uint square = uint( first ) + face;
+	uint within = square % ( perRow * perRow );
+	float2 corner = float2( float( within % perRow ), float( within / perRow ) );
+	float3 at = float3( ( corner + uv ) / float( perRow ), float( square / ( perRow * perRow ) ) );
+
+	//The depth a face holds: from LampNear to the lamp's reach, as its projection wrote it. And the bias, LampBiasTexels'
+	//worth of metres, through that projection's own derivative - a number of depth is a different distance at every range.
+	float far = max( light.position.w, LampNear + 0.01 );
+	float b = LampNear * far / ( far - LampNear );
+	float depth = ( far / ( far - LampNear ) ) - ( b / along );
+	if ( depth >= 1.0 ) return 1.0;
+
+	float perMetre = b / ( along * along );
+	float bias = LampBiasTexels * steadyWorld * perMetre;
+
+	//Receiver plane slope on the face, constant across it in perspective depth; clamped at grazing
+	float facing = max( -dot( normal, d ), 0.1 * length( d ) );
+	float2 slope = float2( dot( normal, right ), dot( normal, up ) ) * ( b / facing ) * ( 2.0 * halfTan / ( fit * size ) );
+
+	float compare = depth - bias;
+	float texel = 1.0 / LampLayerTexels;
+
+	float lit = LampLit( map, uint( g_frame[0].sunMaps.z ), at, compare, texel, slope, light, along, far, b, texelWorld );
+
+	//What moves in this face is in the movers' map beside it, where its bit says it was drawn this frame - see CoreLampMaps. Shadowed by either.
+	uint moversMap = uint( g_frame[0].sunDepth.z );
+
+	if ( ( uint( light.shape.y ) & ( 1u << face ) ) != 0u && moversMap != 0u && lit > 0.0 )
+		lit *= LampLit( moversMap, uint( g_frame[0].sunDepth.w ), at, compare, texel, slope, light, along, far, b, texelWorld );
+
+	return lit;
+#endif
+}
+
+//The same, stepped off along the normal - what every surface wants.
+float LampShadow( float3 world, float3 normal, Light light, float distance )
+{
+	return LampShadow( world, normal, normal, light, distance );
+}
+
+//One number for how much light a colour is, for weighing lights against each other.
+float LightStrength( float3 colour )
+{
+	return dot( colour, float3( 0.2126, 0.7152, 0.0722 ) );
+}
+
+//Spec constant: shade reflection probes; folding it out saves registers. Always 0 on portable
+#ifdef PORTABLE
+static const int kProbesOn = 0;
+#elif defined( SPECIALIZED )
+[vk::constant_id( 0 )] const int kProbesOn = 1;
+#else
+static const int kProbesOn = 1;
+#endif
+
+//Spec constant: debug views; off merges diffuse and specular accumulators to save registers
+#ifdef SPECIALIZED
+[vk::constant_id( 1 )] const int kDebugOn = 1;
+#else
+static const int kDebugOn = 1;
+#endif
+
+//Spec constant: frame has a light grid; off walks the whole list (always safe, only slower)
+#ifdef SPECIALIZED
+[vk::constant_id( 2 )] const int kGridOn = 1;
+#else
+static const int kGridOn = 1;
+#endif
+
+//Spec constant: frame has non-directional lights; must be correct or lamps go missing
+#ifdef SPECIALIZED
+[vk::constant_id( 3 )] const int kLampsOn = 1;
+#else
+static const int kLampsOn = 1;
+#endif
+
+//Spec constant: frame has a sky table (settings.w), so the read/fallback branch folds away
+#ifdef SPECIALIZED
+[vk::constant_id( 4 )] const int kSkyTableOn = 1;
+#else
+static const int kSkyTableOn = 1;
+#endif
+
+//Whether the frame has fog in it at all - the same word ApplyFog would have found nought in, see CoreSceneRenderer.SetFog.
+#ifdef SPECIALIZED
+[vk::constant_id( 5 )] const int kFogOn = 1;
+#else
+static const int kFogOn = 1;
+#endif
+
+//And whether it drew an occlusion picture for the world to read - settings.x, which is nought when there is none. Off by default as a
+//project setting, so the branch that reads it is one more piece of the pixel stage that the ordinary frame carries and never enters.
+#ifdef SPECIALIZED
+[vk::constant_id( 6 )] const int kOcclusionOn = 1;
+#else
+static const int kOcclusionOn = 1;
+#endif
+
+//Spec constant: far material calls (past ClusterFarSlice) skip normal and roughness maps; 0 is full
+#ifdef SPECIALIZED
+[vk::constant_id( 13 )] const int kFarShading = 0;
+#else
+static const int kFarShading = 0;
+#endif
+
+//Spec constant: march fog volumes per pixel; 0 when the froxel sheet exists. Default 1 marches
+#ifdef SPECIALIZED
+[vk::constant_id( 14 )] const int kFogMarch = 1;
+#else
+static const int kFogMarch = 1;
+#endif
+
+//Spec constant: frame has more than one light; 0 turns the light loop into a single test
+#ifdef SPECIALIZED
+[vk::constant_id( 7 )] const int kManyLights = 1;
+#else
+static const int kManyLights = 1;
+#endif
+
+//Spec constant: sun drew a movers map this frame; off drops the second read and its registers
+#ifdef SPECIALIZED
+[vk::constant_id( 8 )] const int kMoversOn = 1;
+#else
+static const int kMoversOn = 1;
+#endif
+
+//Spec constant: frame has decals; must be correct. Always 0 on portable, which has no decals
+#ifdef PORTABLE
+static const int kDecalsOn = 0;
+#elif defined( SPECIALIZED )
+[vk::constant_id( 9 )] const int kDecalsOn = 1;
+#else
+static const int kDecalsOn = 1;
+#endif
+
+//Whether the frame has baked lighting to read - see HasBakedSheet. A scene nobody baked, which is most of them while they are being built,
+//folds the sheet's two reads and the volume's six out of every surface, and with them the registers the branch around them would have held.
+#ifdef SPECIALIZED
+[vk::constant_id( 10 )] const int kBakedOn = 1;
+#else
+static const int kBakedOn = 1;
+#endif
+
+//Sky spec constants: fold out moon/stars (and the sky's own cloud) when unused, to cut registers
+
+//Whether there is any night in this frame - NightFactor above nought. Nought folds the moon and the stars out of the sky's pixel stage.
+#ifdef SPECIALIZED
+[vk::constant_id( 11 )] const int kNightOn = 1;
+#else
+static const int kNightOn = 1;
+#endif
+
+//And whether there is any day in it - NightFactor below one. Nought, at night, folds the sun's disc, its limb and its glare out of the same stage.
+#ifdef SPECIALIZED
+[vk::constant_id( 12 )] const int kSunDiscOn = 1;
+#else
+static const int kSunDiscOn = 1;
+#endif
+
+//Constant ids 15+ belong to shaders' own Fold( N ) params (e.g. sky cloud); keep frame ids below
+
+//The first two probe boxes a point is in, with edge fades, layered first over second over sky
+struct ProbeMix
+{
+	int first;
+	float firstWeight;
+	int second;
+	float secondWeight;
+};
+
+ProbeMix ProbesAt( float3 world )
+{
+	ProbeMix mix;
+	mix.first = -1;
+	mix.firstWeight = 0.0;
+	mix.second = -1;
+	mix.secondWeight = 0.0;
+
+	int count = int( g_frame[0].probeInfo.x );
+
+	for ( int i = 0; i < count && i < 4; ++i )
+	{
+		Probe probe = g_frame[0].probes[i];
+
+		float3 mins = probe.mins.xyz;
+		float3 maxs = probe.maxs.xyz;
+
+		if ( any( world < mins ) || any( world > maxs ) ) continue;
+
+		//How far inside the box it is, in the tightest of the three axes. A probe that
+		//stopped at its wall would show a hard line across the floor where two rooms meet.
+		float fade = max( probe.maxs.w, 0.0001 );
+		float3 near = min( world - mins, maxs - world );
+		float weight = saturate( min( near.x, min( near.y, near.z ) ) / fade );
+
+		//A probe with no picture yet - not captured, or its capture failed - is no probe: read as a colour it is a room with no light in it.
+		if ( weight <= 0.0 || probe.where.w < 0.5 ) continue;
+
+		if ( mix.first < 0 )
+		{
+			mix.first = i;
+			mix.firstWeight = weight;
+
+			//Wholly inside the first: nothing under it shows.
+			if ( weight >= 1.0 ) break;
+		}
+		else
+		{
+			mix.second = i;
+			mix.secondWeight = weight;
+			break;
+		}
+	}
+
+	return mix;
+}
+
+float4 EncodeRgbm( float3 hdr, float range )
+{
+	float3 c = max( hdr, 0.0 ) / max( range, 0.001 );
+	float m = clamp( max( max( c.r, c.g ), c.b ), 1.0 / 255.0, 1.0 );
+	m = ceil( m * 255.0 ) / 255.0;
+	return float4( saturate( c / m ), m );
+}
+
+float3 DecodeRgbm( float4 rgbm, float range )
+{
+	return rgbm.rgb * rgbm.a * max( range, 0.001 );
+}
+
+//Gradient fog amount: distance falloff times height falloff (dense below the start height)
+float FogAmount( float3 world, float3 eye )
+{
+	if ( g_frame[0].fogShape.z < 0.5 ) return 0.0;
+
+	float2 span = g_frame[0].fogRange.xy;
+	float away = saturate( ( length( world - eye ) - span.x ) / max( span.y - span.x, 0.0001 ) );
+
+	float2 rise = g_frame[0].fogRange.zw;
+	float up = saturate( ( world.y - rise.x ) / max( rise.y - rise.x, 0.0001 ) );
+
+	float byDistance = pow( away, g_frame[0].fogShape.x );
+	float byHeight = pow( 1.0 - up, g_frame[0].fogShape.y );
+
+	return saturate( byDistance * byHeight * g_frame[0].fogColour.w );
+}
+
+//A vector turned by a quaternion's inverse - into the frame the quaternion turns out of.
+float3 TurnInto( float4 q, float3 v )
+{
+	float3 axis = -q.xyz;
+	return v + 2.0 * cross( axis, cross( axis, v ) + q.w * v );
+}
+
+//Ray march steps per fog volume; 3 on portable, which marches every volume per pixel
+#ifdef PORTABLE
+static const int kFogVolumeSteps = 3;
+#else
+static const int kFogVolumeSteps = 8;
+#endif
+
+//Extinction per metre for a volume of strength one
+static const float kFogVolumeDensity = 0.25;
+
+//Henyey-Greenstein phase, forward-leaning; averages to 1/(4 pi) over the sphere
+float FogPhase( float cosine )
+{
+	float g = 0.45;
+	return ( 1.0 - g * g ) / ( 4.0 * 3.14159265 * pow( 1.0 + g * g - 2.0 * g * cosine, 1.5 ) );
+}
+
+//Lamp light in fog via the light grid, with falloff and cone but no shadow
+float3 FogLampLight( float3 here, float3 view, float2 screen )
+{
+	float viewDepth = mul( float4( here, 1.0 ), EYE_FRAME( worldToClip ) ).w;
+
+	LightWalk walk = LightsHere( screen, viewDepth );
+	int count = int( walk.count );
+	if ( kManyLights == 0 ) count = min( count, 1 );
+
+	float3 arriving = 0.0;
+
+	for ( int index = 0; index < count; ++index )
+	{
+		uint which = LightHere( walk, uint( index ) );
+		Light light = LightAt( which );
+
+		//The sun is taken by VolumeFog itself, with its shadow.
+		if ( light.colour.w < 0.5 ) continue;
+
+		LightLamp( which, light );
+
+		float3 toLight = light.position.xyz - here;
+		float distance = length( toLight );
+		if ( distance > light.position.w ) continue;
+
+		float3 l = toLight / max( distance, 0.0001 );
+
+		//See the lamp loop in surface_shading.slang, which this repeats: inverse square, windowed to nothing at the range.
+		float reach = distance / max( light.position.w, 0.0001 );
+		float falloff = saturate( 1.0 - reach * reach * reach * reach );
+		float square = max( distance * distance, 0.0001 );
+		float spread = light.shape.x == 1.0 ? square : pow( square, light.shape.x );
+		float attenuation = falloff * falloff / max( spread, 0.0001 );
+
+		if ( light.colour.w > 1.5 )
+		{
+			float aligned = dot( -l, light.direction.xyz );
+			attenuation *= saturate( ( aligned - light.cone.x ) / max( light.direction.w - light.cone.x, 0.0001 ) );
+		}
+
+		if ( attenuation <= 0.0 ) continue;
+
+		arriving += light.colour.rgb * attenuation * FogPhase( dot( view, l ) );
+	}
+
+	return arriving;
+}
+
+//Fog volume air from the froxel sheet (two slice taps, lerped); false if no sheet, so caller marches
+bool FogVolumeSheet( float3 world, float2 screen, out float3 scattered, out float through )
+{
+	scattered = float3( 0.0, 0.0, 0.0 );
+	through = 1.0;
+
+#ifdef PORTABLE
+	//The portable frame draws no sheet: CoreVolumeFog is a compute pass on a storage picture, and there is no bindless
+	//table here to read one out of. The caller marches, which is what it did before there was a sheet at all.
+	return false;
+#else
+	uint sheet = uint( g_frame[0].fogVolumeSheet.x );
+	float slices = g_frame[0].fogVolumeSheet.y;
+	float near = g_frame[0].fogVolumeSheet.z;
+	float far = g_frame[0].fogVolumeSheet.w;
+	float columns = max( g_frame[0].fogVolumeInfo.y, 1.0 );
+
+	if ( sheet == 0 || slices < 1.0 || Eye() != 0 ) return false;
+
+	//How far down the view the point is - the same number the clip position's w holds, which is what the slices were laid out along.
+	float depth = mul( float4( world, 1.0 ), g_frame[0].worldToClip ).w;
+
+	if ( depth <= near )
+	{
+		//Nearer than the first slice: nothing has been scattered yet.
+		return true;
+	}
+
+	//Which slice, as the pass laid them out: geometric from near to far.
+	float at = slices * ( log( min( depth, far ) / near ) / log( far / near ) );
+
+	//A texel holds the integral to the END of its slice, so the value at `at` sits between texels at - 1 and at.
+	float index = clamp( at - 1.0, 0.0, slices - 1.0 );
+	float low = floor( index );
+	float mix = index - low;
+	float high = min( low + 1.0, slices - 1.0 );
+
+	float2 uv = saturate( screen / float2( max( g_frame[0].settings.y, 1.0 ), max( g_frame[0].settings.z, 1.0 ) ) );
+
+	//Which tile of the sheet a slice is in - the slices are laid across and then down, because a column of them would be a picture taller
+	//than a device will make. See CoreVolumeFog.Columns, which decides this, and the writer, which lays them out the same way round.
+	float rows = ceil( slices / columns );
+
+	//Inside its own tile, so the filter cannot reach into the slice beside it: a sheet of
+	//tiles is not a volume texture, and the texels along a tile's edge belong to somebody else.
+	float2 froxels = max( g_frame[0].fogVolumeInfo.zw, float2( 1.0, 1.0 ) );
+	float2 inset = clamp( uv, 0.5 / max( froxels, 1.0 ), 1.0 - ( 0.5 / max( froxels, 1.0 ) ) );
+
+	float2 tileA = float2( fmod( low, columns ), floor( low / columns ) );
+	float2 tileB = float2( fmod( high, columns ), floor( high / columns ) );
+
+	float2 across = float2( columns, rows );
+
+	//One sheet for the frame - see SkyTableAt for why that means no NonUniformResourceIndex.
+	float4 a = g_textures[sheet].SampleLevel( ( tileA + inset ) / across, 0.0 );
+	float4 b = g_textures[sheet].SampleLevel( ( tileB + inset ) / across, 0.0 );
+
+	float4 held = lerp( a, b, mix );
+
+	scattered = held.rgb;
+	through = held.a;
+
+	return true;
+#endif
+}
+
+float3 VolumeFog( float3 lit, float3 world, float3 eye, float2 screen )
+{
+	int count = (int)g_frame[0].fogVolumeInfo.x;
+	if ( count <= 0 ) return lit;
+
+	//The sheet, where the frame drew one - one read instead of eight steps and eight taps of the sun's map, and the same arithmetic at the end.
+	{
+		float3 scattered;
+		float through;
+
+		if ( FogVolumeSheet( world, screen, scattered, through ) ) return lit * through + scattered;
+	}
+
+#ifndef STEREO
+	//The frame drew the sheet, so the only way here is a pixel the sheet had no answer for - which the pipeline was
+	//baked knowing never happens. Not in a two-eye build: the second eye reads no sheet and marches. See kFogMarch.
+	if ( kFogMarch == 0 ) return lit;
+#endif
+
+	float3 ray = world - eye;
+	float rayLength = length( ray );
+	if ( rayLength < 0.001 ) return lit;
+
+	float3 view = ray / rayLength;
+
+	bool sun = HasSun();
+	float3 sunDirection = g_frame[0].sunDirection.xyz;
+	float3 sunLight = g_frame[0].sunLight.rgb;
+
+	float phase = sun ? FogPhase( dot( view, sunDirection ) ) : 0.0;
+
+	float3 ambient = g_frame[0].ambient.rgb;
+
+	for ( int v = 0; v < count && v < 8; ++v )
+	{
+		FogVolume volume = g_frame[0].fogVolumes[v];
+
+		float3 extents = volume.extents.xyz;
+		float3 origin = TurnInto( volume.rotation, eye - volume.centre.xyz ) / extents;
+		float3 direction = TurnInto( volume.rotation, ray ) / extents;
+
+		//The slab test: where the ray is inside the unit box, as fractions of the way from the eye to the pixel.
+		float3 safe = max( abs( direction ), 1e-6 ) * sign( direction + 1e-7 );
+		float3 near = ( -1.0 - origin ) / safe;
+		float3 far = ( 1.0 - origin ) / safe;
+		float3 enter = min( near, far );
+		float3 leave = max( near, far );
+		float t0 = max( max( enter.x, enter.y ), max( enter.z, 0.0 ) );
+		float t1 = min( min( leave.x, leave.y ), min( leave.z, 1.0 ) );
+		if ( t1 <= t0 ) continue;
+
+		float strength = volume.centre.w;
+		float fade = volume.extents.w;
+		float3 scatterColour = volume.colour.rgb;
+
+		float step = ( t1 - t0 ) / kFogVolumeSteps;
+		float metres = step * rayLength;
+
+		float through = 1.0;
+		float3 scattered = 0.0;
+
+		for ( int i = 0; i < kFogVolumeSteps; ++i )
+		{
+			float t = t0 + ( i + 0.5 ) * step;
+			float3 local = origin + direction * t;
+
+			//One at the centre, nought at the faces, raised to the fade: an exponent of nought is a hard-edged box, one a straight fade.
+			float edge = saturate( 1.0 - max( abs( local.x ), max( abs( local.y ), abs( local.z ) ) ) );
+			float density = strength * kFogVolumeDensity * pow( edge, fade );
+
+			float3 here = eye + ray * t;
+			float3 light = ambient + FogLampLight( here, view, screen );
+
+			//One sun shadow tap per march step; a point in air needs no plane or soft edge
+			if ( sun )
+				light += sunLight * phase * SunShadow( here, sunDirection, sunDirection, false );
+
+			float taken = 1.0 - exp( -density * metres );
+			scattered += through * taken * light * scatterColour;
+			through *= 1.0 - taken;
+		}
+
+		lit = lit * through + scattered;
+	}
+
+	return lit;
+}
+
+//Apply fog volumes, then gradient fog (optionally tinted by the sky behind the pixel)
+float3 ApplyFog( float3 lit, float3 world, float3 eye, float2 screen )
+{
+	if ( kFogOn == 0 ) return lit;
+
+	lit = VolumeFog( lit, world, eye, screen );
+
+	float amount = FogAmount( world, eye );
+	if ( amount <= 0.0 ) return lit;
+
+	float3 colour = g_frame[0].fogColour.rgb;
+
+	if ( g_frame[0].fogShape.w > 0.5 ) colour *= SkyDrawn( normalize( world - eye ) );
+
+	return lerp( lit, colour, amount );
+}
+
+//Whether this frame has a sheet of baked light for the surfaces that stand still - see bakedMaps in frame_data.slang.
+bool HasBakedSheet()
+{
+#ifdef PORTABLE
+	//Two pictures out of the table, which the portable frame has none of.
+	return false;
+#else
+	return kBakedOn != 0 && g_frame[0].bakedMaps.w > 0.5;
+#endif
+}
+
+//And whether it has the volume, for everything else.
+bool HasBakedVolume()
+{
+#ifdef PORTABLE
+	return false;
+#else
+	return kBakedOn != 0 && g_frame[0].bakedVolume.w > 0.5;
+#endif
+}
+
+//Whether it has a mask: lights whose shadows of the still world were baked rather than drawn into maps - see Light.Baked.
+bool HasBakedMask()
+{
+#ifdef PORTABLE
+	return false;
+#else
+	return kBakedOn != 0 && g_frame[0].bakedMask.w > 0.5;
+#endif
+}
+
+//Which channel of the mask holds the sun's shadow, or -1 - for what lights by the sun without walking the frame's lights, as a leaf's back does.
+int SunMaskChannel()
+{
+	return HasBakedMask() ? int( g_frame[0].bakedSun.x ) - 1 : -1;
+}
+
+#ifndef PORTABLE
+
+//Baked lightmap diffuse with a dominant direction; only redistributes light for bent normals
+float3 BakedSheet( float2 uv, float3 normal )
+{
+	uint sheet = uint( g_frame[0].bakedMaps.x );
+	uint ways = uint( g_frame[0].bakedMaps.y );
+
+	//Both frame-uniform - see SkyTableAt.
+	float3 light = g_textures[sheet].SampleLevel( uv, 0.0 ).rgb;
+	float4 way = g_textures[ways].SampleLevel( uv, 0.0 );
+
+	float lean = dot( normal, way.xyz ) * 0.5 + 0.5;
+
+	return light * ( lean / max( way.w, 0.25 ) );
+}
+
+//One layer of the volume's three pictures at a point of the lattice's floor, as the constant and the lean of each colour.
+void BakedLayer( float2 uv, out float4 red, out float4 green, out float4 blue )
+{
+	//Three frame-uniform pictures - see SkyTableAt.
+	red = g_textures[uint( g_frame[0].bakedVolume.x )].SampleLevel( uv, 0.0 );
+	green = g_textures[uint( g_frame[0].bakedVolume.y )].SampleLevel( uv, 0.0 );
+	blue = g_textures[uint( g_frame[0].bakedVolume.z )].SampleLevel( uv, 0.0 );
+}
+
+//Baked light-volume mask at a point, clamped half a texel inside each layer to avoid bleeding
+float4 BakedVolumeMask( float3 world )
+{
+	float3 count = g_frame[0].volumeCount.xyz;
+
+	float3 at = ( world - g_frame[0].volumeOrigin.xyz ) * g_frame[0].volumeOrigin.w;
+	at = clamp( at, float3( 0.0, 0.0, 0.0 ), count - 1.0 );
+
+	float below = floor( at.y );
+	float above = min( below + 1.0, count.y - 1.0 );
+	float between = at.y - below;
+
+	float across = count.x * count.y;
+	float v = ( at.z + 0.5 ) / count.z;
+
+	//Frame-uniform - see SkyTableAt.
+	uint mask = uint( g_frame[0].bakedMask.y );
+
+	float4 low = g_textures[mask].SampleLevel( float2( ( ( below * count.x ) + at.x + 0.5 ) / across, v ), 0.0 );
+	float4 high = g_textures[mask].SampleLevel( float2( ( ( above * count.x ) + at.x + 0.5 ) / across, v ), 0.0 );
+
+	return lerp( low, high, between );
+}
+
+//Baked still-world shadow for a masked light, from the lightmap mask or else the volume mask
+float BakedMask( float3 world, float3 geometric, float2 lightmap, int channel )
+{
+	float4 through;
+
+	if ( g_frame[0].bakedMask.z > 0.5 && ( lightmap.x + lightmap.y ) > 0.0 )
+	{
+		//Frame-uniform - see SkyTableAt.
+		through = g_textures[uint( g_frame[0].bakedMask.x )].SampleLevel( lightmap, 0.0 );
+	}
+	else
+	{
+		//A step off the surface, as BakedVolume takes it: a floor reads the air above it, which is what its shadow is the shadow of.
+		through = BakedVolumeMask( world + ( geometric * ( 0.35 / g_frame[0].volumeOrigin.w ) ) );
+	}
+
+	return through[clamp( channel, 0, 3 )];
+}
+
+float3 BakedVolume( float3 world, float3 normal )
+{
+	float3 count = g_frame[0].volumeCount.xyz;
+
+	float3 at = ( world - g_frame[0].volumeOrigin.xyz ) * g_frame[0].volumeOrigin.w;
+	at = clamp( at, float3( 0.0, 0.0, 0.0 ), count - 1.0 );
+
+	float below = floor( at.y );
+	float above = min( below + 1.0, count.y - 1.0 );
+	float between = at.y - below;
+
+	float across = count.x * count.y;
+	float v = ( at.z + 0.5 ) / count.z;
+
+	float4 red0, green0, blue0, red1, green1, blue1;
+
+	BakedLayer( float2( ( ( below * count.x ) + at.x + 0.5 ) / across, v ), red0, green0, blue0 );
+	BakedLayer( float2( ( ( above * count.x ) + at.x + 0.5 ) / across, v ), red1, green1, blue1 );
+
+	float4 red = lerp( red0, red1, between );
+	float4 green = lerp( green0, green1, between );
+	float4 blue = lerp( blue0, blue1, between );
+
+	float4 facing = float4( 1.0, normal );
+
+	return max( float3( dot( red, facing ), dot( green, facing ), dot( blue, facing ) ), 0.0 );
+}
+
+#endif
+
+//Min of baked still-world shadow and the live movers shadow; unchanged without a channel or mask
+float BakedShadow( float moving, float3 world, float3 geometric, float2 lightmap, int channel )
+{
+#ifdef PORTABLE
+	return moving;
+#else
+	if ( channel < 0 || moving <= 0.0 || !HasBakedMask() ) return moving;
+
+	return min( moving, BakedMask( world, geometric, lightmap, channel ) );
+#endif
+}
+
+//Octahedral mapping of a direction; must match CoreEnvmap.Fold exactly
+float2 OctahedralUv( float3 direction )
+{
+	float3 d = normalize( direction );
+	float sum = abs( d.x ) + abs( d.y ) + abs( d.z );
+
+	if ( sum < 0.00001 ) return float2( 0.5, 0.5 );
+
+	float2 p = d.xy / sum;
+
+	if ( d.z < 0.0 )
+	{
+		p = float2(
+			( 1.0 - abs( p.y ) ) * ( p.x >= 0.0 ? 1.0 : -1.0 ),
+			( 1.0 - abs( p.x ) ) * ( p.y >= 0.0 ? 1.0 : -1.0 ) );
+	}
+
+	return ( p * 0.5 ) + 0.5;
+}
+
+//One band of one probe's picture. The bands are stacked down the texture, so a band is a slice of the v coordinate. Kept a
+//half texel off each end of the slice, or the filter reaches into the band above and a rough reflection picks up a sharp one.
+float3 SampleProbeBand( int slot, float2 uv, int band )
+{
+#ifdef PORTABLE
+	return 0.0.xxx;
+#else
+	float bands = max( g_frame[0].probeInfo.z, 1.0 );
+	float side = max( g_frame[0].probeInfo.y, 1.0 );
+
+	float inset = 0.5 / ( side * bands );
+	float v = ( ( float( band ) + clamp( uv.y, 0.0, 1.0 ) ) / bands );
+
+	v = clamp( v, ( float( band ) / bands ) + inset, ( float( band + 1 ) / bands ) - inset );
+
+	//The top level and no other: the bands below it are already the blur, and a mip chosen from the neighbours would reach across the band edge
+	//and across the seam the octahedron is folded along - which a full-screen pass does at every pixel, because its neighbours are another surface.
+	float4 rgbm = g_textures[NonUniformResourceIndex( uint( slot ) )].SampleLevel( float2( uv.x, v ), 0.0 );
+
+	return DecodeRgbm( rgbm, g_frame[0].probeInfo.w );
+#endif
+}
+
+//What one probe reflects in one direction, at one roughness. Between two bands rather than in one, because five steps of blur across the whole
+//roughness range is a visible staircase on anything that varies - a roughness map, or a curved surface catching the light at a changing angle.
+float3 SampleProbe( int which, float3 direction, float roughness )
+{
+	if ( which < 0 || which >= 4 ) return 0.0.xxx;
+
+	//Clamp the index: GLSL ES rejects a constant probes[-1] even in dead code
+	Probe probe = g_frame[0].probes[clamp( which, 0, 3 )];
+
+	int slot = int( probe.where.w );
+	if ( slot <= 0 ) return 0.0.xxx;
+
+	float2 uv = OctahedralUv( direction );
+
+	float bands = max( g_frame[0].probeInfo.z, 1.0 );
+
+	//Band index linear in roughness, matching how CoreEnvmap.Fold builds the bands
+	float along = saturate( roughness ) * ( bands - 1.0 );
+
+	int lower = int( floor( along ) );
+	int upper = min( lower + 1, int( bands ) - 1 );
+
+	float3 mixed = lerp(
+		SampleProbeBand( slot, uv, lower ),
+		SampleProbeBand( slot, uv, upper ),
+		along - float( lower ) );
+
+	return mixed * probe.tint.rgb * probe.tint.a;
+}
+
+//The probes covering a point - <see cref="ProbesAt"/>, and none at all on a pipeline baked without the probe path (kProbesOn).
+ProbeMix ProbesHere( float3 world )
+{
+	if ( kProbesOn == 0 )
+	{
+		ProbeMix none;
+		none.first = -1;
+		none.firstWeight = 0.0;
+		none.second = -1;
+		none.secondWeight = 0.0;
+		return none;
+	}
+
+	return ProbesAt( world );
+}
+
+//What the probes over a point say lies one way, laid over `under` - the second over it as far as it reaches, the first over
+//that. `roughness` picks the band; `boxed` reads each probe along its box's projection of `away` rather than along `away` itself.
+float3 ProbesOver( ProbeMix mix, float3 under, float3 world, float3 away, float roughness, bool boxed )
+{
+	float3 seen = under;
+
+	if ( mix.second >= 0 )
+		seen = lerp( seen, SampleProbe( mix.second, boxed ? ProbeDirection( mix.second, world, away ) : away, roughness ), mix.secondWeight );
+
+	if ( mix.first >= 0 )
+		seen = lerp( seen, SampleProbe( mix.first, boxed ? ProbeDirection( mix.first, world, away ) : away, roughness ), mix.firstWeight );
+
+	return seen;
+}
+
+//Box projection: a picture taken from the middle of a room is only right in the middle of it, and the correction is where the reflected
+//ray actually meets the wall. Without it a reflection slides along a floor as the eye moves, which is the giveaway of an uncorrected probe.
+float3 ProbeDirection( int probe, float3 world, float3 away )
+{
+	//Clamped for the same reason as SampleProbe's, and here there is not even a guard above it to hide behind.
+	Probe held = g_frame[0].probes[clamp( probe, 0, 3 )];
+
+	if ( held.mins.w <= 0.5 ) return away;
+
+	float3 first = ( held.maxs.xyz - world ) / away;
+	float3 second = ( held.mins.xyz - world ) / away;
+
+	float3 furthest = max( first, second );
+	float distance = min( furthest.x, min( furthest.y, furthest.z ) );
+
+	if ( distance <= 0.0 ) return away;
+
+	return normalize( ( world + ( away * distance ) ) - held.where.xyz );
+}
+
+//Environment reflection (probe or sky); shared by surfaces and SSR so both agree exactly
+float3 EnvironmentAt( ProbeMix probes, float3 world, float3 normal, float3 away, float roughness )
+{
+	float3 lookAt = normalize( lerp( away, normal, roughness * roughness ) );
+
+	//Reflect the drawn sky, not the flat ambient; flat colour only when there's no sky
+	float3 sky = HasSky() ? SkyDrawn( lookAt ) : SceneAmbient( float3( 0.0, 0.0, 0.0 ) );
+
+	return ProbesOver( probes, sky, world, away, roughness, true );
+}
+
+//Exposure and tonemap for frames without a compose pass, using the same EngineTonemap
+#ifdef TARGET_SCREEN
+
+#include "tonemap.slang"
+
+#ifdef ENGINE_SCREEN_CHAIN
+
+//Point-effect chain to screen (written by CorePointChain.ScreenText) when there's no compose
+float3 EngineFinishToScreen( float3 colour, float4 position )
+{
+	return EngineScreenChain( colour, position.xy / max( g_frame[0].settings.yz, float2( 1.0, 1.0 ) ) );
+}
+
+#define FinishToScreen( colour ) EngineFinishToScreen( ( colour ), i.position )
+
+#else
+
+float3 FinishToScreen( float3 colour )
+{
+	return EngineTonemap( colour * g_frame[0].finish.x, g_frame[0].finish.y );
+}
+
+#endif
+
+//Alpha written to screen: 1 unless the draw blends, since the Linux window is see-through
+#ifndef F_TRANSLUCENT
+#define F_TRANSLUCENT 0
+#endif
+
+float ScreenAlpha( bool blends, float alpha )
+{
+#ifdef CLUSTER
+	//Cluster pipelines never blend, so return 1 here and keep tint/alpha from living across lighting
+	return 1.0;
+#else
+	return blends ? alpha : 1.0;
+#endif
+}
+
+#endif
+
+#ifdef CLUSTER
+#include "cluster_main.slang"
+#endif
+
+#ifdef ENGINE_WORLD_PUSH
+
+//Unposed model-space corner position, so surface detail sticks to the mesh; clusters reread the pool
+#ifdef CLUSTER
+static uint g_clusterRest;
+
+float3 RestPosition( VIn i )
+{
+	return LoadVisVertex( g_clusterRest ).position;
+}
+#else
+float3 RestPosition( VIn i )
+{
+	return i.position;
+}
+#endif
+
+#endif

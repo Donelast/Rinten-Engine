@@ -1,0 +1,74 @@
+@namespace Editor.Preferences
+@attribute [Title( "MCP Server" ), Icon( "smart_toy" ), Order( 6 )]
+@attribute [Description( "A local server that lets an AI agent see and drive the open project." )]
+@using Editor.Mcp
+@using Editor.ProjectSettingsUI
+@inherits PreferencesPage
+
+<root class="preferences-page">
+	<div class="body" @ref="Body">
+		<SettingsCalloutPanel Html="@Explanation" />
+
+		<div @ref="settingsHost"></div>
+		<div @ref="statusHost"></div>
+		<div class="button-row" @ref="buttonHost"></div>
+	</div>
+</root>
+
+@code
+{
+	const string Explanation =
+		"<p>The editor can serve the Model Context Protocol, which lets AI agents like Claude Code " +
+		"see and drive the project you have open. The server only accepts connections from this computer.</p>";
+
+	Panel settingsHost;
+	Panel statusHost;
+	Panel buttonHost;
+
+	Rinten.UI.Label status;
+	TextButtonPanel copyUrl;
+	TextButtonPanel copyCommand;
+
+	protected override void OnBuild()
+	{
+		var sheet = AddSheet( settingsHost );
+		sheet.AddProperty( () => EditorPreferences.McpServerEnabled );
+		sheet.AddProperty( () => EditorPreferences.McpServerPort );
+
+		status = statusHost.AddChild<Rinten.UI.Label>( "status" );
+
+		copyUrl = buttonHost.AddChild<TextButtonPanel>();
+		copyUrl.Icon = "content_copy";
+		copyUrl.Text = "Copy Url";
+		copyUrl.Pressed = () => EditorUtility.Clipboard.Copy( McpServer.Url );
+
+		copyCommand = buttonHost.AddChild<TextButtonPanel>();
+		copyCommand.Icon = "content_copy";
+		copyCommand.Text = "Copy Claude Code Command";
+		copyCommand.Pressed = () => EditorUtility.Clipboard.Copy( $"claude mcp add --transport http rinten {McpServer.Url}" );
+
+		SyncStatus();
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		SyncStatus();
+	}
+
+	//Whether the server is up, and so whether there is anything to copy.
+	void SyncStatus()
+	{
+		if ( status is null ) return;
+
+		var running = McpServer.IsRunning;
+		var text = running ? $"🟢 Running at {McpServer.Url}" : "🔴 Not running";
+
+		if ( status.Text != text )
+			status.Text = text;
+
+		copyUrl.Disabled = !running;
+		copyCommand.Disabled = !running;
+	}
+}

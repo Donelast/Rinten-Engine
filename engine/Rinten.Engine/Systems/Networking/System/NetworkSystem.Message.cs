@@ -1,0 +1,387 @@
+﻿using Rinten.Engine;
+using Rinten.Internal;
+using System.IO;
+
+namespace Rinten.Network;
+
+//A network system is a bunch of connections that people can send messages over. Right
+//now it can be a dedicated server, a listen server, a pure client, or a p2p system.
+internal partial class NetworkSystem
+{
+	internal delegate void MessageHandler( NetworkMessage msg );
+	internal delegate void TypedMessageHandler( InternalMessageType type, NetworkMessage msg );
+	internal delegate void TypdMessageHandler( object t, Connection msg, Guid guid, int depth );
+	internal delegate void TypedMessageHandler<T>( T message, Connection msg, Guid guid );
+	internal delegate Task TypedMessageHandlerAsync<T>( T message, Connection source, Guid guid );
+
+	public ref struct NetworkMessage
+	{
+		public Connection Source;
+		public ByteStream Data;
+
+		//How many times this was unwrapped out of another message. Zero off the wire.
+		public int Depth;
+	}
+
+	//BytePack's depth counter unwinds before a handler runs, so nesting needs its own limit.
+	const int MaxNestedDispatch = 128;
+
+	//Always nest through here - taking the parent depth is what keeps the recursion bounded.
+	internal void DispatchNested( byte[] data, Connection source, int parentDepth )
+	{
+		var msg = new NetworkMessage
+		{
+			Source = source,
+			Data = ByteStream.CreateReader( data ),
+			Depth = parentDepth + 1,
+		};
+
+		try
+		{
+			HandleIncomingMessage( msg );
+		}
+		finally
+		{
+			msg.Data.Dispose();
+		}
+	}
+
+	static bool CanDispatchAtDepth( int depth, Connection source )
+	{
+		if ( depth <= MaxNestedDispatch ) return true;
+
+		Log.Warning( $"Dropping message from {source}: nested {depth} deep, limit is {MaxNestedDispatch} - possible malicious payload" );
+		return false;
+	}
+
+	readonly Dictionary<InternalMessageType, TypedMessageHandler> messageHandlers = new();
+	readonly Dictionary<Type, TypdMessageHandler> typeMessageHandlers = new();
+
+	internal void AddHandler( InternalMessageType message, TypedMessageHandler handler )
+	{
+		messageHandlers[message] = handler;
+	}
+
+	internal void AddHandler<T>( Action<T, Connection, Guid> handler )
+	{
+		typeMessageHandlers[(typeof( T ))] = ( o, channel, g, _ ) => handler( (T)o, channel, g );
+	}
+
+	//For handlers that re-dispatch their payload, which need the depth to pass on.
+	internal void AddHandler<T>( Action<T, Connection, Guid, int> handler )
+	{
+		typeMessageHandlers[(typeof( T ))] = ( o, channel, g, depth ) => handler( (T)o, channel, g, depth );
+	}
+
+	internal void AddHandler<T>( Func<T, Connection, Guid, Task> handler )
+	{
+		//Async handlers yield before they could recurse, so the depth isn't theirs to pass on.
+		typeMessageHandlers[(typeof( T ))] = ( o, channel, g, depth ) =>
+		{
+			_ = ExceptionWrapAsync( async () => await handler( (T)o, channel, g ) );
+		};
+	}
+
+	async Task ExceptionWrapAsync( Func<Task> method )
+	{
+		try
+		{
+			await method();
+		}
+		catch ( Exception e )
+		{
+			Log.Error( e );
+		}
+	}
+
+	//Process any incoming or outgoing messages. This would usually be called on a worker thread unless threaded networking is disabled.
+	internal void ProcessMessagesInThread()
+	{
+		foreach ( var socket in Sockets )
+		{
+			socket?.ProcessMessagesInThread();
+		}
+
+		if ( Connection is null )
+			return;
+
+		lock ( Connection )
+		{
+			Connection.ProcessMessagesInThread();
+		}
+	}
+
+	void HandleIncomingMessages()
+	{
+		Assert.NotNull( sockets, "Socket list is null" ); //should be impossible
+
+		//This network system only exists in the game. Its scope is taken as the struct where Push is still
+		//the engine's own: returned as IDisposable it was boxed on every read of the network, every tick.
+		var game = GameSystem;
+
+		if ( game is not null && PushIsTheEngines( game ) )
+		{
+			using var sceneScope = game.PushScene();
+			ReadIncoming();
+		}
+		else
+		{
+			using var gameScope = game?.Push();
+			ReadIncoming();
+		}
+	}
+
+	void ReadIncoming()
+	{
+		foreach ( var socket in sockets )
+		{
+			socket?.GetIncomingMessages( HandleIncomingMessage );
+		}
+
+		Connection?.GetIncomingMessages( HandleIncomingMessage );
+	}
+
+	//Whether a game network system's Push is one the engine wrote - its own default or the scene system's - rather than a game's override.
+	static bool PushIsTheEngines( GameNetworkSystem system ) => enginePush.GetOrAdd( system.GetType(), static type =>
+		type.GetMethod( nameof( GameNetworkSystem.Push ), System.Type.EmptyTypes )?.DeclaringType?.Assembly == typeof( GameNetworkSystem ).Assembly );
+
+	static readonly System.Collections.Concurrent.ConcurrentDictionary<System.Type, bool> enginePush = new();
+
+	//Outer catch so one bad message can't tear down the dispatch path.
+	internal void HandleIncomingMessage( NetworkMessage msg )
+	{
+		if ( !CanDispatchAtDepth( msg.Depth, msg.Source ) ) return;
+
+		try
+		{
+			HandleIncomingMessageInternal( msg );
+		}
+		catch ( Exception e )
+		{
+			Log.Warning( e, $"Error processing network message from {msg.Source}" );
+		}
+	}
+
+	void HandleIncomingMessageInternal( NetworkMessage msg )
+	{
+		//Conna: If this message is not from the host and we're still connecting, ignore it.
+		if ( !IsHost && !msg.Source.IsHost && Connection.Local.IsConnecting )
+		{
+			return;
+		}
+
+		//Don't try to deserialize any scripts if we don't trust the sender!
+
+		using var scriptDisabledScope = !msg.Source.CanSendScripts
+			? Json.DisableScriptDeserialization()
+			: null;
+
+		var type = msg.Data.Read<InternalMessageType>();
+
+		if ( type == InternalMessageType.HeartbeatPing )
+		{
+			OnHeartbeatPingMessage( msg.Data, msg.Source );
+			return;
+		}
+
+		if ( type is InternalMessageType.DeltaSnapshot
+			or InternalMessageType.DeltaSnapshotAck
+			or InternalMessageType.DeltaSnapshotCluster
+			or InternalMessageType.DeltaSnapshotClusterAck )
+		{
+			var dataCount = msg.Data.Read<int>();
+			var bs = msg.Data.ReadByteStream( dataCount );
+			OnDeltaSnapshotMessage( type, bs, msg.Source );
+			bs.Dispose();
+
+			return;
+		}
+
+		if ( type == InternalMessageType.ClientTick )
+		{
+			OnReceiveClientTick( msg.Data, msg.Source );
+			return;
+		}
+
+		if ( type == InternalMessageType.SetCullState )
+		{
+			OnReceiveCullStateChange( msg.Data, msg.Source );
+			return;
+		}
+
+		if ( type == InternalMessageType.HeartbeatPong )
+		{
+			OnHeartbeatPongMessage( msg.Data, msg.Source );
+			return;
+		}
+
+		var responseTo = Guid.Empty;
+		var requestGuid = Guid.Empty;
+
+		if ( type == InternalMessageType.Request )
+		{
+			requestGuid = msg.Data.Read<Guid>();
+			type = msg.Data.Read<InternalMessageType>();
+		}
+
+		if ( type == InternalMessageType.Response )
+		{
+			responseTo = msg.Data.Read<Guid>();
+			type = msg.Data.Read<InternalMessageType>();
+		}
+
+		if ( type == InternalMessageType.Packed )
+		{
+			object obj = default;
+
+			//This can error if we're getting a message containing types that are defined in an assemblly we didn't recieve yet
+			//(because we're connecting) so just ignore these exceptions, but output an error for now so we know it's happening.
+			try
+			{
+				obj = TypeLibrary.FromBytes<object>( ref msg.Data );
+			}
+			catch ( Exception e )
+			{
+				Log.Warning( e, $"Skipping message from {msg.Source}, deserialize error ({e.Message})!" );
+			}
+
+			if ( obj is null )
+			{
+				Log.Warning( $"Got packed null message from {msg.Source}!" );
+				return;
+			}
+
+			if ( responseTo != Guid.Empty )
+			{
+				msg.Source.OnResponse( responseTo, obj );
+				return;
+			}
+
+			if ( typeMessageHandlers.TryGetValue( obj.GetType(), out var h ) )
+			{
+				h( obj, msg.Source, requestGuid, msg.Depth );
+				return;
+			}
+
+			if ( Networking.Debug )
+			{
+				//Conna: let's only print this warning if we have network debugging enabled. It's
+				//possible we receive some unreliably sent messages before we've loaded assemblies.
+				Log.Warning( $"Unhandled packed message type {obj.GetType()} from {msg.Source}!" );
+			}
+
+			return;
+		}
+
+		if ( messageHandlers.TryGetValue( type, out var handler ) )
+		{
+			handler( type, msg );
+			return;
+		}
+
+		Log.Info( $"Unhandled message type: {type} from {msg.Source}" );
+	}
+
+	private void OnDeltaSnapshotMessage( InternalMessageType type, ByteStream data, Connection source )
+	{
+		GameSystem?.OnDeltaSnapshotMessage( type, data, source );
+	}
+
+	private void OnReceiveCullStateChange( ByteStream data, Connection source )
+	{
+		GameSystem?.OnCullStateChangeMessage( data, source );
+	}
+
+	internal void OnReceiveClientTick( ByteStream data, Connection source )
+	{
+		NetworkDebugSystem.Current?.Record( NetworkDebugSystem.MessageType.UserCommands, data.Length );
+
+		//Read and apply visibility origins from the client
+		{
+			var count = data.Read<char>();
+
+			//Each origin is 3 floats (12 bytes). Reject a count the payload can't hold before allocating
+			//or reading, so a crafted packet can't over-allocate or read past the buffer end.
+			if ( count * 12 > data.ReadRemaining )
+			{
+				Log.Warning( $"Ignoring malformed ClientTick from {source}: visibility origin count {(int)count} exceeds payload ({data.ReadRemaining}b remaining, length {data.Length})." );
+				return;
+			}
+
+			if ( count == 0 )
+			{
+				if ( source.VisibilityOrigins.Length > 0 )
+					source.VisibilityOrigins = [];
+			}
+			else
+			{
+
+				if ( source.VisibilityOrigins.Length != count )
+					source.VisibilityOrigins = new Vector3[count];
+
+				for ( var i = 0; i < count; i++ )
+				{
+					var x = data.Read<float>();
+					var y = data.Read<float>();
+					var z = data.Read<float>();
+					source.VisibilityOrigins[i] = new Vector3( x, y, z );
+				}
+			}
+		}
+
+		//Read and apply the user command from this client
+		{
+			if ( data.ReadRemaining == 0 )
+				return;
+
+			//We should reject user commands from clients if we're not the host
+			if ( !Networking.IsHost )
+				return;
+
+			//This is a user command directly from another client
+			UserCommand cmd = default;
+			cmd.Deserialize( ref data );
+			source.Input.ApplyUserCommand( cmd );
+		}
+	}
+
+	private void OnHeartbeatPingMessage( ByteStream data, Connection source )
+	{
+		if ( IsHost ) return; //Only the host is allowed to send out pings
+		if ( !source.IsHost ) return; //Ignore this heartbeat
+
+		var serverRealTime = data.Read<float>();
+		var serverGameTime = data.Read<double>();
+
+		//Echo it back to the server, so they can work out our ping
+		{
+			ByteStream bs = ByteStream.Create( 512 );
+			bs.Write( InternalMessageType.HeartbeatPong );
+			bs.Write( serverRealTime ); //the time they sent
+			source.SendStream( bs, NetFlags.Reliable | NetFlags.SendImmediate );
+			bs.Dispose();
+		}
+
+		//Tell the game about the new time etc
+		GameSystem?.OnHeartbeat( serverGameTime );
+	}
+
+	private void OnHeartbeatPongMessage( ByteStream data, Connection source )
+	{
+		if ( !IsHost ) return; //Only the host accepts replies from pings
+
+		var requestTime = data.Read<float>();
+		var rtt = RealTime.Now - requestTime;
+
+		if ( rtt < 0 )
+		{
+			Log.Warning( "Round-trip time error! Round-trip time was less than zero." );
+			return;
+		}
+
+		//Cap the max, because it could get silly
+		if ( rtt > 2.0f ) rtt = 2.0f;
+
+		source.UpdateRtt( rtt );
+	}
+}

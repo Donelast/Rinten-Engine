@@ -1,0 +1,70 @@
+.tagset-picker-popup {
+  gap: 4px;
+  padding: 4px;
+  min-height: 500px;
+  min-width: 100px;
+
+  > .entry-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 100%;
+    min-height: $control-row-height;
+    background-color: $control-background;
+    border: $control-border;
+    border-radius: $control-radius;
+
+    > .entry,
+    > textentry.entry {
+      width: 100%;
+      padding: $control-text-padding;
+      color: $text;
+      background-color: transparent;
+      border: none;
+    }
+
+    > .placeholder {
+      position: absolute;
+      left: 6px;
+      top: 0;
+      bottom: 0;
+      align-items: center;
+      color: $text-light;
+      font-size: $control-text-size;
+      pointer-events: none;
+    }
+  }
+
+  > .suggestions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+
+    > .tag-suggestion {
+      flex-direction: row;
+      pointer-events: all;
+      align-items: center;
+      flex-grow: 1;
+      flex-basis: 0;
+      min-width: 25%;
+      min-height: 24px;
+      padding: 2px 8px;
+      gap: 4px;
+      border-radius: $control-radius;
+      background-color: $control-background-light;
+      cursor: pointer;
+
+      > .name {
+        flex-grow: 1;
+        font-size: $type-body;
+        color: $ink-dim;
+        @include one-line;
+      }
+
+      > .count {
+        flex-shrink: 0;
+        font-size: $type-small;
+        color: $text-light;
+      }
+    }
+  }
+}

@@ -1,0 +1,110 @@
+﻿//This dropdown lives inside other editors and always spans their full width.
+ControlDropDown.dropdown
+{
+	flex-grow: 1;
+	min-width: 0;
+	width: 100%;
+	min-height: $control-row-height;
+	padding: $control-text-padding;
+	padding-right: 28px;
+	background-color: $control-background;
+	border: $control-border;
+	border-radius: $control-radius;
+	color: $text-control;
+	justify-content: flex-start;
+	align-items: center;
+	transition: none;
+
+	&:active
+	{
+		background-color: $control-background;
+		transform: none;
+	}
+
+	&.open
+	{
+		transition: none;
+	}
+
+	&.multiple
+	{
+		color: $multiple-values;
+	}
+
+	> .button-right-column
+	{
+		flex-grow: 1;
+		min-width: 0;
+		justify-content: flex-start;
+
+		> .button-label
+		{
+			@include one-line;
+		}
+	}
+
+}
+
+ControlDropDownPopup.popup-panel
+{
+	background-color: $popup-background;
+	border: $popup-border;
+	border-radius: $control-radius;
+	max-height: 420px;
+	//The list scrolls rather than the popup, so a search box stays put above it.
+	overflow: hidden;
+
+	> .list
+	{
+		flex-direction: column;
+		overflow: scroll;
+
+		//The list builds only the rows the scroll is over, and stands the rest of the height up with these.
+		//Nothing may shrink, or the rows the scrollbar was measured against would not be the rows that get drawn.
+		> .spacer
+		{
+			flex-shrink: 0;
+		}
+
+		> button
+		{
+			flex-shrink: 0;
+			flex-direction: row;
+			align-items: center;
+			padding: 0 8px;
+			color: $text-control;
+			font-size: $control-text-size;
+			cursor: pointer;
+			transition: none;
+
+			&:hover,
+			&.active
+			{
+				background-color: $primary;
+				color: $text;
+			}
+		}
+	}
+
+	&.searchable
+	{
+		padding: 4px;
+
+		> .list > button
+		{
+			border-radius: $control-radius;
+		}
+
+		> .filter
+		{
+			flex-shrink: 0;
+			min-height: $control-row-height;
+			margin-bottom: 4px;
+			padding: $control-text-padding;
+			background-color: $control-background;
+			border: $control-border;
+			border-radius: $control-radius;
+			color: $text-control;
+		}
+	}
+}

@@ -1,0 +1,41 @@
+﻿//A row of squares in the bottom left of the model viewport. It sits on the overlay layer over the viewport, so it is placed against that
+//layer's corner and only its distance from the bottom is set from code - it changes with whatever the viewport has along its own bottom edge.
+
+.placement-tools
+{
+	position: absolute;
+	left: 12px;
+	flex-direction: row;
+	gap: 4px;
+	height: $row;
+
+	//The layer under it is deaf so the 3D view can be used; the bar is not.
+	pointer-events: all;
+
+	&.hidden { display: none; }
+
+	> .tool
+	{
+		width: $row;
+		height: $row;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+		font-size: $type-large;
+		cursor: pointer;
+		background-color: rgba( $surface-background, 0.7 );
+		color: rgba( $text-control, 0.55 );
+
+		&:hover
+		{
+			background-color: rgba( $surface-background, 0.95 );
+			color: rgba( $text-control, 0.9 );
+		}
+
+		&.on
+		{
+			background-color: rgba( $primary, 0.9 );
+			color: $text;
+		}
+	}
+}

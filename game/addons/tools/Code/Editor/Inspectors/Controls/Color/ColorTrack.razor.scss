@@ -1,0 +1,98 @@
+//One of the colour picker's sliders - see ColorTrack.razor.
+ColorTrack.control
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 4px;
+	width: 100%;
+	height: $control-row-height;
+	pointer-events: all;
+
+	> .icon
+	{
+		width: 18px;
+		min-width: 18px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+
+		> label
+		{
+			font-size: 14px;
+			color: $text-control;
+			opacity: 0.7;
+			pointer-events: none;
+		}
+	}
+
+	> .track
+	{
+		position: relative;
+		flex-grow: 1;
+		min-width: 0;
+		height: 14px;
+		border-radius: $control-radius;
+		border: 1px solid $border;
+		cursor: pointer;
+		pointer-events: all;
+		overflow: visible;
+
+		> .checker,
+		> .fill
+		{
+			position: absolute;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+			border-radius: $control-radius;
+			pointer-events: none;
+		}
+
+		> .checker
+		{
+			background-image: url( tools/checker.png );
+			background-repeat: repeat;
+			image-rendering: point;
+			background-size: 16px 16px;
+		}
+
+		> .handle
+		{
+			position: absolute;
+			top: 50%;
+			width: 12px;
+			height: 12px;
+			border-radius: 50%;
+			border: 2px solid white;
+			box-shadow: 0 1px 3px rgba( 0, 0, 0, 0.6 );
+			transform: translate( -50%, -50% );
+			pointer-events: none;
+		}
+	}
+
+	&.hue > .track
+	{
+		background: linear-gradient( to right, red, yellow, lime, cyan, blue, magenta, red );
+	}
+
+	&.range > .track
+	{
+		background: linear-gradient( to right, #000, #808080, #fff );
+	}
+
+	//Held: the handle a little bigger, the way the square's is.
+	&.dragging > .track > .handle
+	{
+		width: 16px;
+		height: 16px;
+	}
+
+	> .number
+	{
+		width: 52px;
+		min-width: 52px;
+		flex-shrink: 0;
+	}
+}

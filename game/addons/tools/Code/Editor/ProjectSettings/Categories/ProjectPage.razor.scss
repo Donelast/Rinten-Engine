@@ -1,0 +1,158 @@
+//The project page: name and folder, the picture, then the platforms it builds for.
+.project-page > .body
+{
+	gap: 16px;
+
+	> .page-section
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		width: 100%;
+		min-width: 0;
+		gap: 8px;
+
+		&:not(:first-child)
+		{
+			padding-top: 12px;
+			border-top: 1px solid rgba( $text, 0.1 );
+		}
+
+		> .section-title
+		{
+			font-weight: 600;
+			font-size: $type-body;
+			color: $text;
+		}
+	}
+
+	.image-row
+	{
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 12px;
+
+		> .image
+		{
+			width: 96px;
+			height: 96px;
+		}
+
+		> .image-side
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			min-width: 0;
+			gap: 8px;
+
+			> .hint
+			{
+				font-size: 12px;
+				color: rgba( $text, 0.6 );
+			}
+		}
+	}
+
+	.platform-list
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		border: 1px solid rgba( $text, 0.1 );
+		border-radius: 4px;
+
+		> .platform
+		{
+			flex-direction: row;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 4px 12px;
+			padding: 2px 8px;
+			min-height: 30px;
+
+			&:not(:first-child)
+			{
+				border-top: 1px solid rgba( $text, 0.06 );
+			}
+
+			> .toggle,
+			> .option
+			{
+				flex-direction: row;
+				align-items: center;
+				gap: 8px;
+				pointer-events: all;
+				cursor: pointer;
+				color: rgba( $text, 0.6 );
+
+				&:hover { color: $text; }
+
+				> .material-icon { font-size: 18px; }
+			}
+
+			> .toggle
+			{
+				flex-grow: 1;
+				min-width: 0;
+				padding: 4px 0;
+
+				> .icon { opacity: 0.7; }
+			}
+
+			> .option
+			{
+				font-size: 12px;
+
+				&.on { color: $text; }
+			}
+
+			&.checked > .toggle
+			{
+				color: $text;
+
+				> .check { color: $accent; }
+			}
+
+			> .missing
+			{
+				width: 100%;
+				padding: 0 0 4px 26px;
+				font-size: 12px;
+				color: $yellow;
+			}
+		}
+	}
+
+	.settings-button-row
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		gap: 8px;
+
+		> .btn
+		{
+			flex-direction: row;
+			align-items: center;
+			gap: 6px;
+			padding: 6px 12px;
+			border-radius: 4px;
+			background-color: rgba( $text, 0.08 );
+			pointer-events: all;
+			cursor: pointer;
+			color: $text;
+
+			&:hover { background-color: rgba( $text, 0.14 ); }
+
+			&.good
+			{
+				margin-left: auto;
+				background-color: $green;
+				color: white;
+			}
+
+			&.disabled
+			{
+				opacity: 0.4;
+				pointer-events: none;
+			}
+		}
+	}
+}

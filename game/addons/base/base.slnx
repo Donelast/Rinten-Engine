@@ -1,0 +1,14 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+  </Configurations>
+  <Folder Name="/Addons/">
+    <Project Path="code/Base Library.csproj" />
+  </Folder>
+  <Folder Name="/Tools/">
+    <Project Path="../../editor/ActionGraph/Code/actiongraph.csproj" />
+    <Project Path="../../editor/MdlEditor/Code/mdleditor.csproj" />
+    <Project Path="../../editor/MovieMaker/Code/moviemaker.csproj" />
+    <Project Path="../tools/Code/Base Editor Library.csproj" />
+  </Folder>
+</Solution>

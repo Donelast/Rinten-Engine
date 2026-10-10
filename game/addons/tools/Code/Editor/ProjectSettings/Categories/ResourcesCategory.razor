@@ -1,0 +1,35 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Resource Files" ), Icon( "dataset" )]
+@using Editor.ProjectSettingsUI
+@using Editor.ProjectSettingPages.Categories.Settings
+@inherits ProjectSettingsCategoryPanel
+
+<root class="project-settings-category">
+	<div class="body" @ref="Body">
+		<SettingsCalloutPanel Html="Compiled assets and stylesheets are included in a standalone build by default. Add extra paths here if you need more files copied into the build. Wildcards work." />
+		<div @ref="sheetHost"></div>
+	</div>
+</root>
+
+@code
+{
+	ResourcesSettings settings;
+	Panel sheetHost;
+
+	protected override void OnInit( Project project )
+	{
+		settings = new ResourcesSettings();
+		settings.Load( project );
+
+		var sheet = sheetHost.AddChild<Editor.Inspectors.ControlSheet>();
+		sheet.Target = settings.GetSerialized();
+		sheet.Rebuild();
+		ListenForChanges( settings.GetSerialized() );
+	}
+
+	public override void OnSave()
+	{
+		settings.Apply( Project );
+		base.OnSave();
+	}
+}

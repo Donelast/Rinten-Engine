@@ -1,0 +1,36 @@
+//A blend space page: the canvas and its own preview side by side, with a divider between them. The page is only
+//the row - what the two halves look like is theirs - so all this says is that neither may be squeezed to nothing.
+
+.blend-space-page
+{
+	flex-direction: row;
+	flex-grow: 1;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+
+	//Through the splitter rather than straight at the halves: the rule that lets a cell be squeezed to nothing is .splitter-panel > .splitter-cell,
+	//which is as particular as .blend-space-page .blend-space-canvas would be - and a tie is settled by which sheet happened to load last.
+	> .splitter-panel > .blend-space-canvas
+	{
+		min-width: 300px;
+		min-height: 300px;
+	}
+
+	> .splitter-panel > .blend-space-preview
+	{
+		min-width: 200px;
+		min-height: 200px;
+	}
+}
+
+//Under the picture, in the column the preview lays out: what it has to say when there is nothing it can play. Gone entirely until then - .hidden.
+.blend-space-preview > .hint
+{
+	flex-shrink: 0;
+	padding: 8px;
+	text-align: center;
+	white-space: pre-wrap;
+	color: rgba( $text-control, 0.55 );
+}

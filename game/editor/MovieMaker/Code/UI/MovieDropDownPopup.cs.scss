@@ -1,0 +1,40 @@
+MovieDropDownPopup.popup-panel
+{
+	background-color: $popup-background;
+	border: $popup-border;
+	border-radius: $control-radius;
+	max-height: 420px;
+	padding: 4px;
+	overflow: scroll;
+
+	> button
+	{
+		flex-shrink: 0;
+		flex-direction: row;
+		align-items: center;
+		gap: 6px;
+		padding: 0 8px;
+		min-height: $control-row-height;
+		border-radius: $control-radius;
+		color: $text-control;
+		font-family: $font-family;
+		font-size: $control-text-size;
+		cursor: pointer;
+		transition: none;
+
+		&:hover,
+		&.active
+		{
+			background-color: $primary;
+			color: $text;
+		}
+	}
+
+	> .separator
+	{
+		flex-shrink: 0;
+		height: 1px;
+		margin: 4px 0px;
+		background-color: $border;
+	}
+}

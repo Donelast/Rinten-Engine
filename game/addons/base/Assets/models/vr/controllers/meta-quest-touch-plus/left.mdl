@@ -1,0 +1,110 @@
+{
+  "Steps": [],
+  "Meshes": [
+    {
+      "Name": "",
+      "File": "models/vr/controllers/meta-quest-touch-plus/left.fbx",
+      "Scale": 1,
+      "Include": [],
+      "Enabled": true,
+      "Position": "0,0,0",
+      "Rotation": "0,0,0",
+      "Parent": ""
+    }
+  ],
+  "Scale": 1,
+  "Material": "",
+  "Materials": [
+    "models/vr/controllers/meta-quest-touch-plus/controllermatphonglt.mat"
+  ],
+  "MaterialRemaps": [
+    {
+      "Surface": "controllerMATphongLT",
+      "Material": "models/vr/controllers/meta-quest-touch-plus/controllermatphonglt.mat"
+    }
+  ],
+  "Clips": [],
+  "Transform": {
+    "Enabled": true,
+    "Position": "0,0,0",
+    "Rotation": "0,0,0",
+    "Scale": "1,1,1",
+    "IsIdentity": true
+  },
+  "Mirror": {
+    "Enabled": false,
+    "Axis": "X",
+    "FlipWinding": true,
+    "RemapLeftRight": true
+  },
+  "Joints": [],
+  "LookAtChains": [],
+  "IkChains": [],
+  "WeightLists": [],
+  "Morphs": [
+    {
+      "Name": "trigger",
+      "Enabled": true,
+      "Preview": 0
+    },
+    {
+      "Name": "grip",
+      "Enabled": true,
+      "Preview": 0
+    },
+    {
+      "Name": "stick_press",
+      "Enabled": true,
+      "Preview": 0
+    },
+    {
+      "Name": "stick_left",
+      "Enabled": true,
+      "Preview": 0
+    },
+    {
+      "Name": "stick_right",
+      "Enabled": true,
+      "Preview": 0
+    },
+    {
+      "Name": "stick_up",
+      "Enabled": true,
+      "Preview": 0
+    },
+    {
+      "Name": "stick_down",
+      "Enabled": true,
+      "Preview": 0
+    },
+    {
+      "Name": "button_a",
+      "Enabled": true,
+      "Preview": 0
+    },
+    {
+      "Name": "button_b",
+      "Enabled": true,
+      "Preview": 0
+    }
+  ],
+  "BodyGroups": [],
+  "Folders": [],
+  "CoarseMeshes": [],
+  "MaterialGroups": [],
+  "Hulls": [],
+  "Surface": "",
+  "Mass": 0,
+  "OverrideBounds": false,
+  "Bounds": {
+    "Mins": "-64,-64,-64",
+    "Maxs": "64,64,64"
+  },
+  "JiggleBones": [],
+  "JiggleColliders": [],
+  "Attachments": [],
+  "Bones": [],
+  "Constraints": [],
+  "__references": [],
+  "__version": 2
+}

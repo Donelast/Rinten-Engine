@@ -1,0 +1,83 @@
+﻿
+<Project>
+
+	<PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+		<CodeGeneratorExe Condition="'$(CodeGeneratorExe)' == ''">..\\Tools\\CodeGen\\bin\\CodeGen.exe</CodeGeneratorExe>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+        <CodeGeneratorExe Condition="'$(CodeGeneratorExe)' == ''">../Tools/CodeGen/bin/CodeGen</CodeGeneratorExe>
+    </PropertyGroup>
+
+	<Target Name="CleanCodeGen" AfterTargets="Clean">
+		<RemoveDir Directories="obj/.generated" />
+	</Target>
+
+	<ItemGroup>
+		<ProjectReference Include="../Tools/CodeGen/CodeGen.csproj" OutputItemType="CodeGenTool" ReferenceOutputAssembly="false" Private="true" />
+
+		<!-- What the generator reads, captured before the generated copies replace it below. -->
+		<CodeGenSource Include="@(Compile)" />
+
+		<GeneratedFiles Include="obj/.generated/**/*.cs" Exclude="obj/.generated/obj/**/*.cs" />
+		<Compile Remove="@(GeneratedFiles->'%(RecursiveDir)%(Filename)%(Extension)')" />
+		<Compile Include="@(GeneratedFiles)" />
+
+		<!--
+			The sources, back where the IDE can see them - not to compile, the
+			generated copies above are what compiles, but because the line above
+			takes every one of them out of @(Compile) and Visual Studio decides
+			whether a project needs building by looking at exactly that.
+
+			So editing an engine source and pressing Build built nothing at all:
+			the file was not an input to the project as far as the IDE was
+			concerned, the project looked up to date, and the previous binary
+			went on being used. It reads as a change that did not work rather
+			than as a change that was never compiled - and the generated copies
+			sat unrefreshed for hours while everything downstream of them, which
+			is every project that references this one, failed to find members
+			that are plainly there in the source.
+		-->
+		<UpToDateCheckInput Include="@(CodeGenSource)" />
+	</ItemGroup>
+
+	<!--
+		Inputs are the sources, not @(Compile): by the time this runs @(Compile)
+		is the generated copies, which are this target's own outputs and so are
+		never newer than its stamp. Editing a source then rebuilt nothing, said
+		"build succeeded", and shipped the previous binary - which reads as a
+		change that did not work rather than as a change that was not built.
+	-->
+	<Target Name="CodeGenFiles" BeforeTargets="CoreCompile" Condition="'$(DesignTimeBuild)' != 'true'"
+		Inputs="@(CodeGenSource);$(CodeGeneratorExe)" Outputs="obj/.generated/.codegen.stamp">
+
+		<Message Importance="high" Text="Running Code Generation.."></Message>
+		<Exec Command="$(CodeGeneratorExe)"  />
+		<Message Importance="high" Text="Code Generation Complete"></Message>
+
+	</Target>
+
+	<!--
+		The glob above is evaluated before the generator runs, so it lists the
+		files the last build generated. The generator then deletes the ones whose
+		source has since gone and writes the ones that are new, and neither shows
+		up in @(Compile) - the deleted ones came back as CS2001 "source file could
+		not be found" for a file nobody had ever named, and the new ones as types
+		that would not resolve. Both are the same fix: look again once the
+		generator has finished.
+	-->
+	<Target Name="SyncGeneratedFiles" AfterTargets="CodeGenFiles" BeforeTargets="CoreCompile"
+		Condition="'$(DesignTimeBuild)' != 'true'">
+
+		<ItemGroup>
+			<Compile Remove="@(Compile)" Condition="!Exists('%(FullPath)')" />
+
+			<GeneratedNow Include="obj/.generated/**/*.cs" Exclude="obj/.generated/obj/**/*.cs" />
+			<Compile Remove="@(GeneratedNow->'%(RecursiveDir)%(Filename)%(Extension)')" />
+			<Compile Remove="@(GeneratedNow)" />
+			<Compile Include="@(GeneratedNow)" />
+		</ItemGroup>
+
+	</Target>
+
+</Project>

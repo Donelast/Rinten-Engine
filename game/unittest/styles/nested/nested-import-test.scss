@@ -1,0 +1,12 @@
+﻿
+$var1: red;
+$var2: blue;
+$var3: green;
+
+.base
+{
+    font-size: 32px;
+    color: blue;
+}
+
+@import "../nested-overrides.scss";

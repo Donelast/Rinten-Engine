@@ -1,0 +1,35 @@
+ProjectSettingsSectionPanel,
+.settings-section
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	min-width: 0;
+	gap: 8px;
+
+	&:not(:first-child)
+	{
+		padding-top: 16px;
+		border-top: 1px solid rgba( $text, 0.1 );
+	}
+
+	> .header
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+
+		> .title
+		{
+			font-size: $type-large;
+			font-weight: 600;
+			color: $text;
+		}
+
+		> .description
+		{
+			font-size: 12px;
+			color: rgba( $text, 0.6 );
+			margin-top: 4px;
+		}
+	}
+}

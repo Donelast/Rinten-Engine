@@ -1,0 +1,53 @@
+@using System
+
+@using Rinten.UI
+@namespace Editor.Inspectors
+
+@attribute [CustomEditor( typeof( string ) )]
+@attribute [StyleSheet( "StringControl.razor.scss" )]
+
+@inherits BaseControl
+
+<root>
+	<TextEntry @ref="Entry" Value:bind="@Value" OnTextEdited="@OnEdited" Placeholder="@Placeholder" Disabled="@IsReadOnly" />
+</root>
+
+@code
+{
+	public override bool SupportsMultiEdit => true;
+
+	protected TextEntry Entry { get; set; }
+
+	protected string _value;
+
+	protected string Placeholder { get; set; }
+
+	public virtual string Value
+	{
+		get => Property?.As.String ?? _value;
+		set
+		{
+			if ( IsReadOnly )
+				return;
+
+			if ( Value == value )
+				return;
+
+			Property?.As.String = value;
+			_value = value;
+		}
+	}
+
+	void OnEdited( string text ) => Value = text;
+
+	public override void Rebuild()
+	{
+		if ( Property is null )
+			return;
+
+		if ( Property.TryGetAttribute<PlaceholderAttribute>( out var placeholder ) )
+			Placeholder = placeholder.Value;
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Value, Placeholder, IsReadOnly );
+}

@@ -1,0 +1,179 @@
+﻿.controlsheetrow {
+	position: relative;
+
+	.prefab-override {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 2px;
+		background-color: $primary;
+		pointer-events: none;
+	}
+
+	.prefab-override.hidden {
+		display: none;
+	}
+}
+
+.controlsheetlabel {
+	position: relative;
+
+	.drag-veil {
+		position: absolute;
+		left: 0;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		background-color: $veil-down;
+		border-radius: $radius-2;
+		pointer-events: none;
+	}
+
+	.drag-veil.hidden {
+		display: none;
+	}
+}
+
+.propertybutton {
+	position: relative;
+
+	.state-dot {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		width: 10px;
+		height: 10px;
+		margin-left: -5px;
+		margin-top: -5px;
+		border-radius: 50%;
+		border: 1px solid $text-control;
+		opacity: 0.3;
+		pointer-events: none;
+	}
+
+	.state-dot.has-value {
+		background-color: $accent;
+		border-color: $accent;
+		opacity: 0.3;
+	}
+
+	.state-dot.multiple {
+		background-color: $multiple-values;
+		border-color: $multiple-values;
+		opacity: 0.3;
+	}
+}
+
+.infoboxwidget {
+	position: relative;
+
+	.infobox-bg {
+		position: absolute;
+		left: 3px;
+		top: 3px;
+		right: 8px;
+		bottom: 0;
+		border-radius: 4px;
+		pointer-events: none;
+	}
+
+	.infobox-bg.tint-yellow {
+		background-color: $yellow-dark;
+	}
+
+	.infobox-bg.tint-red {
+		background-color: $red-dark;
+	}
+
+	.infobox-bg.tint-blue {
+		background-color: $blue-dark;
+	}
+}
+
+.controlsheetgroup {
+	position: relative;
+
+	.group-connector {
+		position: absolute;
+		background-color: $window-background;
+		pointer-events: none;
+	}
+
+	.group-connector.vertical {
+		left: 8px;
+		top: 4px;
+		width: 3px;
+		height: calc(100% - 4px);
+		border-radius: 4px;
+	}
+
+	.group-connector.corner {
+		left: 10px;
+		bottom: 0;
+		width: 8px;
+		height: 3px;
+		border-radius: 4px;
+	}
+
+	.group-connector.hidden {
+		display: none;
+	}
+}
+
+.groupheader {
+	position: relative;
+
+	.group-chevron {
+		position: absolute;
+		left: 3px;
+		top: 4px;
+		width: 14px;
+		height: 14px;
+		border-radius: 6px;;
+		background-color: $window-background;
+		opacity: 0.5;
+		pointer-events: none;
+	}
+
+	.group-chevron.expanded {
+		opacity: 1;
+	}
+
+	.group-chevron.hovered {
+		opacity: 1;
+	}
+
+	.group-prefab-bar {
+		position: absolute;
+		left: 20px;
+		top: 4px;
+		width: 2px;
+		height: 14px;
+		background-color: $primary;
+		pointer-events: none;
+	}
+
+	.group-prefab-bar.hidden {
+		display: none;
+	}
+}
+
+.listentrywidget .list-drop-line {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	height: 2px;
+	background-color: $text-highlight;
+	pointer-events: none;
+}
+
+.listentrywidget .list-drop-line.bottom {
+	top: auto;
+	bottom: 0;
+}
+
+.listentrywidget .list-drop-line.hidden {
+	display: none;
+}

@@ -1,0 +1,5834 @@
+{
+  "Steps": [],
+  "Meshes": [
+    {
+      "Name": "skelet",
+      "File": "models/skeleton/skeleton.fbx",
+      "Scale": 1,
+      "Include": null,
+      "Enabled": true,
+      "Position": "0,0,0",
+      "Rotation": "0,0,0",
+      "Parent": ""
+    }
+  ],
+  "Scale": 1,
+  "LodGroup": "",
+  "Material": "",
+  "Materials": [],
+  "MaterialRemaps": [],
+  "ArtSurfaces": "Unchosen",
+  "Clips": [
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "A_TPose",
+      "TakeName": "skelet_rig|A_TPose",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Crouch_Fwd_Loop",
+      "TakeName": "skelet_rig|Crouch_Fwd_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Crouch_Idle_Loop",
+      "TakeName": "skelet_rig|Crouch_Idle_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Dance_Loop",
+      "TakeName": "skelet_rig|Dance_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Death01",
+      "TakeName": "skelet_rig|Death01",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Combat",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Driving_Loop",
+      "TakeName": "skelet_rig|Driving_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Fixing_Kneeling",
+      "TakeName": "skelet_rig|Fixing_Kneeling",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Hit_Chest",
+      "TakeName": "skelet_rig|Hit_Chest",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Combat",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Hit_Head",
+      "TakeName": "skelet_rig|Hit_Head",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Combat",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Idle_Loop",
+      "TakeName": "skelet_rig|Idle_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Idle_Talking_Loop",
+      "TakeName": "skelet_rig|Idle_Talking_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Idle_Torch_Loop",
+      "TakeName": "skelet_rig|Idle_Torch_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Interact",
+      "TakeName": "skelet_rig|Interact",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Jog_Fwd_Loop",
+      "TakeName": "skelet_rig|Jog_Fwd_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Jump_Land",
+      "TakeName": "skelet_rig|Jump_Land",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Jump_Loop",
+      "TakeName": "skelet_rig|Jump_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Jump_Start",
+      "TakeName": "skelet_rig|Jump_Start",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "PickUp_Table",
+      "TakeName": "skelet_rig|PickUp_Table",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Pistol_Aim_Down",
+      "TakeName": "skelet_rig|Pistol_Aim_Down",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Pistol",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Pistol_Aim_Neutral",
+      "TakeName": "skelet_rig|Pistol_Aim_Neutral",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Pistol",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Pistol_Aim_Up",
+      "TakeName": "skelet_rig|Pistol_Aim_Up",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Pistol",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Pistol_Idle_Loop",
+      "TakeName": "skelet_rig|Pistol_Idle_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Pistol",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Pistol_Reload",
+      "TakeName": "skelet_rig|Pistol_Reload",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Pistol",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Pistol_Shoot",
+      "TakeName": "skelet_rig|Pistol_Shoot",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Pistol",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Punch_Cross",
+      "TakeName": "skelet_rig|Punch_Cross",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Combat",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Punch_Jab",
+      "TakeName": "skelet_rig|Punch_Jab",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Combat",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Push_Loop",
+      "TakeName": "skelet_rig|Push_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Roll",
+      "TakeName": "skelet_rig|Roll",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Combat",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Sitting_Enter",
+      "TakeName": "skelet_rig|Sitting_Enter",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Sitting_Exit",
+      "TakeName": "skelet_rig|Sitting_Exit",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Sitting_Idle_Loop",
+      "TakeName": "skelet_rig|Sitting_Idle_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Sitting_Talking_Loop",
+      "TakeName": "skelet_rig|Sitting_Talking_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Misc",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Spell_Simple_Enter",
+      "TakeName": "skelet_rig|Spell_Simple_Enter",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Spell",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Spell_Simple_Exit",
+      "TakeName": "skelet_rig|Spell_Simple_Exit",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Spell",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Spell_Simple_Idle_Loop",
+      "TakeName": "skelet_rig|Spell_Simple_Idle_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Spell",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Spell_Simple_Shoot",
+      "TakeName": "skelet_rig|Spell_Simple_Shoot",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Spell",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Sprint_Loop",
+      "TakeName": "skelet_rig|Sprint_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Swim_Fwd_Loop",
+      "TakeName": "skelet_rig|Swim_Fwd_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Swim_Idle_Loop",
+      "TakeName": "skelet_rig|Swim_Idle_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Sword_Attack",
+      "TakeName": "skelet_rig|Sword_Attack",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": false,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Combat",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Sword_Idle",
+      "TakeName": "skelet_rig|Sword_Idle",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Combat",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Walk_Formal_Loop",
+      "TakeName": "skelet_rig|Walk_Formal_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Walk_Loop",
+      "TakeName": "skelet_rig|Walk_Loop",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Locomotion",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Lean_Ref",
+      "TakeName": "skelet_rig|Lean_Ref",
+      "Take": 0,
+      "SubtractFrom": "",
+      "SubtractFrame": -1,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": false,
+      "Enabled": true,
+      "Folder": "Lean",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Lean_Zero",
+      "TakeName": "skelet_rig|Lean_Ref",
+      "Take": 0,
+      "SubtractFrom": "Lean_Ref",
+      "SubtractFrame": 0,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": true,
+      "Enabled": true,
+      "Folder": "Lean",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Lean_Fwd",
+      "TakeName": "skelet_rig|Lean_Fwd",
+      "Take": 0,
+      "SubtractFrom": "Lean_Ref",
+      "SubtractFrame": 0,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": true,
+      "Enabled": true,
+      "Folder": "Lean",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Lean_Back",
+      "TakeName": "skelet_rig|Lean_Back",
+      "Take": 0,
+      "SubtractFrom": "Lean_Ref",
+      "SubtractFrame": 0,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": true,
+      "Enabled": true,
+      "Folder": "Lean",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Lean_Left",
+      "TakeName": "skelet_rig|Lean_Left",
+      "Take": 0,
+      "SubtractFrom": "Lean_Ref",
+      "SubtractFrame": 0,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": true,
+      "Enabled": true,
+      "Folder": "Lean",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Lean_Right",
+      "TakeName": "skelet_rig|Lean_Right",
+      "Take": 0,
+      "SubtractFrom": "Lean_Ref",
+      "SubtractFrame": 0,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": true,
+      "Enabled": true,
+      "Folder": "Lean",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Dip",
+      "TakeName": "skelet_rig|Dip",
+      "Take": 0,
+      "SubtractFrom": "Lean_Ref",
+      "SubtractFrame": 0,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": true,
+      "Enabled": true,
+      "Folder": "Lean",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Twist_Left",
+      "TakeName": "skelet_rig|Twist_Left",
+      "Take": 0,
+      "SubtractFrom": "Lean_Ref",
+      "SubtractFrame": 0,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": true,
+      "Enabled": true,
+      "Folder": "Lean",
+      "Events": []
+    },
+    {
+      "File": "models/skeleton/skeleton.fbx",
+      "Name": "Twist_Right",
+      "TakeName": "skelet_rig|Twist_Right",
+      "Take": 0,
+      "SubtractFrom": "Lean_Ref",
+      "SubtractFrame": 0,
+      "SubtractModelSpace": false,
+      "FirstFrame": -1,
+      "LastFrame": -1,
+      "MotionBone": "",
+      "MotionAcross": false,
+      "MotionUp": false,
+      "AlignTo": "",
+      "AlignFrame": 0,
+      "AlignToFrame": 0,
+      "AlignBone": "",
+      "AlignAcross": false,
+      "AlignUp": false,
+      "SmoothFromStart": 0,
+      "SmoothFromEnd": 0,
+      "LayerFrom": "",
+      "TurnDegrees": 0,
+      "FrameRate": -1,
+      "LoopStart": 0,
+      "Scale": 1,
+      "Looping": true,
+      "Additive": true,
+      "Enabled": true,
+      "Folder": "Lean",
+      "Events": []
+    }
+  ],
+  "Transform": {
+    "Enabled": true,
+    "Position": "0,0,0",
+    "Rotation": "0,180,0",
+    "Scale": "1,1,1",
+    "IsIdentity": false
+  },
+  "Mirror": {
+    "Enabled": false,
+    "Axis": "X",
+    "FlipWinding": true,
+    "RemapLeftRight": true
+  },
+  "Joints": [],
+  "LookAtChains": [],
+  "IkChains": [
+    {
+      "Name": "foot_l",
+      "Enabled": true,
+      "Bone": "foot_l",
+      "StartBone": "thigh_l",
+      "MiddleBone": "calf_l",
+      "UseKneeDirection": false,
+      "KneeDirection": "0,0,1",
+      "TwistWeight": 0
+    },
+    {
+      "Name": "foot_r",
+      "Enabled": true,
+      "Bone": "foot_r",
+      "StartBone": "thigh_r",
+      "MiddleBone": "calf_r",
+      "UseKneeDirection": false,
+      "KneeDirection": "0,0,1",
+      "TwistWeight": 0
+    },
+    {
+      "Name": "hand_l",
+      "Enabled": true,
+      "Bone": "hand_l",
+      "StartBone": "upperarm_l",
+      "MiddleBone": "lowerarm_l",
+      "UseKneeDirection": false,
+      "KneeDirection": "0,0,1",
+      "TwistWeight": 0
+    },
+    {
+      "Name": "hand_r",
+      "Enabled": true,
+      "Bone": "hand_r",
+      "StartBone": "upperarm_r",
+      "MiddleBone": "lowerarm_r",
+      "UseKneeDirection": false,
+      "KneeDirection": "0,0,1",
+      "TwistWeight": 0
+    }
+  ],
+  "WeightLists": [],
+  "Morphs": [],
+  "BodyGroups": [],
+  "Folders": [],
+  "CoarseMeshes": [],
+  "MaterialGroups": [],
+  "Hulls": [],
+  "Surface": "",
+  "Mass": 0,
+  "OverrideBounds": false,
+  "Bounds": {
+    "Mins": "-16,-16,-16",
+    "Maxs": "16,16,16"
+  },
+  "Graph": {
+    "Version": 1,
+    "nodes": [
+      {
+        "_class": "PoseResultNode",
+        "Pose": {
+          "Identifier": "23a1d717-d315-4b10-b723-65f7356b00c3",
+          "Output": "Result"
+        },
+        "Identifier": "fc3664a5-bd46-4e39-a6d2-60ce7808f0e5",
+        "Position": "550,0",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "StateMachineNode",
+        "States": [
+          {
+            "Name": "Locomotion",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "0,0",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "f8a52b89-c0f0-4e74-b684-32334db066db",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "54788bed-0fe9-4f7f-8522-dfe1f1c9e335",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "81614ac2-9514-42a2-9461-f827ee5b3aa3",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          },
+          {
+            "Name": "JumpStart",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "300,-250",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "005f873e-546e-4045-ba20-68c6cafda893",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "bde43b19-cf48-47b4-aac7-0a533632e99a",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "1e67e85c-b747-4439-b846-4b6339f6d434",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          },
+          {
+            "Name": "Fall",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "600,-250",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "712ce972-f474-489d-a1a8-d088ce9efd02",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "f342d4b4-b451-4a79-945c-e5949b99bc07",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "fe496ada-28e3-42fe-917e-e09916d6dcb6",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          },
+          {
+            "Name": "Land",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "600,0",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "bcaba409-8cb4-46b6-8de4-e960aec4bb4c",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "1179c313-16c2-4faf-9585-9a4a3c330260",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "1f8b7c68-22ba-49b6-82c0-86aab15477c0",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          },
+          {
+            "Name": "Roll",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "-300,250",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "3f34ed2c-d133-448d-b19e-554408a54d58",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "86b703a6-da16-4377-bce3-7778cf658b0d",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "2e39759c-dbc8-4e33-9bb1-c46bafaafa7d",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          },
+          {
+            "Name": "Sword",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "0,300",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "36bf1ce5-185c-472d-9b32-4d174c61a0f3",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "6a089a4e-f364-4310-9ca4-be5d2fa203ea",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "9531796f-dfc4-422e-86be-b07614f850ef",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          },
+          {
+            "Name": "Jab",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "300,300",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "cd297495-1752-4e71-92f8-5ab173431684",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "eb74db97-74a3-406a-b969-66cb7495d1c2",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "bfa345db-410f-40f7-b437-9f308221e597",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          },
+          {
+            "Name": "Cross",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "600,300",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "333a897d-6319-46c9-9308-28f193ee6c40",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "9933a7a1-a8a4-4680-a509-b5723a55f414",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "ff842bf6-3f87-4cf4-b9dc-9e1560bc7d6c",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          },
+          {
+            "Name": "Hit",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "-300,-250",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "6a16e5f7-4e17-437b-b876-ee4164c1742e",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "19ac838b-b616-4c15-aadf-d3a99d6b5744",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "84e8b57f-bc08-4c67-adfb-92e7de886937",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          },
+          {
+            "Name": "Death",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "-300,-450",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "edc16d5d-dd40-4f5e-bc72-981b9a26720f",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "f0db7701-87c6-46b0-bea0-a5916ab76fdd",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "fabb8c3b-86fc-4687-a8f5-18781eaaf014",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          },
+          {
+            "Name": "Crouch",
+            "Type": "BlendTree",
+            "Events": [],
+            "TimedEvents": [],
+            "TransitionOrder": [],
+            "Position": "0,-450",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "2964c603-b9a4-421c-867a-1c0e004453b8",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "47468553-7a1b-471f-8960-e5e0f2d14d3b",
+              "Output": "Result"
+            },
+            "LayerGraph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "StateLayerDataNode",
+                  "LayerWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "RootMotionWeight": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "BoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "f147ba24-4b12-4a0b-b26b-b39898136dd6",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "LayerData"
+            }
+          }
+        ],
+        "Conduits": [
+          {
+            "From": "Locomotion",
+            "To": "JumpStart",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "773b8af8-e806-4721-894a-0eb321278195",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Locomotion -> JumpStart",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "227b030d-c72e-4607-868e-4f95e787f504",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "Invert": false,
+                  "ParameterIdentifier": "8312b4d5-d901-4501-b45c-2ebdacc61fed",
+                  "ParameterName": "jump",
+                  "Identifier": "773b8af8-e806-4721-894a-0eb321278195",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Locomotion",
+            "To": "Fall",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "fa59a41a-fb55-40ce-8c77-4b7316420994",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Locomotion -> Fall",
+                  "Duration": 0.25,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "933b5e72-ca36-4cd0-8f6c-6f6761f953c6",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "Invert": true,
+                  "ParameterIdentifier": "9a67e6ea-cec0-4442-ab61-8223a322ee23",
+                  "ParameterName": "grounded",
+                  "Identifier": "fa59a41a-fb55-40ce-8c77-4b7316420994",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "JumpStart",
+            "To": "Fall",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "a662f28e-1f4e-4c81-b47f-175a2a08e3bc",
+                    "Output": "Result"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "JumpStart -> Fall",
+                  "Duration": 0.15,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "d1e26e67-cee9-4cdc-811f-59094aca4f04",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "StateCompletedConditionNode",
+                  "AtClipEnd": false,
+                  "Invert": false,
+                  "Identifier": "a662f28e-1f4e-4c81-b47f-175a2a08e3bc",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "JumpStart",
+            "To": "Land",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "b4cbbf92-a69d-4173-8406-16d1c70329fd",
+                    "Output": "Result"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "JumpStart -> Land",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "81051aa1-d48b-4714-8151-f9f6de1412f2",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "AndNode",
+                  "Conditions": [
+                    {
+                      "Input": {
+                        "Identifier": "ce6fa4ae-b497-4043-9807-37512ba2cbe1",
+                        "Output": "Value"
+                      }
+                    },
+                    {
+                      "Input": {
+                        "Identifier": "b789b571-da47-4c46-ab2d-f781b44ea18d",
+                        "Output": "Result"
+                      }
+                    }
+                  ],
+                  "Identifier": "b4cbbf92-a69d-4173-8406-16d1c70329fd",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "Invert": false,
+                  "ParameterIdentifier": "9a67e6ea-cec0-4442-ab61-8223a322ee23",
+                  "ParameterName": "grounded",
+                  "Identifier": "ce6fa4ae-b497-4043-9807-37512ba2cbe1",
+                  "Position": "-650,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "TimeConditionNode",
+                  "Type": "ElapsedTime",
+                  "Operator": "GreaterThanEqual",
+                  "Value": 0.25,
+                  "ValueInput": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "b789b571-da47-4c46-ab2d-f781b44ea18d",
+                  "Position": "-650,120",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Fall",
+            "To": "Land",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "2c4d35aa-6b4c-4365-bd2a-ceb03599dd61",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Fall -> Land",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "62b4f1c3-2716-4cde-bcdc-474793f6ab7b",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "Invert": false,
+                  "ParameterIdentifier": "9a67e6ea-cec0-4442-ab61-8223a322ee23",
+                  "ParameterName": "grounded",
+                  "Identifier": "2c4d35aa-6b4c-4365-bd2a-ceb03599dd61",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Land",
+            "To": "Locomotion",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "07fbdc36-5adc-4efd-a827-584f4dda91b7",
+                    "Output": "Result"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Land -> Locomotion",
+                  "Duration": 0.2,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "ab86b551-51df-44a2-b165-68d64974edb6",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "OrNode",
+                  "A": {
+                    "Identifier": "796d0de4-5726-4a5b-9e0f-2e7e03b690fd",
+                    "Output": "Result"
+                  },
+                  "B": {
+                    "Identifier": "3c1b60b5-f69d-416f-9b4f-de6650d85ab3",
+                    "Output": "Result"
+                  },
+                  "Identifier": "07fbdc36-5adc-4efd-a827-584f4dda91b7",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "StateCompletedConditionNode",
+                  "AtClipEnd": false,
+                  "Invert": false,
+                  "Identifier": "796d0de4-5726-4a5b-9e0f-2e7e03b690fd",
+                  "Position": "-650,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "FloatParameterNode",
+                  "ParameterIdentifier": "ea907e76-5b52-4c62-a880-6d9902d320e3",
+                  "ParameterName": "move_speed",
+                  "Identifier": "fd5421fb-1fd8-40b2-97a9-99986a9af1f1",
+                  "Position": "-950,120",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "FloatComparisonNode",
+                  "Value": {
+                    "Identifier": "fd5421fb-1fd8-40b2-97a9-99986a9af1f1",
+                    "Output": "Value"
+                  },
+                  "Comparand": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Comparison": "GreaterThanEqual",
+                  "ComparisonValue": 1,
+                  "Epsilon": 0,
+                  "Invert": false,
+                  "Identifier": "3c1b60b5-f69d-416f-9b4f-de6650d85ab3",
+                  "Position": "-650,120",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Roll",
+            "To": "Locomotion",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "6a355c9c-1e86-4687-815a-9c1e25c9945d",
+                    "Output": "Result"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Roll -> Locomotion",
+                  "Duration": 0.25,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "9b7b8df8-311a-43b3-955a-884861c0466f",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "StateCompletedConditionNode",
+                  "AtClipEnd": false,
+                  "Invert": false,
+                  "Identifier": "6a355c9c-1e86-4687-815a-9c1e25c9945d",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Sword",
+            "To": "Locomotion",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "a44aaba3-c1a1-483b-a9a1-391d6fe8ec6f",
+                    "Output": "Result"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Sword -> Locomotion",
+                  "Duration": 0.25,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "d86ba61b-06a6-4aeb-a321-86aedc38646a",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "StateCompletedConditionNode",
+                  "AtClipEnd": false,
+                  "Invert": false,
+                  "Identifier": "a44aaba3-c1a1-483b-a9a1-391d6fe8ec6f",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Jab",
+            "To": "Locomotion",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "fb180328-eea6-4ded-97c4-1f79d18d84ab",
+                    "Output": "Result"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Jab -> Locomotion",
+                  "Duration": 0.2,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "9a449102-4173-4d28-a55c-519741e7a2df",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "StateCompletedConditionNode",
+                  "AtClipEnd": false,
+                  "Invert": false,
+                  "Identifier": "fb180328-eea6-4ded-97c4-1f79d18d84ab",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Cross",
+            "To": "Locomotion",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "faabc7c3-471f-4513-87d9-1a86605d3ad1",
+                    "Output": "Result"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Cross -> Locomotion",
+                  "Duration": 0.2,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "3723a12e-26a5-423b-8eaf-c4a01a771f1d",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "StateCompletedConditionNode",
+                  "AtClipEnd": false,
+                  "Invert": false,
+                  "Identifier": "faabc7c3-471f-4513-87d9-1a86605d3ad1",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Hit",
+            "To": "Locomotion",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "67276f5c-46fc-4267-bed3-5ef6b79ad2c5",
+                    "Output": "Result"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Hit -> Locomotion",
+                  "Duration": 0.2,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "acddc812-bd55-48ea-8173-bfa8d5fda40b",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "StateCompletedConditionNode",
+                  "AtClipEnd": false,
+                  "Invert": false,
+                  "Identifier": "67276f5c-46fc-4267-bed3-5ef6b79ad2c5",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Locomotion",
+            "To": "Sword",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "09ae4144-b239-49f7-90fe-e19a4f451bff",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Locomotion -> Sword",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "304b5606-d513-4c72-9fcc-8d193042c4ae",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "Invert": false,
+                  "ParameterIdentifier": "05f2f4a1-5b6c-4758-9859-4c456859c901",
+                  "ParameterName": "attack_sword",
+                  "Identifier": "09ae4144-b239-49f7-90fe-e19a4f451bff",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Locomotion",
+            "To": "Jab",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "eef8b020-1292-4eff-8f84-3e96eb0ed455",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Locomotion -> Jab",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "726f1569-abfe-4cd6-ad8f-d471b5830575",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "Invert": false,
+                  "ParameterIdentifier": "be269354-c04c-4462-80d2-cd2b06c8e552",
+                  "ParameterName": "attack_punch",
+                  "Identifier": "eef8b020-1292-4eff-8f84-3e96eb0ed455",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Land",
+            "To": "Jab",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "f253fa6f-d39a-4f5c-9936-d2fb51ce07c5",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Land -> Jab",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "35d2a9eb-3e34-4d18-ada2-bde56e85a479",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "Invert": false,
+                  "ParameterIdentifier": "be269354-c04c-4462-80d2-cd2b06c8e552",
+                  "ParameterName": "attack_punch",
+                  "Identifier": "f253fa6f-d39a-4f5c-9936-d2fb51ce07c5",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Jab",
+            "To": "Cross",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "278c6245-98d8-4194-9401-410a730871af",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Jab -> Cross",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "aacf880f-226a-4295-83ea-883e771b1355",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "Invert": false,
+                  "ParameterIdentifier": "be269354-c04c-4462-80d2-cd2b06c8e552",
+                  "ParameterName": "attack_punch",
+                  "Identifier": "278c6245-98d8-4194-9401-410a730871af",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Cross",
+            "To": "Jab",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "d53c757c-fc14-4965-ad1a-64303b42b87c",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Cross -> Jab",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "c3d4de88-0475-4431-b41f-73d2c59106c3",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "Invert": false,
+                  "ParameterIdentifier": "be269354-c04c-4462-80d2-cd2b06c8e552",
+                  "ParameterName": "attack_punch",
+                  "Identifier": "d53c757c-fc14-4965-ad1a-64303b42b87c",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Land",
+            "To": "Sword",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "e1ac037d-0122-42a9-a7e7-5c5b47853e51",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Land -> Sword",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "d5efb323-7cee-4d06-9cf9-20e3342891a6",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "Invert": false,
+                  "ParameterIdentifier": "05f2f4a1-5b6c-4758-9859-4c456859c901",
+                  "ParameterName": "attack_sword",
+                  "Identifier": "e1ac037d-0122-42a9-a7e7-5c5b47853e51",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Locomotion",
+            "To": "Crouch",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "b863cd0d-361c-4a59-bb88-95ab5634c5bc",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Locomotion -> Crouch",
+                  "Duration": 0.25,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "948502f3-93db-4e43-b9c2-867c4acdfaae",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "ParameterIdentifier": "9fdf8e58-9414-457d-b74f-8116d744af12",
+                  "ParameterName": "crouched",
+                  "Invert": false,
+                  "Identifier": "b863cd0d-361c-4a59-bb88-95ab5634c5bc",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Land",
+            "To": "Crouch",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "24d03e52-e51b-4e00-b104-e781479f1af5",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Land -> Crouch",
+                  "Duration": 0.2,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "2d02f60e-4781-440c-874b-c8b3fa466332",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "ParameterIdentifier": "9fdf8e58-9414-457d-b74f-8116d744af12",
+                  "ParameterName": "crouched",
+                  "Invert": false,
+                  "Identifier": "24d03e52-e51b-4e00-b104-e781479f1af5",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Crouch",
+            "To": "Locomotion",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "569ad56a-f3d7-47fc-a0c0-2f027a02a105",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Crouch -> Locomotion",
+                  "Duration": 0.25,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "4af677b2-ad52-4886-94bb-1ecb0e87461b",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "ParameterIdentifier": "9fdf8e58-9414-457d-b74f-8116d744af12",
+                  "ParameterName": "crouched",
+                  "Invert": true,
+                  "Identifier": "569ad56a-f3d7-47fc-a0c0-2f027a02a105",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Crouch",
+            "To": "Fall",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "aeeaad43-ad8a-4b2d-a810-b979fd90b80d",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Crouch -> Fall",
+                  "Duration": 0.25,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "b16ecf44-c133-495f-b7e2-87bc0b1f2b15",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "ParameterIdentifier": "9a67e6ea-cec0-4442-ab61-8223a322ee23",
+                  "ParameterName": "grounded",
+                  "Invert": true,
+                  "Identifier": "aeeaad43-ad8a-4b2d-a810-b979fd90b80d",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Crouch",
+            "To": "Sword",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "768178f3-6dd5-42ac-bc68-0521d7c64d5f",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Crouch -> Sword",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "3c83ce26-2e79-46c4-99f1-26b7e8832bc7",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "ParameterIdentifier": "05f2f4a1-5b6c-4758-9859-4c456859c901",
+                  "ParameterName": "attack_sword",
+                  "Invert": false,
+                  "Identifier": "768178f3-6dd5-42ac-bc68-0521d7c64d5f",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          },
+          {
+            "From": "Crouch",
+            "To": "Jab",
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "TransitionNode",
+                  "Condition": {
+                    "Identifier": "0bce25eb-9e12-4371-9504-b514d0c8d08a",
+                    "Output": "Value"
+                  },
+                  "DurationOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TimeOffsetOverride": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "StartBoneMask": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TargetSyncID": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "TransitionName": "Crouch -> Jab",
+                  "Duration": 0.1,
+                  "TimeMatch": "None",
+                  "TimeOffset": 0,
+                  "BlendWeightEasing": "InOutQuad",
+                  "RootMotionBlend": "Blend",
+                  "ClampDurationToSource": false,
+                  "CanBeForced": false,
+                  "BoneMaskBlendInTimePercentage": 0.33,
+                  "Identifier": "cb437ce9-8e3f-43c7-a74b-8849dc9d1048",
+                  "Position": "320,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                },
+                {
+                  "_class": "BoolParameterNode",
+                  "ParameterIdentifier": "be269354-c04c-4462-80d2-cd2b06c8e552",
+                  "ParameterName": "attack_punch",
+                  "Invert": false,
+                  "Identifier": "0bce25eb-9e12-4371-9504-b514d0c8d08a",
+                  "Position": "-300,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ],
+              "Kind": "TransitionConduit"
+            }
+          }
+        ],
+        "GlobalGraph": {
+          "Version": 1,
+          "nodes": [
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "Locomotion",
+              "Condition": {
+                "Identifier": null,
+                "Output": null
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "a440c8d7-0933-4dc0-b02e-ed47c3e21512",
+              "Position": "400,0",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "JumpStart",
+              "Condition": {
+                "Identifier": null,
+                "Output": null
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "b6fa9beb-ddec-4b8f-9bd7-6beed649bdb9",
+              "Position": "400,250",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "Fall",
+              "Condition": {
+                "Identifier": null,
+                "Output": null
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "8095161e-0773-4ded-ba6e-5963cdaed038",
+              "Position": "400,500",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "Land",
+              "Condition": {
+                "Identifier": null,
+                "Output": null
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "3f8154b1-7d50-4ae3-873d-46dbc08be67a",
+              "Position": "400,750",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "Roll",
+              "Condition": {
+                "Identifier": "6f4ff303-98ce-4297-a811-ae875be2013b",
+                "Output": "Result"
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "34676c66-028b-41e2-9190-8ac5115b9909",
+              "Position": "400,1000",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "Sword",
+              "Condition": {
+                "Identifier": null,
+                "Output": null
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "8eab3c86-3a6c-45cd-bbe8-bb8b6e6bcea4",
+              "Position": "400,1250",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "Jab",
+              "Condition": {
+                "Identifier": null,
+                "Output": null
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "9fe29aed-c519-482f-a98b-452e1d1bbbdb",
+              "Position": "400,1500",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "Cross",
+              "Condition": {
+                "Identifier": null,
+                "Output": null
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "39e3222f-95a7-4eb9-88ae-c1d836456492",
+              "Position": "400,1750",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "Hit",
+              "Condition": {
+                "Identifier": "0486663b-907e-4214-8523-529239b2784b",
+                "Output": "Value"
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "e3ff99e7-a95d-42f6-bd38-df81e728de6f",
+              "Position": "400,2000",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "Death",
+              "Condition": {
+                "Identifier": "e6c41248-7762-4433-bd6c-5773a1e46294",
+                "Output": "Value"
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "28e91cda-d243-4666-9cb7-25f97c01a8c7",
+              "Position": "400,2250",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "AndNode",
+              "Conditions": [
+                {
+                  "Input": {
+                    "Identifier": "b1a9f7f7-695f-4a57-a004-26683e36e96a",
+                    "Output": "Value"
+                  }
+                },
+                {
+                  "Input": {
+                    "Identifier": "7c2db502-b528-496b-807d-0bac5cb6533d",
+                    "Output": "Value"
+                  }
+                }
+              ],
+              "Identifier": "6f4ff303-98ce-4297-a811-ae875be2013b",
+              "Position": "-300,-400",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "BoolParameterNode",
+              "Invert": false,
+              "ParameterIdentifier": "4af9e5ef-c956-434d-b3d0-743149e721b6",
+              "ParameterName": "roll",
+              "Identifier": "b1a9f7f7-695f-4a57-a004-26683e36e96a",
+              "Position": "-650,-400",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "BoolParameterNode",
+              "Invert": false,
+              "ParameterIdentifier": "9a67e6ea-cec0-4442-ab61-8223a322ee23",
+              "ParameterName": "grounded",
+              "Identifier": "7c2db502-b528-496b-807d-0bac5cb6533d",
+              "Position": "-650,-280",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "BoolParameterNode",
+              "Invert": false,
+              "ParameterIdentifier": "a25e2f43-4473-4991-a29c-d71207edf208",
+              "ParameterName": "hit",
+              "Identifier": "0486663b-907e-4214-8523-529239b2784b",
+              "Position": "-300,0",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "BoolParameterNode",
+              "Invert": false,
+              "ParameterIdentifier": "d148e165-beab-4979-8277-ff2d6ce9d390",
+              "ParameterName": "dead",
+              "Identifier": "e6c41248-7762-4433-bd6c-5773a1e46294",
+              "Position": "-300,400",
+              "Attached": false,
+              "HandleOffsets": {}
+            },
+            {
+              "_class": "GlobalTransitionNode",
+              "StateName": "Crouch",
+              "Condition": {
+                "Identifier": null,
+                "Output": null
+              },
+              "DurationOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TimeOffsetOverride": {
+                "Identifier": null,
+                "Output": null
+              },
+              "StartBoneMask": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TargetSyncID": {
+                "Identifier": null,
+                "Output": null
+              },
+              "TransitionName": "Transition",
+              "Duration": 0.2,
+              "TimeMatch": "None",
+              "TimeOffset": 0,
+              "BlendWeightEasing": "Linear",
+              "RootMotionBlend": "Blend",
+              "ClampDurationToSource": false,
+              "CanBeForced": false,
+              "BoneMaskBlendInTimePercentage": 0.33,
+              "Identifier": "54e00958-338f-4ea5-99d5-062479db582c",
+              "Position": "400,2750",
+              "Attached": false,
+              "HandleOffsets": {}
+            }
+          ],
+          "Kind": "GlobalTransitions"
+        },
+        "EntryGraph": {
+          "Version": 1,
+          "nodes": [
+            {
+              "_class": "EntryStateOverrideConditionsNode",
+              "States": [
+                "Locomotion",
+                "JumpStart",
+                "Fall",
+                "Land",
+                "Roll",
+                "Sword",
+                "Jab",
+                "Cross",
+                "Hit",
+                "Death"
+              ],
+              "Conditions": [
+                {
+                  "Identifier": null,
+                  "Output": null
+                },
+                {
+                  "Identifier": null,
+                  "Output": null
+                },
+                {
+                  "Identifier": null,
+                  "Output": null
+                },
+                {
+                  "Identifier": null,
+                  "Output": null
+                },
+                {
+                  "Identifier": null,
+                  "Output": null
+                },
+                {
+                  "Identifier": null,
+                  "Output": null
+                },
+                {
+                  "Identifier": null,
+                  "Output": null
+                },
+                {
+                  "Identifier": null,
+                  "Output": null
+                },
+                {
+                  "Identifier": null,
+                  "Output": null
+                },
+                {
+                  "Identifier": null,
+                  "Output": null
+                }
+              ],
+              "Identifier": "fe1bfa11-a36e-4e09-9a6c-6aa7abb34990",
+              "Position": "400,0",
+              "Attached": false,
+              "HandleOffsets": {}
+            }
+          ],
+          "Kind": "EntryOverrides"
+        },
+        "DefaultState": "",
+        "DefaultStateIndex": 0,
+        "Identifier": "0e06bc98-3c2d-442d-961e-b2158de61fe4",
+        "Position": "-200,0",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "FloatParameterNode",
+        "ParameterIdentifier": "ea907e76-5b52-4c62-a880-6d9902d320e3",
+        "ParameterName": "move_speed",
+        "Identifier": "47c5b325-2a22-44da-9983-fbd33b58117b",
+        "Position": "-1100,-200",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "Blend1DNode",
+        "Parameter": {
+          "Identifier": "7125ca04-77fe-42cd-90f3-726f9ab8cc3e",
+          "Output": "Result"
+        },
+        "Points": [
+          {
+            "Name": "Idle",
+            "Value": 0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "f3d311d3-6808-45a1-b663-4b31c4508f9a",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "79f331c0-b1de-4b1c-9a72-322bfed9bb81",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "Move",
+            "Value": 1.7,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "f6cd5ab9-600b-4316-9fd0-06ab9641a885",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "01533f72-acbd-4c9a-a3c0-b95544c3639f",
+              "Output": "Result"
+            }
+          }
+        ],
+        "Loop": false,
+        "Synchronized": false,
+        "Identifier": "54788bed-0fe9-4f7f-8522-dfe1f1c9e335",
+        "Position": "-700,-200",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Idle_Loop",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "79f331c0-b1de-4b1c-9a72-322bfed9bb81",
+        "Position": "-1000,-350",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Walk_Loop",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "06d1c87c-c166-45c5-a201-c8c611186c64",
+        "Position": "-1000,-260",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Jog_Fwd_Loop",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "778773af-c319-4a6c-84ed-22f702712812",
+        "Position": "-1000,-170",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Sprint_Loop",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "846d96af-3433-4e36-ad97-2b9e556f4e58",
+        "Position": "-1000,-80",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": false,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Jump_Start",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "bde43b19-cf48-47b4-aac7-0a533632e99a",
+        "Position": "-600,180",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Jump_Loop",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "f342d4b4-b451-4a79-945c-e5949b99bc07",
+        "Position": "-600,260",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": false,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Jump_Land",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "1179c313-16c2-4faf-9585-9a4a3c330260",
+        "Position": "-600,340",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": false,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Roll",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "86b703a6-da16-4377-bce3-7778cf658b0d",
+        "Position": "-600,420",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": false,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Sword_Attack",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "6a089a4e-f364-4310-9ca4-be5d2fa203ea",
+        "Position": "-600,500",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": false,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Punch_Jab",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "eb74db97-74a3-406a-b969-66cb7495d1c2",
+        "Position": "-600,580",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": false,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Punch_Cross",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "9933a7a1-a8a4-4680-a509-b5723a55f414",
+        "Position": "-600,660",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": false,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Hit_Chest",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "19ac838b-b616-4c15-aadf-d3a99d6b5744",
+        "Position": "-600,740",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": false,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Death01",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "f0db7701-87c6-46b0-bea0-a5916ab76fdd",
+        "Position": "-600,820",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "FloatSpringNode",
+        "Value": {
+          "Identifier": "47c5b325-2a22-44da-9983-fbd33b58117b",
+          "Output": "Value"
+        },
+        "Hertz": 2.5,
+        "DampingRatio": 1.0,
+        "UseStartValue": false,
+        "StartValue": 0,
+        "Identifier": "7125ca04-77fe-42cd-90f3-726f9ab8cc3e",
+        "Position": "-900,-200",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "Blend1DNode",
+        "Parameter": {
+          "Identifier": "7125ca04-77fe-42cd-90f3-726f9ab8cc3e",
+          "Output": "Result"
+        },
+        "Points": [
+          {
+            "Name": "CrouchIdle",
+            "Value": 0.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "04a274f5-ee46-42b2-9eab-18d4cfbf5e11",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "c6762c5b-ec64-4a7c-ac0b-a2f91fe8e3da",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "CrouchWalk",
+            "Value": 1.5,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "38352ab9-df0b-45a0-8c00-e19dafc21075",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "a292db80-479b-4139-b560-dd63a74d7889",
+              "Output": "Result"
+            }
+          }
+        ],
+        "Loop": false,
+        "Synchronized": false,
+        "Identifier": "47468553-7a1b-471f-8960-e5e0f2d14d3b",
+        "Position": "-700,700",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Crouch_Idle_Loop",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "c6762c5b-ec64-4a7c-ac0b-a2f91fe8e3da",
+        "Position": "-1000,700",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Crouch_Fwd_Loop",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "a292db80-479b-4139-b560-dd63a74d7889",
+        "Position": "-1000,790",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "FloatParameterNode",
+        "ParameterIdentifier": "c3b1ea9a-f019-4a3d-bfaa-7247f1ae29c4",
+        "ParameterName": "lean",
+        "Identifier": "c71ad71b-3764-4177-a22c-9964f30bd654",
+        "Position": "-700,-800",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "Blend1DNode",
+        "Parameter": {
+          "Identifier": "c71ad71b-3764-4177-a22c-9964f30bd654",
+          "Output": "Value"
+        },
+        "Points": [
+          {
+            "Name": "Back",
+            "Value": -1.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "7fd692aa-7d43-44e7-a1fc-348e8039b316",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "eb6bb542-d9e3-4206-9203-6b785d5dbec8",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "Neutral",
+            "Value": 0.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "5ab71ea1-b254-49cd-8544-32a85d6b7ecd",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "d8a8adf7-3fdf-444b-a5f5-eb540eccc3b1",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "Forward",
+            "Value": 1.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "405841a9-cae0-480d-9d1f-9af17f98a55e",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "02a26b3d-b685-425f-9f84-6d244b40f472",
+              "Output": "Result"
+            }
+          }
+        ],
+        "Loop": false,
+        "Synchronized": false,
+        "Identifier": "d7fdbf08-1fd9-462d-8d25-be6c805dda90",
+        "Position": "-400,-800",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Lean_Back",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "eb6bb542-d9e3-4206-9203-6b785d5dbec8",
+        "Position": "-700,-800",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Lean_Zero",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "d8a8adf7-3fdf-444b-a5f5-eb540eccc3b1",
+        "Position": "-700,-710",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Lean_Fwd",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "02a26b3d-b685-425f-9f84-6d244b40f472",
+        "Position": "-700,-620",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "ConstFloatNode",
+        "Value": 1.0,
+        "Identifier": "a30451da-7c80-45b2-af9f-88e542c6b1ce",
+        "Position": "-400,-550",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "LocalLayerNode",
+        "Input": {
+          "Identifier": "d7fdbf08-1fd9-462d-8d25-be6c805dda90",
+          "Output": "Result"
+        },
+        "Weight": {
+          "Identifier": "a30451da-7c80-45b2-af9f-88e542c6b1ce",
+          "Output": "Result"
+        },
+        "RootMotionWeight": {
+          "Identifier": null,
+          "Output": null
+        },
+        "BoneMask": {
+          "Identifier": null,
+          "Output": null
+        },
+        "BlendMode": "Additive",
+        "BlendInModelSpace": false,
+        "RotationOnly": false,
+        "ChannelsApart": false,
+        "IsSynchronized": false,
+        "IgnoreEvents": false,
+        "Identifier": "5e019357-4136-40ca-89d4-cceb5b7144dd",
+        "Position": "-100,-700",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "LayerBlendNode",
+        "Base": {
+          "Identifier": "0e06bc98-3c2d-442d-961e-b2158de61fe4",
+          "Output": "Result"
+        },
+        "Layers": [
+          {
+            "Identifier": "5e019357-4136-40ca-89d4-cceb5b7144dd",
+            "Output": "Layer"
+          },
+          {
+            "Identifier": "822013e3-fc1a-4b46-81ec-9ff1bcab6217",
+            "Output": "Layer"
+          },
+          {
+            "Identifier": "7a1aff4b-c226-440e-b562-dbe377d03d0f",
+            "Output": "Layer"
+          },
+          {
+            "Identifier": "50bc5cc9-f6a3-428e-a471-9fcb2c1b0be1",
+            "Output": "Layer"
+          }
+        ],
+        "OnlySampleBaseRootMotion": true,
+        "Identifier": "3ff0e8f9-6fc1-4eef-886d-d2cd24601a85",
+        "Position": "100,0",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "TargetParameterNode",
+        "ParameterIdentifier": "2b682602-a5cd-4ef6-9070-2a8af73afcdf",
+        "ParameterName": "foot_l_target",
+        "Identifier": "a9cd1ef6-86ed-4a80-b9c9-0d3c946a61ce",
+        "Position": "0,300",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "TargetParameterNode",
+        "ParameterIdentifier": "1f6d1de2-a491-42ed-84b7-e3083260b7a4",
+        "ParameterName": "foot_r_target",
+        "Identifier": "5b4bd8fd-7ecd-4322-86f8-81d3b3cf2986",
+        "Position": "0,380",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "BoolParameterNode",
+        "ParameterIdentifier": "e24a6284-23ce-402c-8153-636761782190",
+        "ParameterName": "foot_ik",
+        "Invert": false,
+        "Identifier": "43c11efd-b075-4bca-8d62-3e2d66e18373",
+        "Position": "0,460",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "FootIKNode",
+        "Input": {
+          "Identifier": "3ff0e8f9-6fc1-4eef-886d-d2cd24601a85",
+          "Output": "Result"
+        },
+        "LeftFootTarget": {
+          "Identifier": "a9cd1ef6-86ed-4a80-b9c9-0d3c946a61ce",
+          "Output": "Value"
+        },
+        "RightFootTarget": {
+          "Identifier": "5b4bd8fd-7ecd-4322-86f8-81d3b3cf2986",
+          "Output": "Value"
+        },
+        "Enable": {
+          "Identifier": "43c11efd-b075-4bca-8d62-3e2d66e18373",
+          "Output": "Value"
+        },
+        "BlendMode": "Effector",
+        "IsTargetInWorldSpace": true,
+        "DefaultVariationData": {
+          "LeftFootChain": "foot_l",
+          "RightFootChain": "foot_r",
+          "LeftFootBone": "",
+          "RightFootBone": "",
+          "BlendTime": 0.25
+        },
+        "Overrides": [],
+        "Identifier": "23a1d717-d315-4b10-b723-65f7356b00c3",
+        "Position": "250,0",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "Blend1DNode",
+        "Parameter": {
+          "Identifier": "7125ca04-77fe-42cd-90f3-726f9ab8cc3e",
+          "Output": "Result"
+        },
+        "Points": [
+          {
+            "Name": "Walk",
+            "Value": 1.7,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "67e6fa88-1bf3-44a1-a8c8-c0cd0664a19c",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "06d1c87c-c166-45c5-a201-c8c611186c64",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "Jog",
+            "Value": 3.8,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "f1a17e1d-c735-4b4b-a729-6e572372fa11",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "778773af-c319-4a6c-84ed-22f702712812",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "Sprint",
+            "Value": 6.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "699590d0-b8fe-49ec-a2c7-38aab6caf18f",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "846d96af-3433-4e36-ad97-2b9e556f4e58",
+              "Output": "Result"
+            }
+          }
+        ],
+        "Loop": false,
+        "Synchronized": true,
+        "Identifier": "01533f72-acbd-4c9a-a3c0-b95544c3639f",
+        "Position": "-850,-100",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "FloatParameterNode",
+        "ParameterIdentifier": "732a4492-ef31-48b5-921d-a7dabf11070b",
+        "ParameterName": "lean_side",
+        "Identifier": "e661e2f2-3fc3-42cd-944a-b030c35c1ad7",
+        "Position": "-700,-1300",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Lean_Left",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "13dea955-2dfe-4b28-8b00-7130616a3bcb",
+        "Position": "-700,-1220",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Lean_Zero",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "47fe4a5a-ca87-428a-865a-16e8a729ff36",
+        "Position": "-700,-1140",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Lean_Right",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "09ed9899-aa2e-4edc-9ae0-2ca9e567489b",
+        "Position": "-700,-1060",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "Blend1DNode",
+        "Parameter": {
+          "Identifier": "e661e2f2-3fc3-42cd-944a-b030c35c1ad7",
+          "Output": "Value"
+        },
+        "Points": [
+          {
+            "Name": "Left",
+            "Value": -1.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "93afe152-773f-40bc-af82-319c7614689c",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "13dea955-2dfe-4b28-8b00-7130616a3bcb",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "Neutral",
+            "Value": 0.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "d3ede20a-d3a4-453b-bc30-008d4c2c3c4c",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "47fe4a5a-ca87-428a-865a-16e8a729ff36",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "Right",
+            "Value": 1.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "aacb6c12-cf34-41e4-95f7-d53c8f785769",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "09ed9899-aa2e-4edc-9ae0-2ca9e567489b",
+              "Output": "Result"
+            }
+          }
+        ],
+        "Loop": false,
+        "Synchronized": false,
+        "Identifier": "a57ca890-4502-4bea-9449-7b304849be1e",
+        "Position": "-400,-1300",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "LocalLayerNode",
+        "Input": {
+          "Identifier": "a57ca890-4502-4bea-9449-7b304849be1e",
+          "Output": "Result"
+        },
+        "Weight": {
+          "Identifier": "a30451da-7c80-45b2-af9f-88e542c6b1ce",
+          "Output": "Result"
+        },
+        "RootMotionWeight": {
+          "Identifier": null,
+          "Output": null
+        },
+        "BoneMask": {
+          "Identifier": null,
+          "Output": null
+        },
+        "BlendMode": "Additive",
+        "BlendInModelSpace": false,
+        "RotationOnly": false,
+        "ChannelsApart": false,
+        "IsSynchronized": false,
+        "IgnoreEvents": false,
+        "Identifier": "822013e3-fc1a-4b46-81ec-9ff1bcab6217",
+        "Position": "-100,-1300",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "FloatParameterNode",
+        "ParameterIdentifier": "3a0ccec2-15c6-4d2a-9abe-b50faf5f1ebc",
+        "ParameterName": "dip",
+        "Identifier": "08089eec-1ce7-4f30-a16b-38b054ea7edf",
+        "Position": "-700,-1700",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Lean_Zero",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "eb3e045c-bab6-4f2e-ab60-97cb11877c67",
+        "Position": "-700,-1620",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Dip",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "0776a3e3-0357-40cc-9ffd-df14a8939152",
+        "Position": "-700,-1540",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "Blend1DNode",
+        "Parameter": {
+          "Identifier": "08089eec-1ce7-4f30-a16b-38b054ea7edf",
+          "Output": "Value"
+        },
+        "Points": [
+          {
+            "Name": "None",
+            "Value": 0.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "93e9953a-b072-4ffb-b8d7-de94154aab3d",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "eb3e045c-bab6-4f2e-ab60-97cb11877c67",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "Dip",
+            "Value": 1.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "5a1d53c3-f86b-49e3-a4f8-31dd37aefae6",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "0776a3e3-0357-40cc-9ffd-df14a8939152",
+              "Output": "Result"
+            }
+          }
+        ],
+        "Loop": false,
+        "Synchronized": false,
+        "Identifier": "9aaa90be-7552-49ae-9491-4131dd817a30",
+        "Position": "-400,-1700",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "LocalLayerNode",
+        "Input": {
+          "Identifier": "9aaa90be-7552-49ae-9491-4131dd817a30",
+          "Output": "Result"
+        },
+        "Weight": {
+          "Identifier": "a30451da-7c80-45b2-af9f-88e542c6b1ce",
+          "Output": "Result"
+        },
+        "RootMotionWeight": {
+          "Identifier": null,
+          "Output": null
+        },
+        "BoneMask": {
+          "Identifier": null,
+          "Output": null
+        },
+        "BlendMode": "Additive",
+        "BlendInModelSpace": false,
+        "RotationOnly": false,
+        "ChannelsApart": false,
+        "IsSynchronized": false,
+        "IgnoreEvents": false,
+        "Identifier": "7a1aff4b-c226-440e-b562-dbe377d03d0f",
+        "Position": "-100,-1700",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "FloatParameterNode",
+        "ParameterIdentifier": "3dee4fff-6235-403e-b1b3-b9fd9baf8307",
+        "ParameterName": "turn",
+        "Identifier": "e8c0e8cf-3cb6-4157-9d92-0b4085673c45",
+        "Position": "-700,-2100",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Twist_Left",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "987d1698-6073-44a2-b1fa-a389022ecb02",
+        "Position": "-700,-2020",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Lean_Zero",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "4e020151-5006-437c-8d5f-15e313cff336",
+        "Position": "-700,-1940",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "AnimationClipNode",
+        "Loop": true,
+        "SampleRootMotion": true,
+        "GraphEvents": [],
+        "DefaultVariationData": {
+          "AnimationName": "Twist_Right",
+          "SpeedMultiplier": 1,
+          "StartSyncEventOffset": 0
+        },
+        "Overrides": [],
+        "Identifier": "5c60556e-880a-4cce-a602-443c6f617892",
+        "Position": "-700,-1860",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "Blend1DNode",
+        "Parameter": {
+          "Identifier": "e8c0e8cf-3cb6-4157-9d92-0b4085673c45",
+          "Output": "Value"
+        },
+        "Points": [
+          {
+            "Name": "Left",
+            "Value": -1.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "89e4c72d-3798-4490-abef-778c00eb0cbf",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "987d1698-6073-44a2-b1fa-a389022ecb02",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "Neutral",
+            "Value": 0.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "0fb68d1f-e7ae-445f-875f-8de8a57ea5b5",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "4e020151-5006-437c-8d5f-15e313cff336",
+              "Output": "Result"
+            }
+          },
+          {
+            "Name": "Right",
+            "Value": 1.0,
+            "Graph": {
+              "Version": 1,
+              "nodes": [
+                {
+                  "_class": "PoseResultNode",
+                  "Pose": {
+                    "Identifier": null,
+                    "Output": null
+                  },
+                  "Identifier": "0f0b6354-551b-4cb5-8ff1-7f576607a6dc",
+                  "Position": "400,0",
+                  "Attached": false,
+                  "HandleOffsets": {}
+                }
+              ]
+            },
+            "Pose": {
+              "Identifier": "5c60556e-880a-4cce-a602-443c6f617892",
+              "Output": "Result"
+            }
+          }
+        ],
+        "Loop": false,
+        "Synchronized": false,
+        "Identifier": "bfb8bbfd-49db-4f12-8ae6-0039f797857a",
+        "Position": "-400,-2100",
+        "Attached": false,
+        "HandleOffsets": {}
+      },
+      {
+        "_class": "LocalLayerNode",
+        "Input": {
+          "Identifier": "bfb8bbfd-49db-4f12-8ae6-0039f797857a",
+          "Output": "Result"
+        },
+        "Weight": {
+          "Identifier": "a30451da-7c80-45b2-af9f-88e542c6b1ce",
+          "Output": "Result"
+        },
+        "RootMotionWeight": {
+          "Identifier": null,
+          "Output": null
+        },
+        "BoneMask": {
+          "Identifier": null,
+          "Output": null
+        },
+        "BlendMode": "Additive",
+        "BlendInModelSpace": false,
+        "RotationOnly": false,
+        "ChannelsApart": false,
+        "IsSynchronized": false,
+        "IgnoreEvents": false,
+        "Identifier": "50bc5cc9-f6a3-428e-a471-9fcb2c1b0be1",
+        "Position": "-100,-2100",
+        "Attached": false,
+        "HandleOffsets": {}
+      }
+    ],
+    "Model": "models/skeleton/skeleton.mdl",
+    "Skeleton": "models/skeleton/skeleton.mdl",
+    "parameters": [
+      {
+        "Identifier": "ea907e76-5b52-4c62-a880-6d9902d320e3",
+        "Type": "Float",
+        "Name": "move_speed",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 10,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "5841dab7-2c2c-4fcd-b32d-d44a139c72b9",
+        "Type": "Float",
+        "Name": "move_x",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": -10,
+        "Max": 10,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "355a40e0-912b-4e06-8987-9f48552a451f",
+        "Type": "Float",
+        "Name": "move_y",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": -10,
+        "Max": 10,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "9a67e6ea-cec0-4442-ab61-8223a322ee23",
+        "Type": "Bool",
+        "Name": "b_grounded",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": true,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "8312b4d5-d901-4501-b45c-2ebdacc61fed",
+        "Type": "Bool",
+        "Name": "b_jump",
+        "Group": "",
+        "AutoReset": true,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "4af9e5ef-c956-434d-b3d0-743149e721b6",
+        "Type": "Bool",
+        "Name": "roll",
+        "Group": "",
+        "AutoReset": true,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "05f2f4a1-5b6c-4758-9859-4c456859c901",
+        "Type": "Bool",
+        "Name": "attack_sword",
+        "Group": "",
+        "AutoReset": true,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "be269354-c04c-4462-80d2-cd2b06c8e552",
+        "Type": "Bool",
+        "Name": "attack_punch",
+        "Group": "",
+        "AutoReset": true,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "a25e2f43-4473-4991-a29c-d71207edf208",
+        "Type": "Bool",
+        "Name": "hit",
+        "Group": "",
+        "AutoReset": true,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "d148e165-beab-4979-8277-ff2d6ce9d390",
+        "Type": "Bool",
+        "Name": "dead",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "9fdf8e58-9414-457d-b74f-8116d744af12",
+        "Type": "Bool",
+        "Name": "b_ducked",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "c3b1ea9a-f019-4a3d-bfaa-7247f1ae29c4",
+        "Type": "Float",
+        "Name": "lean",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": -1,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "e24a6284-23ce-402c-8153-636761782190",
+        "Type": "Bool",
+        "Name": "foot_ik",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "2b682602-a5cd-4ef6-9070-2a8af73afcdf",
+        "Type": "Target",
+        "Name": "foot_l_target",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "1f6d1de2-a491-42ed-84b7-e3083260b7a4",
+        "Type": "Target",
+        "Name": "foot_r_target",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "732a4492-ef31-48b5-921d-a7dabf11070b",
+        "Type": "Float",
+        "Name": "lean_side",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": -1,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "3a0ccec2-15c6-4d2a-9abe-b50faf5f1ebc",
+        "Type": "Float",
+        "Name": "dip",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": 0,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      },
+      {
+        "Identifier": "3dee4fff-6235-403e-b1b3-b9fd9baf8307",
+        "Type": "Float",
+        "Name": "turn",
+        "Group": "",
+        "AutoReset": false,
+        "DefaultFloat": 0,
+        "Min": -1,
+        "Max": 1,
+        "DefaultBool": false,
+        "DefaultID": "",
+        "EnumTypeName": "",
+        "ExpectedValues": [],
+        "DefaultVector": "0,0,0",
+        "PreviewStartTargetIsSet": false,
+        "PreviewStartTargetIsBone": false,
+        "PreviewStartBone": ""
+      }
+    ],
+    "virtualParameters": []
+  },
+  "JiggleBones": [],
+  "JiggleColliders": [],
+  "Attachments": [],
+  "Bones": [],
+  "Constraints": [],
+  "__references": [],
+  "__version": 2
+}

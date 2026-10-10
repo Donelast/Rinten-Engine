@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- Engine-attached tests: loads the native engine DLLs (interop) but never boots the engine loop (see Assembly.cs). Needs RINTEN_ENGINE. -->
+
+	<ItemGroup>
+		<Using Include="Microsoft.AspNetCore.Components" />
+		<Using Include="Microsoft.AspNetCore.Components.Rendering" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- A scene somebody authored in s&box, kept as a fixture so the porter's dimension table is
+		     checked against real content rather than against the four components a test thought of. -->
+		<None Include="..\Fixtures\Scenes\sbox-minimal.scene" Link="Fixtures\sbox-minimal.scene">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Facepunch.ActionGraphs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Rinten.Bind\Rinten.Bind.csproj" />
+		<ProjectReference Include="..\..\Rinten.Generator\Rinten.Generator.csproj" />
+		<ProjectReference Include="..\..\Rinten.System\Rinten.System.csproj" />
+		<ProjectReference Include="..\..\Rinten.Engine\Rinten.Engine.csproj" />
+		<ProjectReference Include="..\..\Rinten.Tools\Rinten.Tools.csproj" />
+		<ProjectReference Include="..\..\Porting\Rinten.Porting\Rinten.Porting.csproj" />
+		<ProjectReference Include="..\..\Porting\Rinten.Porting.SBox\Rinten.Porting.SBox.csproj" />
+		<ProjectReference Include="..\..\Rinten.AppSystem\Rinten.AppSystem.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- A Hammer map, written as bytes rather than kept as a file, so that both
+		     tiers test the porter against the layout Hammer actually saves. -->
+		<Compile Include="..\Fixtures\HammerMap.cs" Link="Fixtures\HammerMap.cs" />
+	</ItemGroup>
+
+</Project>

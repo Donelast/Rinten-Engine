@@ -1,0 +1,17 @@
+//An icon button with a second, smaller glyph in its corner. Everything about the button - its size, its wash under the pointer,
+//how it looks lit or greyed - is design.scss's .toolbarbutton. Only the corner is here, because nothing else in the editor has one.
+
+.corner-icon-button
+{
+	position: relative;
+
+	//Corner glyph hangs slightly off the icon; 3px accounts for the 1px border. Ignores clicks
+	> .corner
+	{
+		position: absolute;
+		right: -3px;
+		bottom: -3px;
+		font-size: $type-small;
+		pointer-events: none;
+	}
+}

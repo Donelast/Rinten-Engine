@@ -1,0 +1,27 @@
+.tree-panel,
+TreePanel {
+	flex-direction: column;
+	align-items: stretch;
+	align-self: stretch;
+	flex-grow: 1;
+	min-height: 0;
+	min-width: 0;
+	pointer-events: all;
+}
+
+//The rows a pixel apart, each on a plate of its own - see TreeRowPanel.cs.scss.
+.tree-panel > .body,
+TreePanel > .body {
+	flex-direction: column;
+	align-items: stretch;
+	flex-grow: 1;
+	min-height: 0;
+	overflow: scroll;
+	gap: 1px;
+	padding: 2px 0px;
+
+	> * {
+		flex-grow: 0;
+		flex-shrink: 0;
+	}
+}

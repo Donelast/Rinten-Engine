@@ -1,0 +1,227 @@
+# Ignore all files by default
+*
+!*/
+
+# Git
+!.gitignore
+!.gitattributes
+
+# The .gitignore a new project starts with; the whitelist goes by extension, so it is named
+!/game/templates/template.gitignore
+!.github/workflows/**
+!.github/actions/**
+
+# Source files
+!*.sln
+!*.slnx
+!*.csproj
+!*.cs
+!*.razor
+
+# MSBuild imports; without them a fresh checkout fails restore with MSB4019
+!*.props
+!*.[Tt]argets
+!*.projitems
+!*.shproj
+
+# Android manifests are source; every other .xml here is generated
+!/engine/Launcher/RintenAndroid/Properties/AndroidManifest.xml
+!/engine/Launcher/RintenAndroid/Properties/AndroidManifest.Vr.xml
+!/engine/Launcher/RintenWeb/nuget.config
+
+# What projects embed or generate from
+!*.resx
+!*.scss
+!*.tt
+!*.trie
+
+# Native core sources (engine/Core and its vendored dependencies)
+!*.c
+!*.h
+!*.cpp
+!*.hpp
+!*.inl
+!*.cmake
+!*.natvis
+!*.modulemap
+!*.cmd
+!/engine/Core/extern/*/LICENSE
+
+# Basis Universal: licences, encoder exports for the Windows link, and the web transcoder with its notice
+!/engine/Core/extern/basisu/NOTICE
+!/engine/Core/extern/basisu/LICENSES/**
+!/engine/Core/extern/basisu/zstd/LICENSE
+!/engine/Core/extern/basisu/**/*.inc
+!/engine/Core/extern/basisu/**/*.hh
+!/engine/Core/src/*.def
+!/engine/Launcher/RintenWeb/wwwroot/basis_transcoder.wasm
+!/engine/Launcher/RintenWeb/wwwroot/basis_transcoder.NOTICE.txt
+!/game/bin/wasm32/basis_transcoder.NOTICE.txt
+
+# Project descriptors; built-ins are named in Project.Static.cs
+!*.rinproj
+
+# UI typefaces; FontManager scans /fonts/ for these, and the icon font has no fallback
+!*.ttf
+!*.otf
+
+# Engine source files
+!*.scene
+!*.prefab
+
+# Binary halves of scenes and prefabs (BlobDataSerializer); the json only points at them by guid
+!*.scene_d
+!*.prefab_d
+!*.clothing
+!*.sound
+!*.decal
+!*.sndscape
+!*.surface
+!*.vtex
+
+# Shader files
+!*.shader
+!*.fxc
+!*.hlsl
+!*.hlsli
+!*.slang
+
+# Engine materials and their textures; the dev grid is what an unmaterialled mesh draws with
+!/game/addons/base/Assets/materials/**/*.mat
+!/game/addons/base/Assets/materials/dev/grid.png
+!/game/addons/base/Assets/materials/dev/metal.png
+!/game/addons/base/Assets/materials/error.png
+
+# VR controller models (XrControllerModels); compiled forms are local
+!/game/addons/base/Assets/models/vr/controllers/**
+/game/addons/base/Assets/models/vr/controllers/**/*_c
+/game/addons/base/Assets/models/vr/controllers/**/*_c.*
+# The error model and the default character; compiled forms are local
+!/game/addons/base/Assets/models/dev/error.fbx
+!/game/addons/base/Assets/models/dev/error.mdl
+!/game/addons/base/Assets/models/skeleton/skeleton.fbx
+!/game/addons/base/Assets/models/skeleton/skeleton.mdl
+
+# Text files
+!*.html
+!*.txt
+!*.md
+!*.ini
+!*.cfg
+!*.json
+!*.css
+!.editorconfig
+!*.yaml
+!*.yml
+
+# Script files
+!*.js
+!*.bat
+!*.sh
+
+# Branding; binaries are ignored above, so the engine's own icons are listed
+!/brand/**
+!/engine/Launcher/*/*.ico
+!/engine/Tools/*/*.ico
+
+# Editor pictures: the logo and the transparency checker behind colour swatches
+!/game/addons/tools/assets/logo_rounded.png
+!/game/core/tools/checker.png
+
+# Editor sounds
+!/game/core/sounds/editor/*.mp3
+
+# Reference assemblies Rinten.Compiling embeds (FrameworkReferences.cs); nothing regenerates them
+!/engine/Rinten.Compiling/EmbeddedRefs/*.dll
+
+#
+# Editors and local tooling
+#
+.vs/
+.vscode/
+.idea/
+.claude/
+*.user
+*.suo
+
+#
+# Build output
+#
+/bin/
+obj/
+.intermediate/
+.generated
+*.codegen
+/.tmp-build-*/
+engine/CodeGen.deps.json
+engine/CodeGen.runtimeconfig.json
+engine/TestResults/
+engine/Benchmark/BenchmarkDotNet.Artifacts/
+engine/Rinten.Compiling/EmbeddedRefs/*.xml
+/engine/**/Interop.*.cs
+
+# Release packaging output
+/dist/
+
+# Web build output dropped beside the solution; the real ones live in game/bin/wasm32
+/web-game.json
+/web-assets.txt
+
+#
+# Addon debris
+#
+/game/**/.rinten/*
+/game/**/*.sln
+/game/**/*.csproj
+/game/**/obj
+/game/**/launchSettings.json
+
+#
+# Game debris
+#
+
+# Compiled asset cache; regenerated on demand
+/game/**/Transients/
+
+game/*.xml
+game/.building
+game/core/shadercache/vulkan/shaders.cache
+
+/game/_toolsettings
+/game/bin/**/*.pdb
+/game/bin/**/*.dll
+/game/bin/**/*.xml
+/game/bin/**/*.json
+/game/bin/win64/logs
+# Our own core library, tracked so a checkout runs without building it first
+!/game/bin/win64/rintencore.dll
+
+# Slang and SDL are fetched by `rintenbuild fetch-natives` (engine/natives.json); Skia and HarfBuzz come from NuGet
+/game/bin/**/slang-standard-module-*/
+/game/bin/**/.natives
+
+# Export output: launcher apphosts and AOT-compiled engine assemblies
+/game/launchers/
+/game/precompiled/
+
+# Per-install config and user state
+*#local.json
+game/config/input/common.json
+/game/config/**/*.json
+/game/config/**/*.json.backup
+/game/config/localuser.txt
+/game/core/cfg/*.vcfg
+/game/core/cfg/video.txt
+/game/core/cfg/video_tools.txt
+
+# Engine versions the launcher installs from releases
+/game/versions/
+
+/game/data
+/game/download
+/game/download_test
+/game/logs
+/game/screenshots
+/game/tools
+/game/aftermath_dumps
+/game/gamecache

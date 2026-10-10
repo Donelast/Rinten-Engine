@@ -1,0 +1,109 @@
+@namespace Editor.Inspectors
+
+@attribute [Inspector( typeof( GameObject ) )]
+@attribute [Inspector( typeof( PrefabScene ) )]
+
+@inherits InspectorPanel
+
+<root class="gameobject-inspector">
+	<div class="scroll">
+
+		<GameObjectHeaderPanel Target="@SerializedObject" />
+
+		@if ( transformObject is not null )
+		{
+			<ComponentSheetPanel GameObjectId="@gameObjectId" Target="@transformObject" HeaderTitle="Transform" />
+		}
+
+		<ComponentListPanel Target="@SerializedObject" @ref="componentList" />
+
+		<AddComponentPanel Target="@SerializedObject" />
+
+	</div>
+</root>
+
+
+
+@code
+{
+	private IDisposable undoScope;
+	private ComponentListPanel componentList;
+
+
+	private SerializedObject transformObject;
+	private Guid gameObjectId;
+
+	public GameObjectInspectorPanel( SerializedObject so ) : base( so )
+	{
+		SerializedObject.OnPropertyStartEdit += PropertyStartEdit;
+		SerializedObject.OnPropertyChanged += PropertyChanged;
+		SerializedObject.OnPropertyFinishEdit += PropertyFinishEdit;
+	}
+
+	protected override int BuildHash()
+	{
+		UpdateTransformBinding();
+		return HashCode.Combine( SerializedObject, transformObject );
+	}
+
+	void UpdateTransformBinding()
+	{
+		gameObjectId = SerializedObject?.Targets.OfType<GameObject>().Select( x => x.Id ).FirstOrDefault() ?? Guid.Empty;
+
+		var prop = SerializedObject?.GetProperty( nameof( GameObject.Transform ) );
+		if ( prop is null || !prop.TryGetAsObject( out var transform ) )
+		{
+			transformObject = null;
+			return;
+		}
+
+		if ( !ComponentSheetPanel.SameTargets( transformObject, transform ) )
+			transformObject = transform;
+	}
+
+
+	protected override void OnRightClick( MousePanelEvent e )
+	{
+		base.OnRightClick( e );
+
+		//Only the empty space: a right click on a component header or sheet has its own menu.
+		if ( e.Target is not Panel target || (target != this && target.Parent != this) ) return;
+
+		var gameObjects = SerializedObject?.Targets.OfType<GameObject>().Where( x => x.IsValid() ).ToArray();
+		if ( gameObjects is null || gameObjects.Length == 0 ) return;
+
+		var menu = new Menu();
+		menu.AddOption( "Paste Component As New", "content_paste_go", () =>
+		{
+			foreach ( var go in gameObjects )
+				go.PasteComponent();
+		} ).Enabled = SceneEditor.HasComponentInClipboard();
+		menu.OpenAtCursor();
+		e.StopPropagation();
+	}
+
+	void PropertyStartEdit( SerializedProperty property )
+	{
+		var name = property.Parent.ParentProperty is null ? property.Name : $"{property.Parent.ParentProperty.Name}.{property.Name}";
+		var undoName = $"Edit {name} on {SerializedObject.GetProperty( nameof( GameObject.Name ) ).GetValue<string>()}";
+		var gameObjects = SerializedObject.Targets.OfType<GameObject>();
+		var session = SceneEditorSession.Resolve( gameObjects.FirstOrDefault() );
+
+		using var scene = session.Scene.Push();
+		undoScope = session.UndoScope( undoName ).WithGameObjectChanges( gameObjects, GameObjectUndoFlags.Properties ).Push();
+		property.DispatchPreEdited();
+	}
+
+	void PropertyChanged( SerializedProperty property )
+	{
+		property.DispatchEdited();
+	}
+
+	void PropertyFinishEdit( SerializedProperty property )
+	{
+		property.DispatchEdited();
+		undoScope?.Dispose();
+		undoScope = null;
+	}
+
+}

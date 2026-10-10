@@ -1,0 +1,178 @@
+//Find in Graph and its type filter; chrome comes from design.scss, TagChip and TriStateCheckbox
+
+//── the search ───────────────────────────────────────────────────────────────
+
+.search-popup
+{
+	//The size the widget was given. The picker beside it knows these numbers too - see the constants there - because where it opens depends on them.
+	width: 580px;
+	height: 440px;
+	padding: 6px;
+	gap: 4px;
+
+	//The field, whatever the filter is currently on, and the button that opens the picker - one row, with the field taking whatever the other two leave.
+	//No height of its own: the field is the tallest thing in it and every field in the editor is the same height, so the row is whatever that is.
+	> .search-row
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+
+		> .field
+		{
+			flex-grow: 1;
+			min-width: 0;
+		}
+
+		> .tags
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 2px;
+		}
+	}
+
+	> .results
+	{
+		flex-grow: 1;
+		min-height: 0;
+		border-radius: $control-radius;
+		background-color: $list-background;
+	}
+
+	//How many were found, quietly, under the lot.
+	> .summary
+	{
+		flex-shrink: 0;
+		height: 16px;
+		justify-content: center;
+		font-size: $type-small;
+		color: rgba( $text-control, 0.45 );
+	}
+}
+
+//── one result ─────────────────────────────────────────────────────────────── 10px of edge,
+//a 22px icon and 10px after it puts the name at 42 - which is where the widget drew it.
+
+.search-result
+{
+	flex-direction: row;
+	align-items: center;
+	width: 100%;
+	height: 42px;
+	padding: 0 10px;
+	gap: 10px;
+	font-family: $font-family;
+	cursor: pointer;
+
+	//Dim until the row is the one being looked at. The colour itself is the kind's own and comes from code.
+	> .icon
+	{
+		flex-shrink: 0;
+		width: 22px;
+		font-size: 17px;
+		text-align: center;
+		opacity: 0.8;
+	}
+
+	> .text
+	{
+		flex-direction: column;
+		justify-content: center;
+		flex-grow: 1;
+		min-width: 0;
+
+		> .title
+		{
+			font-size: $type-body;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+			color: rgba( $text-control, 0.85 );
+		}
+
+		//Where it lives: the trail down to it, and what kind of thing it is.
+		> .context
+		{
+			font-size: $type-small;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+			color: rgba( $text-control, 0.4 );
+		}
+	}
+
+	&:hover
+	{
+		> .icon { opacity: 1; }
+
+		> .text > .title { color: $text-control; }
+	}
+
+	//The one return would go to, so it is heavier as well as lit.
+	&.selected
+	{
+		> .icon { opacity: 1; }
+
+		> .text > .title
+		{
+			font-weight: 600;
+			color: $text-control;
+		}
+	}
+}
+
+//── the picker ───────────────────────────────────────────────────────────────
+
+.search-type-filter
+{
+	width: 460px;
+	height: 300px;
+	padding: 8px;
+	gap: 4px;
+
+	//The heading and the button that empties the filter. A toolbar because the button is one - but on the popup's own ground rather than a strip's.
+	> .panel-toolbar
+	{
+		background-color: transparent;
+		padding: 0;
+
+		> .heading
+		{
+			flex-grow: 1;
+			min-width: 0;
+			font-size: $type-body;
+			font-weight: 500;
+			white-space: nowrap;
+			color: $text-control;
+		}
+	}
+
+	> .type-columns
+	{
+		flex-direction: row;
+		flex-grow: 1;
+		min-height: 0;
+		gap: 6px;
+
+		//Two of them, each taking half whatever there is. They scroll on their own: a long group in one is not a reason to push the other down.
+		> .type-column
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			flex-basis: 0;
+			min-width: 0;
+			gap: 4px;
+			overflow-y: scroll;
+			overflow-x: hidden;
+		}
+	}
+}
+
+//One heading with its kinds under it, held together so the gap between two groups is wider than the gap inside one.
+.type-group
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 2px;
+}

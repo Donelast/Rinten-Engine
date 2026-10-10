@@ -1,0 +1,98 @@
+﻿//Fold header layout, plus two skins: property group (round chevron plate) and inspector band
+
+PanelFoldHeader,
+.panelfoldheader
+{
+	position: relative;
+	flex-direction: row;
+	align-items: center;
+	gap: 5px;
+	flex-shrink: 0;
+	min-height: $control-row-height;
+	padding-left: 8px;
+	cursor: pointer;
+	pointer-events: all;
+
+	&.hidden { display: none; }
+
+	> .chevron
+	{
+		width: 14px;
+		min-width: 14px;
+		height: 14px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		pointer-events: none;
+		order: 0;
+
+		> .icon
+		{
+			width: 14px;
+			height: 14px;
+			font-size: 12px;
+			text-align: center;
+			align-items: center;
+			justify-content: center;
+			color: $text-control;
+			pointer-events: none;
+		}
+	}
+
+	//Chevron, whatever the header carries, then the name. Ordered rather than added in order, because a subclass adds its own control whenever it likes.
+	> .lead-icon
+	{
+		order: 1;
+		font-size: $type-default;
+		flex-shrink: 0;
+		color: $text-control;
+		pointer-events: none;
+
+		&.hidden { display: none; }
+	}
+
+	> .title
+	{
+		order: 2;
+		font-weight: 600;
+		font-size: $type-body;
+		color: $ink;
+		pointer-events: none;
+	}
+}
+
+//A property group: the chevron sits on a round plate and the bar has no ground of
+//its own, so the group reads as part of the sheet rather than a band across it.
+PanelFoldHeader.plate,
+.panelfoldheader.plate
+{
+	> .chevron
+	{
+		border-radius: 8px;
+		background-color: $window-ground;
+		opacity: 0.5;
+	}
+
+	&.expanded > .chevron,
+	&:hover > .chevron
+	{
+		opacity: 1;
+	}
+}
+
+//A section of an inspector: a band with a seam above and below, the same one the component sheets in the main editor wear.
+PanelFoldHeader.bar,
+.panelfoldheader.bar
+{
+	gap: 4px;
+	padding: 4px 6px;
+	background-color: $surface-background;
+	border-top: 1px solid $edge;
+	border-bottom: 1px solid $edge;
+	color: $ink;
+
+	> .chevron > .icon { color: $ink; }
+
+	> .title { flex-grow: 1; min-width: 0; }
+}

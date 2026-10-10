@@ -1,0 +1,206 @@
+.component-type-selector-popup
+{
+	gap: 4px;
+	padding: 4px;
+	min-height: 200px;
+
+	> .head
+	{
+		position: relative;
+		flex-direction: row;
+		align-items: center;
+		gap: 4px;
+		flex-shrink: 0;
+
+		> .search
+		{
+			flex-grow: 1;
+			min-width: 0;
+			min-height: $control-row-height;
+			background-color: $control-background;
+			border: $control-border;
+			border-radius: $control-radius;
+			padding: $control-text-padding;
+			color: $text;
+		}
+
+		> .filter
+		{
+			flex-shrink: 0;
+			min-width: $control-row-height;
+			min-height: $control-row-height;
+		}
+	}
+
+	//Placed by code: left and top are measured from the filter button.
+	> .filter-drop
+	{
+		position: absolute;
+		min-width: 240px;
+		pointer-events: all;
+		z-index: 100;
+		flex-direction: column;
+		background-color: $popup-background;
+		border: $popup-border;
+		border-radius: $popup-radius;
+		box-shadow: $popup-shadow;
+
+		> .filter-row
+		{
+			flex-direction: row;
+			align-items: center;
+			column-gap: 8px;
+			min-height: $control-row-height;
+			padding: 4px 8px;
+			cursor: pointer;
+			pointer-events: all;
+
+			> .check
+			{
+				flex-shrink: 0;
+				width: $control-row-height;
+				height: $control-row-height;
+				font-size: $type-large;
+				color: $primary;
+				align-items: center;
+				justify-content: center;
+			}
+
+			//Not .label: an IconPanel is a Label and carries that class too, so the tick took the words' flex-grow and shared the row with them.
+			> .caption
+			{
+				flex-grow: 1;
+				min-width: 0;
+				color: $text-control;
+				font-size: $control-text-size;
+				pointer-events: none;
+			}
+
+			&:hover
+			{
+				background-color: $veil-down;
+			}
+		}
+	}
+
+	> .back
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 6px;
+		flex-shrink: 0;
+		min-height: $control-row-height;
+		padding: 0 8px;
+		border-radius: $control-radius;
+		cursor: pointer;
+
+		> .icon
+		{
+			flex-shrink: 0;
+			width: 16px;
+			font-size: $type-large;
+			color: $text-light;
+			align-items: center;
+			justify-content: center;
+		}
+
+		> .caption
+		{
+			flex-grow: 1;
+			min-width: 0;
+			color: $text;
+			font-size: $control-text-size;
+		}
+
+		&:hover
+		{
+			background-color: $veil-down;
+		}
+	}
+
+	> .list
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		max-height: 400px;
+		overflow: scroll;
+
+		> .component-selector-row
+		{
+			flex-direction: row;
+			pointer-events: all;
+			align-items: center;
+			gap: 8px;
+			min-height: 24px;
+			padding: 2px 8px;
+			flex-shrink: 0;
+			border-radius: $control-radius;
+			cursor: pointer;
+
+			> .icon
+			{
+				flex-shrink: 0;
+				width: 16px;
+				height: 16px;
+				font-size: $type-large;
+				color: $green;
+				align-items: center;
+				justify-content: center;
+			}
+
+			//Not .label: an IconPanel is a Label and carries that class too, so the icon and the chevron took
+			//the words' flex-grow and shared the row with them - the chevron drifted with the words' width.
+			> .caption
+			{
+				flex-grow: 1;
+				color: $ink-dim;
+				font-size: $type-body;
+				@include one-line;
+			}
+
+			> .chevron
+			{
+				flex-shrink: 0;
+				width: 16px;
+				font-size: $type-large;
+				color: $text-light;
+			}
+
+			&:hover:not(.heading)
+			{
+				background-color: $veil-down;
+
+				> .caption
+				{
+					color: $ink;
+				}
+			}
+
+			&.heading
+			{
+				cursor: default;
+				padding-top: 8px;
+				padding-bottom: 2px;
+
+				> .caption
+				{
+					color: $text-light;
+					font-size: 12px;
+				}
+			}
+		}
+
+		> .name-entry
+		{
+			flex-shrink: 0;
+			margin: 0 8px 4px;
+			min-height: $control-row-height;
+			padding: $control-text-padding;
+			background-color: $control-background;
+			border: $control-border;
+			border-radius: $control-radius;
+			color: $text;
+		}
+	}
+}

@@ -1,0 +1,19 @@
+//The cursor image fits the preview square whole, without cropping.
+CursorPreviewPanel
+{
+	> .cursor-preview-image
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		object-fit: contain;
+		pointer-events: none;
+	}
+
+	> .cursor-preview-placeholder
+	{
+		pointer-events: none;
+	}
+}

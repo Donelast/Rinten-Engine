@@ -1,0 +1,25 @@
+ProjectThumbPanel
+{
+	flex-shrink: 0;
+	border-radius: 4px;
+	background-color: rgba( $text, 0.08 );
+	border: 1px solid rgba( $text, 0.1 );
+	pointer-events: all;
+	cursor: pointer;
+	align-items: center;
+	justify-content: center;
+
+	&:not(.has-thumb)::after
+	{
+		content: "image";
+		font-family: "Material Icons";
+		font-size: 22px;
+		opacity: 0.4;
+	}
+
+	&.has-thumb
+	{
+		background-size: cover;
+		background-position: center;
+	}
+}

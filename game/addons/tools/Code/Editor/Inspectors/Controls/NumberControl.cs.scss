@@ -1,0 +1,53 @@
+@import "ControlHandle.scss";
+
+//The letter and the number are two wells side by side with a sliver of the card between them, rather
+//than one well with a line down it. The shell is the row they stand in and draws nothing itself.
+NumberControl.control {
+  @include control-shell;
+  @include control-prefix;
+
+  gap: $gap-inside;
+  background-color: transparent;
+  border-width: 0px;
+  border-radius: 0px;
+  overflow: visible;
+
+  > .prefix {
+    border: 1px solid $border;
+    border-radius: $control-radius;
+    background-color: $control-background;
+  }
+
+  > .field {
+    flex-grow: 1;
+    min-width: 0;
+    min-height: $control-row-height;
+    background-color: $control-background;
+    border: 1px solid $border;
+    border-radius: $control-radius;
+    overflow: hidden;
+
+    &:hover {
+      border-color: $border-light;
+    }
+
+    > textentry {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      padding: $control-text-padding;
+      border: none;
+
+      > .content-label,
+      > .label {
+        color: inherit;
+        pointer-events: none;
+        font-size: 13px;
+      }
+    }
+  }
+
+  &.under-60 {
+    gap: 1px;
+  }
+}

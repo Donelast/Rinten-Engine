@@ -1,0 +1,93 @@
+//The importer, a card held over the window: its title and close button across the top, then the settings and buttons down the left and the sheet to
+//the right. The buttons are design.scss's .btn, .good and .is-disabled, the scroll its .scroll, the close button its .toolbarbutton - none is restated.
+
+.spritesheet-importer
+{
+	flex-direction: column;
+	width: 960px;
+	height: 620px;
+	max-width: 95%;
+	max-height: 95%;
+	border-radius: 10px;
+	background-color: $window-background;
+	border: 1px solid rgba( $text, 0.08 );
+	box-shadow: 0 12px 40px rgba( black, 0.5 );
+	overflow: hidden;
+
+	> .head
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		height: 36px;
+		padding: 0 6px 0 12px;
+		gap: 8px;
+		border-bottom: 1px solid rgba( $text, 0.08 );
+
+		> .glyph
+		{
+			font-size: $type-large;
+			color: rgba( $text, 0.6 );
+		}
+
+		> .title
+		{
+			flex-grow: 1;
+			font-family: $font-family;
+			font-size: $type-body;
+			font-weight: 600;
+			color: $text;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+		}
+	}
+
+	> .body
+	{
+		flex-direction: row;
+		flex-grow: 1;
+		min-height: 0;
+		gap: 4px;
+
+		> .side
+		{
+			flex-direction: column;
+			flex-shrink: 0;
+			width: 300px;
+			gap: 4px;
+
+			> .scroll
+			{
+				flex-direction: column;
+				flex-grow: 1;
+				min-height: 0;
+				padding: 8px;
+			}
+
+			> .buttons
+			{
+				flex-direction: column;
+				flex-shrink: 0;
+				padding: 4px;
+				gap: 4px;
+
+				> .btn
+				{
+					flex-direction: row;
+					align-items: center;
+					justify-content: center;
+					gap: 6px;
+
+					> i { font-size: $type-large; }
+				}
+			}
+		}
+
+		> .sheet-view
+		{
+			flex-grow: 1;
+			min-width: 0;
+			min-height: 0;
+		}
+	}
+}

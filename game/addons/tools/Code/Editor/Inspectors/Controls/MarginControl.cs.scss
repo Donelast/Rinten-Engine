@@ -1,0 +1,6 @@
+@import "NumericFields.scss";
+
+MarginControl.control.no-background
+{
+	@include numeric-fields;
+}

@@ -1,0 +1,43 @@
+@namespace Editor.ProjectSettingsUI
+@attribute [StyleSheet( "ProjectSettingsSectionPanel.razor.scss" )]
+@inherits Panel
+
+<root class="settings-section">
+	@if ( !string.IsNullOrEmpty( Title ) )
+	{
+		<div class="header">
+			<label class="title">@Title</label>
+			@if ( !string.IsNullOrEmpty( Description ) )
+			{
+				<label class="description">@Description</label>
+			}
+		</div>
+	}
+	<div @ref="contentHost"></div>
+</root>
+
+@code
+{
+	public string Title { get; }
+	public string Description { get; }
+	readonly Panel content;
+
+	public ProjectSettingsSectionPanel( string title, string description, Panel content )
+	{
+		Title = title;
+		Description = description;
+		this.content = content;
+	}
+
+	Panel contentHost;
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( !firstTime || contentHost is null || content is null || contentHost.HasChildren )
+			return;
+
+		contentHost.AddChild( content );
+	}
+}

@@ -1,0 +1,31 @@
+@namespace Editor.Preferences
+@attribute [Title( "Editor UI" ), Icon( "dashboard" ), Order( 1 )]
+@attribute [Description( "What the interface does every frame, and what it skips while it rebuilds itself." )]
+@inherits PreferencesPage
+
+<root class="preferences-page">
+	<div class="body" @ref="Body">
+		<label class="section-header">Frame Tick</label>
+		<div @ref="tickHost"></div>
+
+		<label class="section-header">SuspendUpdates Rebuild</label>
+		<div @ref="rebuildHost"></div>
+	</div>
+</root>
+
+@code
+{
+	Panel tickHost;
+	Panel rebuildHost;
+
+	protected override void OnBuild()
+	{
+		AddSheet( tickHost ).AddProperty( () => EditorPreferences.UiWidgetFadeEnabled );
+
+		var rebuild = AddSheet( rebuildHost );
+		rebuild.AddProperty( () => EditorPreferences.UiSuspendArrangeEnabled );
+		rebuild.AddProperty( () => EditorPreferences.UiSuspendBurstPaintEnabled );
+		rebuild.AddProperty( () => EditorPreferences.UiSuspendPaintBudgetMs );
+		rebuild.AddProperty( () => EditorPreferences.UiSuspendProfilerLog );
+	}
+}

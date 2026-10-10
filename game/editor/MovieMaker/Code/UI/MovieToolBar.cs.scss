@@ -1,0 +1,184 @@
+//Colours come from the editor theme; theme.json only holds what is drawn into a bitmap, where SCSS cannot reach.
+
+.movie-toolbar
+{
+	flex-direction: row;
+	flex-shrink: 0;
+	align-items: center;
+	padding: 4px 0px;
+	gap: 4px;
+	background-color: $tab-background;
+
+	> .start
+	{
+		flex-direction: row;
+		flex-grow: 1;
+		align-items: center;
+		gap: 4px;
+	}
+
+	> .end
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		align-items: center;
+		gap: 4px;
+	}
+}
+
+.movie-toolbar-group
+{
+	flex-direction: row;
+	align-items: center;
+	padding: 4px;
+	gap: 2px;
+	border-radius: 3px;
+	background-color: $sidebar-background;
+
+	&.hidden
+	{
+		display: none;
+	}
+
+	> .spacing
+	{
+		width: 8px;
+	}
+}
+
+.movie-toolbar-button
+{
+	width: 24px;
+	height: 24px;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	border-radius: 3px;
+	color: $text-control;
+	pointer-events: all;
+	cursor: pointer;
+	background-color: $control-background;
+
+	> i
+	{
+		font-family: Material Icons;
+		font-size: $type-large;
+		color: inherit;
+	}
+
+	&:hover
+	{
+		background-color: lighten( $control-background, 0.2 );
+		color: $text;
+	}
+
+	&.active
+	{
+		background-color: $primary;
+		color: $text;
+	}
+
+	//Icon only, highlighted by colour rather than by a plate behind it.
+	&.plain
+	{
+		background-color: transparent;
+
+		&:hover
+		{
+			background-color: $veil-hover;
+		}
+
+		&.active
+		{
+			background-color: $picked;
+			color: $ink;
+		}
+	}
+
+	&.disabled
+	{
+		pointer-events: none;
+		cursor: default;
+		opacity: 0.3;
+	}
+}
+
+.movie-toolbar-label,
+.movie-toolbar-readout
+{
+	flex-shrink: 0;
+	padding: 0px 4px;
+	font-family: $font-family;
+	font-size: $type-small;
+	color: rgba( $text, 0.5 );
+	align-items: center;
+}
+
+.movie-toolbar-readout
+{
+	width: 32px;
+	justify-content: center;
+	text-align: center;
+}
+
+//Its shape is design.scss's .toolbar-slider, which it wears; this is its size.
+.movie-toolbar-slider
+{
+	width: 80px;
+	height: 24px;
+	flex-shrink: 0;
+}
+
+.movie-icon-dropdown
+{
+	height: 24px;
+	flex-direction: row;
+	flex-shrink: 0;
+	align-items: center;
+	padding: 0px 2px;
+	gap: 2px;
+	border-radius: 3px;
+	background-color: $control-background;
+	color: $text-control;
+	pointer-events: all;
+	cursor: pointer;
+
+	> .preview
+	{
+		min-width: 16px;
+		height: 16px;
+		flex-grow: 1;
+		align-items: center;
+		justify-content: center;
+		font-family: $font-family;
+		font-size: $type-micro;
+		color: inherit;
+
+		> i
+		{
+			font-family: Material Icons;
+			font-size: $type-default;
+			color: inherit;
+		}
+
+		> .function-preview
+		{
+			width: 24px;
+			height: 14px;
+		}
+	}
+
+	> .arrow
+	{
+		font-family: Material Icons;
+		font-size: 12px;
+		flex-shrink: 0;
+		color: inherit;
+	}
+
+	&:hover
+	{
+		background-color: lighten( $control-background, 0.2 );
+		color: $text;
+	}
+}

@@ -1,0 +1,229 @@
+@namespace Editor.SpriteEditor
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Rinten.UI
+@using Rinten.Rendering
+@using Editor.Inspectors
+@attribute [StyleSheet( "SpritesheetImporterPanel.razor.scss" )]
+@inherits Panel
+
+@* The importer: a title and a way out across the top, the settings that cut the
+   sheet into cells down the left with the buttons under them, and the sheet with
+   those cells drawn on it to the right. Cells are picked on the sheet - pressed or
+   dragged over, and unpicked the same way with the right button. *@
+
+<root class="spritesheet-importer">
+	<div class="head">
+		<i class="glyph">grid_view</i>
+		<label class="title">@Title</label>
+		<ToolbarButton Icon="close" ToolTip="Close without importing" OnPressed="@Close" />
+	</div>
+
+	<div class="body">
+		<div class="side">
+			<div class="scroll">
+				<ControlSheet @ref="_sheet" />
+			</div>
+
+			<div class="buttons">
+				<div class="btn" onclick="@ResetSettings"><i>refresh</i><label>Reset All Settings</label></div>
+				<div class="btn @( Any ? null : "is-disabled" )" onclick="@ClearSelection"><i>deselect</i><label>Clear Selection</label></div>
+				<div class="btn good @( Any ? null : "is-disabled" )" onclick="@Import"><i>download</i><label>@( Any ? Action : "No Frames Selected" )</label></div>
+			</div>
+		</div>
+
+		<SpritesheetSheetView @ref="_view" class="sheet-view" />
+	</div>
+</root>
+
+@code
+{
+	const string SettingsCookie = "SpriteEditor.SpritesheetImporterSettings";
+
+	//The sheet, as a path the mounted filesystem knows.
+	public string ImagePath { get; set; }
+
+	//How the sheet is drawn - the same as the sprite editor's preview.
+	public FilterMode Filter { get; set; } = FilterMode.Point;
+
+	//What the button that hands the picked cells over says.
+	public string Action { get; set; } = "Import Spritesheet";
+
+	//Cells of this size to start from, instead of the last import's settings.
+	public Vector2Int? CellSize { get; set; }
+
+	//Given the picked cells as pixel rectangles on the sheet, in the order they were picked.
+	public Action<IReadOnlyList<Rect>> OnImport { get; set; }
+
+	public SpritesheetImporterPanel()
+	{
+		//So escape reaches it.
+		AcceptsFocus = true;
+	}
+
+	//Leaves without importing.
+	void Close() => SpriteEditorModal.Close( this );
+
+
+	public override void OnButtonTyped( ButtonEvent e )
+	{
+		base.OnButtonTyped( e );
+
+		if ( e.Pressed && e.Button == "escape" ) Close();
+	}
+
+	readonly SpritesheetSelection _selection = new();
+	SpritesheetImportSettings _settings;
+
+	ControlSheet _sheet;
+	SpritesheetSheetView _view;
+	bool _wired;
+
+	string Title => $"Spritesheet - {System.IO.Path.GetFileName( ImagePath ?? "" )}";
+
+	bool Any => _selection.Count > 0;
+
+	protected override int BuildHash() => HashCode.Combine( _selection.Count, Action );
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( _wired || !_sheet.IsValid() || !_view.IsValid() ) return;
+		_wired = true;
+
+		//The settings the last import used, where there was one.
+		_settings = EditorCookie.Get<SpritesheetImportSettings>( SettingsCookie, null ) ?? new SpritesheetImportSettings();
+
+		_view.Settings = _settings;
+		_view.Selection = _selection;
+		_view.Filter = Filter;
+
+		_selection.Changed += StateHasChanged;
+
+		BindSettings();
+		LoadSheet();
+	}
+
+	public override void OnDeleted()
+	{
+		base.OnDeleted();
+
+		_selection.Changed -= StateHasChanged;
+	}
+
+	//The settings
+
+	//Points the sheet at the settings, and hears the frame count change through them.
+	void BindSettings()
+	{
+		_settings.OnFrameCountChanged = _selection.Clear;
+
+		_sheet.Target = _settings.GetSerialized();
+		_sheet.Rebuild();
+	}
+
+	void ResetSettings()
+	{
+		_settings.OnFrameCountChanged = null;
+
+		//The view reads the settings object it was given, so the new values go into that object rather than replacing it.
+		var fresh = new SpritesheetImportSettings();
+
+		_settings.HorizontalFrames = fresh.HorizontalFrames;
+		_settings.VerticalFrames = fresh.VerticalFrames;
+		_settings.PaddingLeft = fresh.PaddingLeft;
+		_settings.PaddingTop = fresh.PaddingTop;
+		_settings.PaddingRight = fresh.PaddingRight;
+		_settings.PaddingBottom = fresh.PaddingBottom;
+		_settings.HorizontalSeparation = fresh.HorizontalSeparation;
+		_settings.VerticalSeparation = fresh.VerticalSeparation;
+
+		_selection.Clear();
+		BindSettings();
+	}
+
+	void ClearSelection() => _selection.Clear();
+
+	//The sheet
+
+	void LoadSheet()
+	{
+		var texture = Texture.LoadFromFileSystem( ImagePath, FileSystem.Mounted );
+		if ( texture is null ) return;
+
+		_view.SetTexture( texture );
+
+		if ( CellSize is { x: > 0, y: > 0 } cell ) CutInto( texture.Width, texture.Height, cell );
+		else TryAutoDetect( texture.Width, texture.Height );
+	}
+
+	//A sheet cut into cells of one size edge to edge - what a frame that is already
+	//one cell of it was cut from. Nothing is picked: the cell is the one to choose.
+	void CutInto( int width, int height, Vector2Int cell )
+	{
+		_settings.OnFrameCountChanged = null;
+
+		_settings.HorizontalFrames = Math.Max( 1, width / cell.x );
+		_settings.VerticalFrames = Math.Max( 1, height / cell.y );
+		_settings.PaddingLeft = _settings.PaddingTop = 0;
+		_settings.PaddingRight = width - _settings.HorizontalFrames * cell.x;
+		_settings.PaddingBottom = height - _settings.VerticalFrames * cell.y;
+		_settings.HorizontalSeparation = _settings.VerticalSeparation = 0;
+
+		BindSettings();
+	}
+
+	//A strip - a picture at least twice as long as it is tall, or as tall as it is long - is cut into squares along its length, and every one picked.
+	void TryAutoDetect( int width, int height )
+	{
+		var longSide = Math.Max( width, height );
+		var shortSide = Math.Min( width, height );
+
+		if ( longSide < 2 * shortSide ) return;
+
+		var count = longSide / shortSide;
+		var exact = longSide % shortSide == 0;
+
+		_settings.OnFrameCountChanged = null;
+
+		_settings.HorizontalFrames = width >= height ? count : 1;
+		_settings.VerticalFrames = width >= height ? 1 : count;
+
+		if ( exact )
+		{
+			_settings.PaddingLeft = 0;
+			_settings.PaddingRight = 0;
+			_settings.PaddingTop = 0;
+			_settings.PaddingBottom = 0;
+			_settings.HorizontalSeparation = 0;
+			_settings.VerticalSeparation = 0;
+		}
+
+		BindSettings();
+
+		_selection.SelectAll( _settings.HorizontalFrames, _settings.VerticalFrames );
+	}
+
+	//The picked cells
+
+	void Import()
+	{
+		if ( _selection.Count == 0 ) return;
+
+		var size = _view.TextureSize;
+		var cells = _settings.GetFrames( (int)size.x, (int)size.y );
+		var columns = Math.Max( 1, _settings.HorizontalFrames );
+
+		var picked = _selection.InOrder
+			.Select( cell => cell.y * columns + cell.x )
+			.Where( index => index >= 0 && index < cells.Count )
+			.Select( index => cells[index] )
+			.ToList();
+
+		EditorCookie.Set( SettingsCookie, _settings );
+
+		OnImport?.Invoke( picked );
+	}
+}

@@ -1,0 +1,76 @@
+@import "ControlHandle.scss";
+
+//Type square, text box and picker button; the TextEntry itself is styled by design.scss
+FilePathControl.control
+{
+	//Border, radius, and the stretch that gives the field below a height to fill.
+	@include control-shell;
+
+	> .thumb
+	{
+		position: relative;
+		flex-shrink: 0;
+		align-self: center;
+		width: $control-row-height - 4px;
+		height: $control-row-height - 4px;
+		margin-left: 2px;
+		border-radius: 2px;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		background-color: rgba( $control-background-light, 0.4 );
+
+		&.error { background-color: rgba( $red, 0.35 ); }
+
+		&:not( .image ) > .thumb-image { display: none; }
+		&:not( .error ) > .icon.error { display: none; }
+
+		> .thumb-image
+		{
+			position: absolute;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+		}
+
+		> .icon.error
+		{
+			color: $red;
+			font-size: $type-large;
+			align-items: center;
+			justify-content: center;
+		}
+	}
+
+	> .field
+	{
+		flex-grow: 1;
+		min-width: 0;
+		min-height: $control-row-height;
+
+		> textentry
+		{
+			position: relative;
+			width: 100%;
+			height: 100%;
+			padding: $control-text-padding;
+			border: none;
+		}
+	}
+
+	//Square, so it reads as the button on the end of the box rather than as a second field beside it.
+	> .toolbarbutton
+	{
+		flex-shrink: 0;
+		align-self: center;
+		width: $control-row-height;
+		height: $control-row-height;
+	}
+
+	&.drop-target
+	{
+		border-color: $green;
+		background-color: rgba( $green, 0.12 );
+	}
+}

@@ -1,0 +1,469 @@
+﻿//Editor design tokens (from LonePine), prepended to each editor sheet; names must not clash with theme
+
+//── layers ──────────────────────────────────────────────────────────────────
+
+//Over everything, under a modal: the window, still there, pushed back.
+$scrim: rgba( 0, 0, 0, 0.5 );
+
+//What a popup is made of: a menu, a tooltip, a dialog.
+$glass: rgba( 5, 5, 10, 0.75 );
+
+//The same, denser - for when there is a lot of text on it.
+$glass-deep: rgba( 5, 5, 10, 0.9 );
+
+//A whole window of glass, thinner than a popup.
+$pane: rgba( 5, 5, 10, 0.5 );
+
+//The ground the editor is drawn on. Opaque, because there is nothing behind the window;
+//neutral, because a tint at this brightness reads as a colour cast over the whole screen.
+$solid: #08080b;
+
+//The ground a window's panels lie on. One surface; pieces are told apart by hairlines and room rather than by sitting on a different darkness.
+$ground: #08080b;
+
+//The window ground behind all transparent docks and bars; the darkest thing
+$window-ground: #1f1f1f;
+
+//A pane laid on the page: a side, a bar, a surface with its own contents - the half of the launcher the projects are on.
+$panel-ground: #333333;
+
+//The ends of a gradient ground, for anything that wants one. Nothing does.
+$ground-top: #17171d;
+$ground-bottom: #0b0b10;
+
+//── cards: a step up from what they lie on; only real cards, never whole panels or rows
+
+$tile: #444444;
+$tile-hover: #4a4a4c;
+$tile-down: #3a3a3c;
+
+//A button standing on a card: the four little squares at the end of a project in the launcher. One more step
+//up, and a grey leaning to the accent when it is on - a blue-grey, turned green at the same brightness.
+$chip: #525254;
+$chip-hover: #5c5c5e;
+$chip-on: #555f42;
+
+//A plate standing on the page itself rather than on a pane - the rows down the launcher's side.
+//Only a breath lighter than the page, because the page is already the darkest thing there is.
+$ground-plate: #363638;
+$ground-plate-hover: #3e3e40;
+
+//Picked: the row that says where you are. A green-grey plate with the accent written on it, the one
+//place a ground is coloured - #48566a turned to the accent's hue at the same brightness.
+$picked: #505a3c;
+
+//Where you are, or what is on: the plate, and the words and glyphs on it left white - the user, 09-14: the
+//colour is the plate's, never the text's. No bar down the side and no wash: the plate is the whole of it.
+@mixin picked
+{
+	background-color: $picked;
+	color: $ink;
+}
+
+//── the wash: what appears behind something you are pointing at ─────────────
+
+$veil: rgba( 255, 255, 255, 0.04 );
+$veil-hover: rgba( 255, 255, 255, 0.06 );
+$veil-down: rgba( 255, 255, 255, 0.1 );
+
+//What is on: a wash and a bar of white beside it.
+$on: rgba( 255, 255, 255, 0.1 );
+
+//── edges: hairlines, and they say something ──────────────────────────────── opaque like everything
+//else in that palette: a line of grey rather than a wash of white, so an edge is the same line whatever it happens to lie on.
+
+$edge-soft: #3e3e3e;
+$edge: #3e3e3e;
+$edge-lit: #484848;
+
+//What is on, and what the keyboard is pointed at: white outright.
+$edge-focus: rgba( 255, 255, 255, 0.8 );
+
+//── the plate: what pressable things are made of; lighter than the ground, no outline
+
+$slab: #444444;
+$slab-hover: #4a4a4c;
+$slab-down: #3a3a3c;
+
+$slab-radius: 4px;
+
+//Everything pressable, in one place.
+@mixin slab
+{
+	background-color: $slab;
+	border-radius: $slab-radius;
+
+	&:hover { background-color: $slab-hover; }
+
+	&:active { background-color: $slab-down; }
+}
+
+//A field, a track, a well: down at the page's own darkness rather than up at the plate's. That is the whole of how a field is told from
+//a button at a glance - one is a hole in the panel, the other is sitting on it.
+$sunken: $window-ground;
+
+//Accent green: link colour and fallback before a theme; text on it uses dark ink ($text-dark)
+$accent: #8DB53E;
+
+//The one button on a page that does the thing, filled with the accent.
+$accent-fill: #8DB53E;
+
+//── what a colour means: shared yes/no/careful colours, so sheets don't drop undefined names
+
+//Yes, and the same green as the accent so the editor has one of them.
+$green: #8DB53E;
+
+//No. Not a pure red - on greys this dark that reads as an error dialog rather than as a state.
+$red: #D4574E;
+
+//Careful, and kept. A warm gold rather than a yellow: yellow on this grey is a highlighter
+//pen, and what this marks is something somebody chose to keep in front of them.
+$gold: #E0B252;
+
+//── depth ───────────────────────────────────────────────────────────────────
+
+$shadow-card: 0px 2px 12px rgba( 0, 0, 0, 0.4 );
+$shadow-float: 0px 12px 40px rgba( 0, 0, 0, 0.7 );
+
+//── the frame: hairline, dark inner band and soft shadow for windows over the editor
+
+$frame-line: #363636;
+$frame-gap: #1a1a1a;
+$frame-radius: 8px;
+
+$shadow-window: 0px 6px 32px rgba( 0, 0, 0, 0.6 );
+
+//A window over the editor: the launcher, a question.
+@mixin frame
+{
+	border: 3px solid $frame-gap;
+	border-radius: $frame-radius;
+	box-shadow: $shadow-window, 0px 0px 0px 1px $frame-line;
+}
+
+//The same edge on something whose rows are placed by code, which has counted a
+//one-pixel border into where they go: a menu, a popup. The band is that pixel.
+@mixin frame-thin
+{
+	border: 1px solid $frame-gap;
+	box-shadow: $shadow-window, 0px 0px 0px 1px $frame-line;
+}
+
+//A panel's right edge lying on the one beside it.
+$shadow-edge-x: 8px 0px 32px rgba( 0, 0, 0, 0.65 );
+
+//The gap that separates two panels: a pixel of the layer below, showing.
+$seam: 1px;
+
+//── shape: three corner radii and a pill; $radius-2 matches the theme's control radius
+
+//A chip, a swatch, a tag: small enough that more would read as a lozenge.
+$radius-1: 3px;
+
+//The default, and what a control wears - see $control-radius in the theme.
+$radius-2: 4px;
+
+//A card, a popup, a panel with its own edges.
+$radius-3: 6px;
+
+//Round: a badge with a letter in it, a dot, anything meant to be a circle. Written as a number bigger
+//than the box rather than as a half of it, so it stays round whatever size the box turns out to be.
+$radius-round: 999px;
+
+//── ink: brightness rather than colour ──────────────────────────────────────
+
+$ink: rgba( 255, 255, 255, 1 );
+$ink-dim: rgba( 255, 255, 255, 0.75 );
+$ink-faint: rgba( 255, 255, 255, 0.55 );
+$ink-off: rgba( 255, 255, 255, 0.4 );
+
+//── time ────────────────────────────────────────────────────────────────────
+
+$instant: 0.05s;
+$fast: 0.1s;
+$normal: 0.2s;
+$slow: 0.3s;
+
+$ease: cubic-bezier( 0.2, 0.8, 0.2, 1 );
+
+//── type: default font for layout widths, monospace only for small print
+
+$font: Inter;
+$font-mono: Roboto Mono;
+
+$tracking: 1px;
+$tracking-wide: 2px;
+
+//── the type scale: six allowed text sizes, far enough apart to be deliberate
+
+//The floor: a count in a chip, a unit, a letter in a badge. Uppercase small print is this size too - see the micro mixin.
+$type-micro: 10px;
+
+//A dense row: a tree, a list, a timeline. The most common size in the editor.
+$type-small: 11px;
+
+//A line meant to be read rather than scanned.
+$type-body: 13px;
+
+//What a control is written in, and the default for anything that says nothing.
+$type-default: 14px;
+
+//A heading inside a panel, and the size most glyph icons are drawn at.
+$type-large: 16px;
+
+//A window's own title, and nothing smaller.
+$type-title: 24px;
+
+//A row of anything - a toolbar button, a list line, a control.
+$row: 24px;
+
+//── mixins ────────────────────────────────────────────────────────────────── The look is assembled out
+//of these rather than out of the values above, so that changing what "a card" is changes every card.
+
+//A panel lying over content.
+@mixin glass
+{
+	background-color: $glass;
+}
+
+//The same, for when there is text on it.
+@mixin glass-deep
+{
+	background-color: $glass-deep;
+}
+
+//Something that pops up: menu, popup, tooltip, dialog. Glass, a hairline round it, and a shadow because it is above everything.
+@mixin float
+{
+	@include glass;
+
+	border: 1px solid rgba( 255, 255, 255, 0.15 );
+	border-radius: $radius-2;
+	box-shadow: $shadow-float;
+}
+
+//A card: white over the glass, with a hairline round it.
+@mixin card
+{
+	background-color: $tile;
+	border: 1px solid $edge;
+	border-radius: $radius-2;
+}
+
+//The ground a window is drawn on. One colour, so that what lies on it is told apart by being
+//glass and by the seams between the pieces - not by sitting on a different part of a gradient.
+@mixin ground
+{
+	background-color: $ground;
+}
+
+//Something you press: no surface at all until it is pointed at, and its words are dim until then.
+@mixin quiet
+{
+	@include pressable;
+
+	background-color: transparent;
+	opacity: 0.6;
+
+	&:hover
+	{
+		opacity: 1;
+		background-color: $veil;
+	}
+
+	&:active
+	{
+		background-color: $veil-down;
+	}
+}
+
+//A field, a track, a well: the same plate as a button, outlined by a hairline.
+@mixin well
+{
+	background-color: $sunken;
+	border: 1px solid $edge;
+	border-radius: $slab-radius;
+}
+
+//The right edge of a panel, lying on the one beside it. Where two panels meet, this replaces the border that used to be drawn between them.
+@mixin edge-right
+{
+	z-index: 1;
+	box-shadow: $shadow-edge-x;
+}
+
+//The pixel of daylight between two panels. Put one of these between them and the layer below shows through.
+@mixin seam
+{
+	width: $seam;
+	min-width: $seam;
+	max-width: $seam;
+	flex-shrink: 0;
+	flex-grow: 0;
+	align-self: stretch;
+	background-color: transparent;
+	pointer-events: none;
+}
+
+//The same, lying horizontally.
+@mixin seam-h
+{
+	height: $seam;
+	min-height: $seam;
+	max-height: $seam;
+	flex-shrink: 0;
+	flex-grow: 0;
+	align-self: stretch;
+	background-color: transparent;
+	pointer-events: none;
+}
+
+//Something you press. Everything that reacts to the pointer moves through this, so the whole editor reacts at the same speed.
+@mixin pressable
+{
+	cursor: pointer;
+
+	transition: background-color $fast $ease,
+		border-color $fast $ease,
+		color $fast $ease,
+		opacity $fast $ease,
+		transform $fast $ease;
+}
+
+//One line with ellipsis; min-width 0 is needed or a flex child never shrinks enough to cut
+@mixin one-line
+{
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+//The ring around whatever the keyboard is pointed at.
+@mixin focus-ring
+{
+	border-color: $edge-focus;
+}
+
+//── lit: how a thing shows it answers the pointer (stylesheet twin of Theme.DrawLit)
+
+//Theme.LitStrengthOver: a row the pointer is merely crossing.
+$lit-over: 0.12;
+
+//Theme.LitStrength: a thing that can be pressed and is being pointed at.
+$lit-link: 0.22;
+
+//Theme.LitStrengthOn: the thing that is picked out, not merely pointed at.
+$lit-on: 0.45;
+
+//How far the colour survives. Theme.LitReach, as a share.
+$lit-reach: 66%;
+
+//The wash is gone; hover is the plate stepping up a grey. Mixins kept so sheets need not change
+
+//Was the wash across a row. Now no gradient - see above.
+@mixin lit( $strength: $lit-over, $colour: $accent )
+{
+	background-image: none;
+}
+
+//Was the same falling from the top. Now no gradient - see above.
+@mixin lit-down( $strength: $lit-on, $colour: $accent )
+{
+	background-image: none;
+}
+
+//The rule at the head of a wash, where the thing wants an edge as well as light. Theme.LitLine and LitLineStrength: one
+//pixel, and see-through, because two solid pixels of the accent on every lit row is a green grid drawn over the window.
+@mixin lit-edge( $colour: $accent )
+{
+	border-left: 1px solid transparent;
+}
+
+//The small print: a count, a type, a unit, a section heading. Upper case and spaced out, which is what makes it read as a label rather than as text.
+@mixin micro
+{
+	font-family: $font;
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: $tracking;
+	color: $ink-faint;
+}
+
+//── movement ──────────────────────────────────────────────────────────────── Named here so that a panel's own sheet can use
+//them without redefining them. :intro is put on by the panel system for the first frame of a panel's life, :outro for its last.
+
+@keyframes editor-fade
+{
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+@keyframes editor-rise
+{
+	from { opacity: 0; transform: translateY( 8px ); }
+	to { opacity: 1; transform: translateY( 0px ); }
+}
+
+@keyframes editor-pop
+{
+	from { opacity: 0; transform: scale( 0.9 ); }
+	to { opacity: 1; transform: scale( 1 ); }
+}
+
+@keyframes editor-breathe
+{
+	0% { opacity: 0.45; }
+	50% { opacity: 0.9; }
+	100% { opacity: 0.45; }
+}
+
+//Arrives rather than appears.
+@mixin arrive( $length: 0.2s )
+{
+	&:intro
+	{
+		animation-name: editor-rise;
+		animation-duration: $length;
+		animation-timing-function: $ease;
+	}
+
+	&:outro
+	{
+		opacity: 0;
+		transform: translateY( 8px );
+	}
+}
+
+//Comes out of nothing, in place: menus, tooltips, anything with a corner it belongs to.
+@mixin pop( $length: 0.2s )
+{
+	&:intro
+	{
+		animation-name: editor-pop;
+		animation-duration: $length;
+		animation-timing-function: $ease;
+	}
+
+	&:outro
+	{
+		opacity: 0;
+		transform: scale( 0.9 );
+	}
+}
+
+@mixin fade( $length: 0.1s )
+{
+	&:intro
+	{
+		animation-name: editor-fade;
+		animation-duration: $length;
+		animation-timing-function: $ease;
+	}
+
+	&:outro
+	{
+		opacity: 0;
+	}
+}

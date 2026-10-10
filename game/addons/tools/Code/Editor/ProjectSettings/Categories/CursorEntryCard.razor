@@ -1,0 +1,196 @@
+@namespace Editor.ProjectSettingPages.Categories
+
+@inherits Panel
+
+
+
+<root class="cursor-card">
+
+	<div class="header">
+
+		<label class="title">@Title</label>
+
+		<div class="btn remove" onclick="@OnRemoveClick">
+
+			<label class="material-icon">@(CanDelete ? "delete" : "restart_alt")</label>
+
+		</div>
+
+	</div>
+
+	<div class="cursor-card-body">
+
+		<div class="cursor-preview-host" @ref="previewHost"></div>
+
+		<div @ref="sheetHost"></div>
+
+	</div>
+
+</root>
+
+
+
+@code
+
+{
+
+	public string Title { get; set; }
+
+	public Func<CursorSettings.Cursor> GetCursor { get; set; }
+
+	public Action<CursorSettings.Cursor> SetCursor { get; set; }
+
+	public bool CanDelete { get; set; }
+
+	public Action OnRemove { get; set; }
+
+	public Action<SerializedProperty> OnPropertyChanged { get; set; }
+
+
+
+	Panel previewHost;
+
+	Panel sheetHost;
+
+	CursorPreviewPanel preview;
+
+	string builtFor;
+
+	string previewKey;
+
+
+
+	CursorSettings.Cursor Cursor => GetCursor?.Invoke() ?? default;
+
+
+
+	protected override void OnAfterTreeRender( bool firstTime )
+
+	{
+
+		base.OnAfterTreeRender( firstTime );
+
+		EnsurePreview();
+
+		UpdatePreview();
+
+		RebuildSheet();
+
+	}
+
+
+
+	void EnsurePreview()
+
+	{
+
+		if ( !previewHost.IsValid() ) return;
+
+		if ( preview.IsValid() ) return;
+
+
+
+		previewHost.DeleteChildren();
+
+		preview = previewHost.AddChild<CursorPreviewPanel>();
+
+		preview.AddClass( "cursor-preview" );
+
+		previewKey = null;
+
+	}
+
+
+
+	void UpdatePreview()
+
+	{
+
+		EnsurePreview();
+
+		if ( !preview.IsValid() ) return;
+
+
+
+		var key = $"{Cursor.Image}|{Cursor.Hotspot}";
+
+		if ( previewKey == key ) return;
+
+
+
+		previewKey = key;
+
+		preview.UpdatePreview( Cursor.Image, Cursor.Hotspot );
+
+	}
+
+
+
+	void RebuildSheet()
+
+	{
+
+		if ( !sheetHost.IsValid() ) return;
+
+		if ( builtFor == Title ) return;
+
+
+
+		builtFor = Title;
+
+		sheetHost.DeleteChildren();
+
+
+
+		var so = Cursor.GetSerialized();
+
+		var sheet = sheetHost.AddChild<Editor.Inspectors.ControlSheet>();
+
+		sheet.Target = new List<SerializedProperty>
+
+		{
+
+			so.GetProperty( nameof( CursorSettings.Cursor.Image ) ),
+
+			so.GetProperty( nameof( CursorSettings.Cursor.Hotspot ) )
+
+		};
+
+		sheet.Rebuild();
+
+
+
+		so.OnPropertyChanged = prop =>
+
+		{
+
+			SetCursor?.Invoke( new CursorSettings.Cursor
+
+			{
+
+				Image = so.GetProperty( nameof( CursorSettings.Cursor.Image ) ).As.String,
+
+				Hotspot = so.GetProperty( nameof( CursorSettings.Cursor.Hotspot ) ).As.Vector2
+
+			} );
+
+			previewKey = null;
+
+			OnPropertyChanged?.Invoke( prop );
+
+			StateHasChanged();
+
+		};
+
+	}
+
+
+
+	void OnRemoveClick() => OnRemove?.Invoke();
+
+
+
+	protected override int BuildHash() => HashCode.Combine( Title, Cursor.Image, Cursor.Hotspot );
+
+}
+

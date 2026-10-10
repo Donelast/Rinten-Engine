@@ -1,0 +1,53 @@
+BrowserTab {
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	min-width: 50px;
+	max-width: 150px;
+	height: $row;
+	padding: 0 6px;
+	gap: 4px;
+	border-radius: 4px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	background-color: rgba(255, 255, 255, 0.02);
+	cursor: pointer;
+
+	> i {
+		font-family: Material Icons;
+		font-size: $type-default;
+		color: rgba(255, 255, 255, 0.7);
+		flex-shrink: 0;
+	}
+
+	> span {
+		flex-grow: 1;
+		font-size: $type-small;
+		color: rgba(255, 255, 255, 0.7);
+		@include one-line;
+	}
+
+	> i.close {
+		font-size: 12px;
+		color: rgba(255, 255, 255, 0.5);
+		flex-shrink: 0;
+
+		&:hover {
+			color: $red;
+		}
+	}
+
+	&:hover {
+		background-color: rgba(255, 255, 255, 0.05);
+		border-color: rgba(255, 255, 255, 0.2);
+	}
+
+	//The open one: the picked plate, its words and glyph left white.
+	&.active {
+		background-color: $picked;
+		border-color: transparent;
+
+		> i, > span {
+			color: $ink;
+		}
+	}
+}

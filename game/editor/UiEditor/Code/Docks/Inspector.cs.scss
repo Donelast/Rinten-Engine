@@ -1,0 +1,665 @@
+//The selected panel's rules, winner first, the way a browser's inspector lists them: a selector,
+//where it is from, and its declarations - each a field when the rule is in a file that can be written.
+
+.ui-inspector
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	font-family: $font-family;
+	font-size: $type-body;
+}
+
+.ui-inspector > .header
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	padding: 10px 12px 8px 12px;
+	border-bottom: 1px solid rgba( $text, 0.08 );
+
+	> .title
+	{
+		font-size: $type-large;
+		color: $text;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		overflow: hidden;
+	}
+
+	> .source
+	{
+		margin-top: 2px;
+		color: $text-link;
+		cursor: pointer;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		overflow: hidden;
+
+		&:hover { text-decoration: underline; }
+		&.hidden { display: none; }
+	}
+}
+
+.ui-inspector > .scroll
+{
+	flex-direction: column;
+	flex-grow: 1;
+	overflow-y: scroll;
+	overflow-x: hidden;
+}
+
+.ui-inspector > .scroll > .rules
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+}
+
+.ui-inspector .note
+{
+	padding: 12px;
+	color: rgba( $text, 0.35 );
+}
+
+.rule
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	padding: 6px 0 8px 0;
+	border-bottom: 1px solid rgba( $text, 0.06 );
+
+	> .rule-header
+	{
+		flex-direction: row;
+		align-items: center;
+		padding: 0 12px;
+
+		> .selector
+		{
+			flex-grow: 1;
+			min-width: 0;
+			color: #d7ba7d;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+			overflow: hidden;
+		}
+
+		> .where
+		{
+			flex-shrink: 0;
+			margin-left: 8px;
+			color: $text-link;
+			cursor: pointer;
+			white-space: nowrap;
+
+			&:hover { text-decoration: underline; }
+
+			&.still
+			{
+				color: rgba( $text, 0.35 );
+				cursor: default;
+				&:hover { text-decoration: none; }
+			}
+		}
+	}
+
+	> .declarations
+	{
+		flex-direction: column;
+		padding: 2px 12px 0 24px;
+	}
+
+	&.readonly > .rule-header > .selector
+	{
+		color: rgba( #d7ba7d, 0.7 );
+	}
+}
+
+.declaration
+{
+	flex-direction: row;
+	align-items: center;
+	height: 22px;
+	white-space: nowrap;
+
+	> .name
+	{
+		flex-shrink: 0;
+		color: #9cdcfe;
+	}
+
+	> .colon
+	{
+		flex-shrink: 0;
+		margin-right: 6px;
+		color: rgba( $text, 0.5 );
+	}
+
+	> .value
+	{
+		flex-grow: 1;
+		min-width: 0;
+		color: #ce9178;
+		text-overflow: ellipsis;
+		overflow: hidden;
+	}
+
+	//The fields are quiet until pointed at, so a rule reads as text and edits as a form.
+	> .field
+	{
+		min-height: 20px;
+		height: 20px;
+		padding: 0 4px;
+		background-color: transparent;
+		border: 1px solid transparent;
+
+		&:hover, &:focus
+		{
+			background-color: rgba( $text, 0.04 );
+			border-color: rgba( $text, 0.12 );
+		}
+	}
+
+	> .name.field
+	{
+		flex-shrink: 0;
+		width: 45%;
+		color: #9cdcfe;
+	}
+
+	> .value.field
+	{
+		flex-grow: 1;
+		min-width: 0;
+		color: #ce9178;
+	}
+
+	&.overridden
+	{
+		> .name, > .value, > .colon
+		{
+			text-decoration: line-through;
+			opacity: 0.5;
+		}
+	}
+}
+
+//Styles the editor cannot write: loud enough to be read before a drag is tried, quiet enough to sit above the rules rather than in place of them.
+.style-tag
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	padding: 8px 12px 10px 12px;
+	background-color: rgba( #e8a33d, 0.1 );
+	border-bottom: 1px solid rgba( #e8a33d, 0.3 );
+
+	> .head
+	{
+		flex-direction: row;
+		align-items: center;
+
+		> .icon
+		{
+			flex-shrink: 0;
+			margin-right: 6px;
+			font-family: Material Icons;
+			font-size: 16px;
+			color: #e8a33d;
+		}
+
+		> .title
+		{
+			min-width: 0;
+			color: $text;
+			text-overflow: ellipsis;
+			overflow: hidden;
+		}
+	}
+
+	> .note
+	{
+		padding: 4px 0 0 0;
+		font-size: $type-small;
+		color: rgba( $text, 0.55 );
+	}
+
+	> .button
+	{
+		align-self: flex-start;
+		margin-top: 8px;
+		padding: 3px 8px;
+		border-radius: 3px;
+		background-color: rgba( #e8a33d, 0.3 );
+		color: $text;
+		cursor: pointer;
+		white-space: nowrap;
+
+		&:hover { background-color: rgba( #e8a33d, 0.5 ); }
+	}
+}
+
+.add-rule
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	padding: 8px 12px;
+
+	> .field
+	{
+		flex-grow: 1;
+		min-width: 0;
+		margin-right: 8px;
+	}
+
+	> .button
+	{
+		flex-shrink: 0;
+		padding: 3px 8px;
+		border-radius: 3px;
+		background-color: rgba( $accent, 0.25 );
+		color: $text;
+		cursor: pointer;
+		white-space: nowrap;
+
+		&:hover { background-color: rgba( $accent, 0.4 ); }
+	}
+}
+
+//── the two views ──────────────────────────────────────────────────────────
+
+.ui-inspector > .tabs
+{
+	flex-direction: row;
+	flex-shrink: 0;
+	padding: 0 12px;
+	border-bottom: 1px solid rgba( $text, 0.08 );
+
+	> .tab
+	{
+		padding: 6px 10px;
+		color: rgba( $text, 0.5 );
+		cursor: pointer;
+		border-bottom: 2px solid transparent;
+
+		&:hover { color: rgba( $text, 0.8 ); }
+
+		&.active
+		{
+			color: $text;
+			border-bottom-color: $accent;
+		}
+	}
+}
+
+//A rule waiting on a state: there, but not now.
+.rule.inactive
+{
+	opacity: 0.55;
+
+	> .rule-header > .state
+	{
+		flex-shrink: 0;
+		margin-right: 8px;
+		padding: 0 5px;
+		border-radius: 3px;
+		background-color: rgba( $accent, 0.25 );
+		color: $text;
+	}
+}
+
+//── sections ───────────────────────────────────────────────────────────────
+
+.section
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	padding: 6px 0 4px 0;
+	border-bottom: 1px solid rgba( $text, 0.06 );
+
+	> .heading
+	{
+		padding: 2px 12px 4px 12px;
+		font-size: $type-small;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		color: rgba( $text, 0.45 );
+	}
+
+	> .rows
+	{
+		flex-direction: column;
+		padding: 0 12px;
+	}
+}
+
+.property
+{
+	flex-direction: row;
+	align-items: center;
+	height: 22px;
+	white-space: nowrap;
+
+	> .name
+	{
+		flex-shrink: 0;
+		width: 42%;
+		min-width: 0;
+		color: #9cdcfe;
+		text-overflow: ellipsis;
+		overflow: hidden;
+	}
+
+	> .field
+	{
+		flex-grow: 1;
+		min-width: 0;
+		min-height: 20px;
+		height: 20px;
+		padding: 0 4px;
+		background-color: transparent;
+		border: 1px solid transparent;
+		color: #ce9178;
+
+		&:hover, &:focus
+		{
+			background-color: rgba( $text, 0.04 );
+			border-color: rgba( $text, 0.12 );
+		}
+	}
+
+	> .source
+	{
+		flex-shrink: 0;
+		max-width: 30%;
+		margin-left: 6px;
+		color: rgba( $text, 0.35 );
+		font-size: $type-small;
+		text-overflow: ellipsis;
+		overflow: hidden;
+		cursor: pointer;
+
+		&:hover { color: $text-link; }
+	}
+
+	&.unset > .name
+	{
+		color: rgba( #9cdcfe, 0.45 );
+	}
+}
+
+//── the tag ────────────────────────────────────────────────────────────────
+
+.tag-block
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	padding: 6px 0 4px 0;
+	border-bottom: 1px solid rgba( $text, 0.06 );
+
+	> .heading
+	{
+		padding: 2px 12px 4px 12px;
+		font-size: $type-small;
+		color: #d7ba7d;
+	}
+
+	> .rows
+	{
+		flex-direction: column;
+		padding: 0 12px;
+	}
+
+	.property > .value.still
+	{
+		flex-grow: 1;
+		min-width: 0;
+		padding: 0 5px;
+		color: rgba( #ce9178, 0.6 );
+		text-overflow: ellipsis;
+		overflow: hidden;
+	}
+}
+
+//── anchors ────────────────────────────────────────────────────────────────
+
+.anchor-block
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	padding: 6px 0 8px 0;
+	border-bottom: 1px solid rgba( $text, 0.06 );
+
+	> .heading
+	{
+		padding: 2px 12px 4px 12px;
+		font-size: $type-small;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		color: rgba( $text, 0.45 );
+	}
+
+	> .row
+	{
+		flex-direction: row;
+		align-items: center;
+		padding: 0 12px;
+	}
+
+	.grid
+	{
+		flex-direction: row;
+		flex-wrap: wrap;
+		width: 72px;
+		flex-shrink: 0;
+
+		> .place
+		{
+			width: 24px;
+			height: 24px;
+			font-size: 15px;
+			text-align: center;
+			align-items: center;
+			justify-content: center;
+			color: rgba( $text, 0.5 );
+			cursor: pointer;
+			border-radius: 3px;
+
+			&:hover { background-color: rgba( $text, 0.08 ); color: $text; }
+			&.lit { color: $accent; }
+		}
+	}
+
+	.side
+	{
+		flex-direction: column;
+		margin-left: 12px;
+	}
+
+	.fill
+	{
+		margin-bottom: 4px;
+		padding: 3px 10px;
+		border-radius: 3px;
+		background-color: rgba( $text, 0.06 );
+		color: $text;
+		cursor: pointer;
+		white-space: nowrap;
+
+		&:hover { background-color: rgba( $accent, 0.3 ); }
+	}
+
+	> .note
+	{
+		padding: 4px 12px 0 12px;
+		font-size: $type-small;
+		color: rgba( $text, 0.4 );
+	}
+}
+
+.property.parameter > .name
+{
+	color: #c586c0;
+}
+
+.property > .bind
+{
+	flex-shrink: 0;
+	width: 18px;
+	margin-left: 4px;
+	font-size: 14px;
+	color: rgba( $text, 0.3 );
+	cursor: pointer;
+
+	&:hover { color: $accent; }
+}
+
+//── states ─────────────────────────────────────────────────────────────────
+
+.states-block
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	padding: 6px 0 8px 0;
+	border-bottom: 1px solid rgba( $text, 0.06 );
+
+	> .heading
+	{
+		padding: 2px 12px 4px 12px;
+		font-size: $type-small;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		color: rgba( $text, 0.45 );
+	}
+
+	> .row
+	{
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: center;
+		padding: 0 12px;
+	}
+
+	.state
+	{
+		margin: 0 6px 4px 0;
+		padding: 2px 8px;
+		border-radius: 999px;
+		border: 1px solid rgba( $text, 0.12 );
+		color: rgba( $text, 0.4 );
+		cursor: pointer;
+
+		&.ruled { color: rgba( $text, 0.8 ); }
+		&:hover { border-color: rgba( $text, 0.3 ); }
+
+		&.on
+		{
+			background-color: rgba( $accent, 0.3 );
+			border-color: $accent;
+			color: $text;
+		}
+	}
+
+	.new-state
+	{
+		width: 70px;
+		min-height: 20px;
+		height: 20px;
+		margin-bottom: 4px;
+		padding: 0 6px;
+		background-color: transparent;
+		border: 1px dashed rgba( $text, 0.2 );
+	}
+}
+
+//── events ─────────────────────────────────────────────────────────────────
+
+.events-block
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	padding: 6px 0 8px 0;
+	border-bottom: 1px solid rgba( $text, 0.06 );
+
+	> .heading
+	{
+		padding: 2px 12px 4px 12px;
+		font-size: $type-small;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		color: rgba( $text, 0.45 );
+	}
+
+	> .rows
+	{
+		flex-direction: column;
+		padding: 0 12px;
+	}
+
+	.property > .value.still
+	{
+		flex-grow: 1;
+		min-width: 0;
+		padding: 0 5px;
+		color: #dcdcaa;
+		text-overflow: ellipsis;
+		overflow: hidden;
+
+		&.link { cursor: pointer; }
+		&.link:hover { text-decoration: underline; }
+	}
+
+	.property > .remove
+	{
+		flex-shrink: 0;
+		width: 18px;
+		font-size: 14px;
+		color: rgba( $text, 0.3 );
+		cursor: pointer;
+
+		&:hover { color: $text; }
+	}
+
+	.add
+	{
+		align-self: flex-start;
+		margin-top: 2px;
+		padding: 2px 8px;
+		border-radius: 3px;
+		color: rgba( $text, 0.6 );
+		cursor: pointer;
+
+		&:hover { background-color: rgba( $accent, 0.25 ); color: $text; }
+	}
+}
+
+//── picking a value ────────────────────────────────────────────────────────
+
+.property > .choose, .declaration > .choose
+{
+	flex-shrink: 0;
+	width: 16px;
+	font-size: 16px;
+	color: rgba( $text, 0.3 );
+	cursor: pointer;
+
+	&:hover { color: $text; }
+}
+
+.property > .swatch, .declaration > .swatch
+{
+	flex-shrink: 0;
+	width: 14px;
+	height: 14px;
+	margin-left: 4px;
+	border-radius: 3px;
+	border: 1px solid rgba( $text, 0.25 );
+	cursor: pointer;
+}

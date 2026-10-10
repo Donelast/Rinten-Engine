@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- Reads a .nettrace without a graphical profiler in the way. PerfView opens these files and shows more than this ever will, but it is a window somebody has to click through, and a finding that has to be clicked
+	     to is a finding nobody checks twice. This prints the two questions worth asking of a run - what the runtime was compiling, and what our own zones cost - into a terminal, where a script can diff two of them. -->
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>disable</Nullable>
+		<AssemblyName>traceread</AssemblyName>
+		<RootNamespace>Rinten.Profiling</RootNamespace>
+		<InvariantGlobalization>true</InvariantGlobalization>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.21" />
+	</ItemGroup>
+
+</Project>

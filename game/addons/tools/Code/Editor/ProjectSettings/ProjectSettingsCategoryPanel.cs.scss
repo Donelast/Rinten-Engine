@@ -1,0 +1,76 @@
+ProjectSettingsCategoryPanel,
+.project-settings-category
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 100%;
+	min-width: 0;
+
+	> .body
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		width: 100%;
+		min-width: 0;
+		gap: 8px;
+
+		> ControlSheet,
+		> .controlsheet
+		{
+			flex-grow: 0;
+			flex-shrink: 0;
+			width: 100%;
+
+			> .body
+			{
+				flex-grow: 0;
+				overflow: visible;
+			}
+		}
+
+		> .widget-slot
+		{
+			flex-grow: 1;
+			flex-shrink: 1;
+			width: 100%;
+			height: auto;
+			min-width: 0;
+			min-height: 0;
+		}
+
+		> .settings-section-header
+		{
+			flex-shrink: 0;
+			width: 100%;
+			padding-top: 8px;
+			font-weight: 600;
+			font-size: $type-body;
+		}
+
+		> .settings-button-row
+		{
+			flex-direction: row;
+			flex-shrink: 0;
+			width: 100%;
+
+			> .btn
+			{
+				flex-direction: row;
+				align-items: center;
+				gap: 6px;
+				padding: 6px 12px;
+				border-radius: 4px;
+				background-color: rgba( $text, 0.08 );
+				pointer-events: all;
+				cursor: pointer;
+				color: $text;
+
+				&.good
+				{
+					background-color: $green;
+					color: white;
+				}
+			}
+		}
+	}
+}

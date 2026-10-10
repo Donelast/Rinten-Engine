@@ -1,0 +1,150 @@
+//The preview's own furniture: the strip of tools over the picture, the groups its buttons stand in, and the transport under it. The picture,
+//the frame around it and the box the transport sits in are the base's - see PreviewScenePanel.cs.scss - and only what this preview adds is here.
+
+.preview
+{
+	//A column narrower than this is a picture nobody can see anything in.
+	min-width: 100px;
+
+	> .toolbar
+	{
+		height: $row-height + 2px;
+		padding-bottom: 2px;
+		gap: 2px;
+		background-color: $surface-background;
+
+		//A row inside the strip: the graph's playback controls, the camera's, and the bone picker nested in the second of
+		//those. One rule, because they are the same thing wherever they sit - so a descendant selector rather than a child one.
+		.row
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 2px;
+		}
+
+		//The hairline between two sets of tools.
+		> .separator
+		{
+			width: 1px;
+			height: $row-height - 8px;
+			flex-shrink: 0;
+			margin: 0 2px;
+			background-color: rgba( $text-light, 0.2 );
+		}
+	}
+
+	//A rounded plate a handful of buttons stand on, the way the scene view groups its own.
+	.group
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 2px;
+		height: $row-height;
+		border-radius: $control-radius;
+		background-color: $control-background;
+	}
+
+	//The speed, as a number, beside the slider that sets it.
+	.reading
+	{
+		width: 38px;
+		flex-shrink: 0;
+		text-align: center;
+		font-size: $type-small;
+		color: $text-light;
+	}
+
+	//The pickers over the viewport - material group, body groups.
+	> .toolbar > .model-preview
+	{
+		padding: 0 2px;
+
+		> ControlDropDown
+		{
+			width: 100px;
+			flex-grow: 0;
+			min-height: $row-height - 4px;
+
+			//The material group's, which the widget drew wider.
+			&.skin { width: 112px; }
+		}
+	}
+
+	.focus-picker
+	{
+		width: 160px;
+		flex-grow: 0;
+		flex-shrink: 0;
+		min-height: $row-height - 4px;
+	}
+}
+
+//One square of a group. Quiet until pointed at, a filled pill while what it turns on is on.
+.preview-tool
+{
+	width: $row-height;
+	height: $row-height;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	border-radius: $control-radius;
+	cursor: pointer;
+	color: $text-light;
+
+	> .material-icon { font-size: $type-large; }
+
+	&:hover { color: lighten( $text-light, 0.8 ); }
+
+	&.on
+	{
+		background-color: $accent;
+		color: $text;
+	}
+}
+
+//The shape of a slider in a toolbar is design.scss's .toolbar-slider, which both of these wear. What is left here is what each one is a slider OF.
+
+//How fast the graph is played back.
+.preview .speed
+{
+	width: 90px;
+	flex-grow: 0;
+	flex-shrink: 0;
+}
+
+//The transport is not here: it stands in the model editor's Timeline dock - see ModelTimeline.razor.scss.
+
+//── the menus the toolbar opens ────────────────────────────────────────────── The chrome is design.scss's .editor-popup; this is only what is inside.
+
+.preview-popup
+{
+	width: 240px;
+	padding: 8px;
+	gap: 4px;
+
+	> .heading
+	{
+		flex-shrink: 0;
+		min-height: $row-height;
+		align-items: center;
+		font-size: 12px;
+		color: $text-control;
+	}
+
+	//The icon that says what the box is about, between the box and its name.
+	> .option > .material-icon
+	{
+		flex-shrink: 0;
+		font-size: $type-default;
+		color: $text-light;
+	}
+
+	//A menu that is a sheet of properties rather than a list of switches: the rows are
+	//a label and a control side by side, and 240px puts the two on top of each other.
+	&.wide { width: 300px; }
+
+	//The heading under a sheet is a sentence, not a title, so it wraps.
+	> .heading { white-space: normal; }
+}

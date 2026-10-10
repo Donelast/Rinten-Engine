@@ -1,0 +1,1819 @@
+﻿//Editor look, applied at the window root; variables come from theme.scss and _tokens.scss
+//Opaque ground, glass panels, white-alpha surfaces, meaningful borders and colours only
+
+//── true of everything ──────────────────────────────────────────────────────
+
+//Icon font for icons; .iconpanel covers IconPanels built from code, which aren't <i> elements
+i,
+.iconpanel,
+.material-icon
+{
+	font-family: Material Icons;
+	font-size: 16px;
+}
+
+//── layout utilities ────────────────────────────────────────────────────────
+
+.row { flex-direction: row; align-items: center; }
+.column { flex-direction: column; align-items: stretch; }
+.grow { flex-grow: 1; }
+.fixed { flex-shrink: 0; }
+.center { align-items: center; justify-content: center; }
+.spacer { flex-grow: 1; }
+
+//Grows and may shrink below content size, so long names ellipsise
+.grow-shrink { flex-grow: 1; min-width: 0; min-height: 0; }
+
+.gap-1 { gap: 2px; }
+.gap-2 { gap: 4px; }
+.gap-3 { gap: 8px; }
+.gap-4 { gap: 16px; }
+
+.scroll { overflow: scroll; }
+.nowrap { white-space: nowrap; }
+
+//Not shown at all - no space left standing empty.
+.hidden { display: none; }
+
+//Hidden but keeping its place. The engine has no visibility, so opacity: a tree row with no children loses its
+//chevron and the column under it holds the indent, or leaves and branches would sit at different left edges.
+.invisible { opacity: 0; pointer-events: none; }
+
+//── surfaces ────────────────────────────────────────────────────────────────
+
+//The window floor: the ground the layers above it are lighter than.
+.surface
+{
+	@include ground;
+
+	color: $ink-dim;
+}
+
+//A panel: a step lighter than the ground rather than darker than it. It used to be @include glass, and every panel read
+//as a hole in the ground instead of a layer on it. What separates one panel from the next is the right edge's shadow.
+.panel
+{
+	background-color: $veil;
+}
+
+//── the window you can see through ── With desktop transparency, the floor is not drawn
+.glass
+{
+	.surface
+	{
+		background-color: transparent;
+	}
+}
+
+.panel-edge
+{
+	@include edge-right;
+}
+
+//Full-screen block, under a modal and under a full-screen menu.
+.scrim
+{
+	background-color: $scrim;
+}
+
+//Modal sheet blurs and darkens the window; overlay layers: docks, sheet (50), popups (100)
+.modal-sheet
+{
+	z-index: 50;
+
+	background-color: rgba( 0, 0, 0, 0.12 );
+	backdrop-filter: blur( 24px ) brightness( 0.75 ) saturate( 0.9 );
+}
+
+//Sunken: a field, a track, a cell.
+.sunken
+{
+	@include well;
+}
+
+//Rounded list background filling the dock, the same panel grey
+.well
+{
+	flex-grow: 1;
+	min-height: 0;
+	margin: 4px;
+	border-radius: $control-radius;
+	background-color: $list-background;
+}
+
+//Raised: a button, a group, a card, a row that can be selected.
+.raised,
+.card
+{
+	@include card;
+}
+
+//Lies over the content and arrives with movement.
+.floating
+{
+	@include float;
+	@include arrive( $normal );
+}
+
+.floating-deep
+{
+	@include glass-deep;
+}
+
+//A hairline, for what really is a line: a heading's underline, a separator inside a menu. Between panels it is .seam, not this.
+.hairline
+{
+	background-color: $edge;
+	flex-shrink: 0;
+}
+
+//The gap between panels: the layer below shows through it.
+.seam
+{
+	@include seam;
+}
+
+.seam-h
+{
+	@include seam-h;
+}
+
+//── movement ────────────────────────────────────────────────────────────────
+
+.appear { @include fade( $normal ); }
+.rise { @include arrive( $slow ); }
+.pop { @include pop( $normal ); }
+
+//Alive while it waits: the status bar of a long job, "loading".
+.breathe
+{
+	animation-name: editor-breathe;
+	animation-duration: 2s;
+	animation-timing-function: ease-in-out;
+	animation-iteration-count: infinite;
+}
+
+//── states ────────────────────────────────────────────────────────────────── One vocabulary for the whole editor:
+//markup adds a class and the look is the same everywhere. A new state is added here, not in the panel that wants it.
+
+//A row that can be pressed: no surface of its own, the wash under the pointer.
+.pressable
+{
+	@include pressable;
+
+	&:hover
+	{
+		background-color: $veil-hover;
+
+		@include lit;
+	}
+
+	&:active { background-color: $veil-down; }
+}
+
+//Button surface; .btn, not .button, since widget type names become classes
+.btn
+{
+	@include pressable;
+
+//The same tile the launcher and the editor's painted buttons wear: one thing across the product rather than three that resemble each other.
+	@include slab;
+
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	height: $row;
+	padding: 0px 12px;
+	color: $ink-dim;
+
+	&:hover { color: $ink; }
+
+	&:active { transform: scale( 0.98 ); }
+
+	//Yes, no, careful. The only coloured things in the window. Green and yellow
+	//are light in this palette, so their text is dark; red is dark and takes white.
+	&.good { background-color: $green; color: $text-dark; }
+	&.bad { background-color: $red; color: $ink; }
+	&.careful { background-color: $yellow; color: $text-dark; }
+}
+
+//A box with a word beside it. Rinten.UI.Checkbox is the panel that draws it - the base addon styles that for a
+//game, and the editor does not load those sheets, so what one looks like here is said here. Once, like .btn above.
+.checkbox
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 6px;
+	min-height: $row;
+	cursor: pointer;
+	pointer-events: all;
+	color: $ink-dim;
+
+	> .checkmark
+	{
+		width: 14px;
+		height: 14px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		font-size: 12px;
+		border-radius: 3px;
+		border: $control-border;
+		background-color: $control-background;
+		color: transparent;
+		pointer-events: none;
+	}
+
+	> label { pointer-events: none; }
+
+	&:hover
+	{
+		color: $ink;
+
+		//The edge lights, the way a hovered plate's does. $control-border-bold is a whole border, not a colour, and written here it dropped the rule.
+		> .checkmark { border-color: $border-light; }
+	}
+
+	&.checked
+	{
+		color: $ink;
+
+		> .checkmark { color: $primary; }
+	}
+}
+
+//On: a tool is on, a tab is open, a filter is applied - a green-grey plate, and the words and glyphs
+//on it white. No bar down the side, no wash behind it and no green lettering: the plate says it.
+.is-active
+{
+	@include picked;
+}
+
+//Selected in a list: the same plate, the words left white - a list with a dozen picked rows in green letters is a list nobody reads.
+.is-selected
+{
+	background-color: $picked;
+	color: $ink;
+}
+
+//Banded list row by index, shared by hierarchy and diagnostic docks
+.list-row
+{
+	background-color: $list-row-odd;
+
+	&.even { background-color: $list-row-even; }
+
+	&:hover
+	{
+		background-color: $list-row-hover;
+
+		@include lit;
+	}
+
+	//Picked out rather than pointed at, so the wash is the stronger one over a plate that carries it - see Theme.LitStrengthOn and LitPlate.
+	&.selected
+	{
+		background-color: $list-row-selected;
+
+		@include lit( $lit-on );
+	}
+}
+
+.is-disabled
+{
+	color: $ink-off;
+	background-color: transparent;
+	border-color: transparent;
+	cursor: default;
+	pointer-events: none;
+}
+
+//A slider standing in a toolbar rather than in an inspector row: no plate of its own, and no room for the height
+//a row gives it. What it is a slider OF stays with whoever put it there - only the shape is the same everywhere.
+.toolbar-slider
+{
+	padding: 0;
+	align-items: center;
+
+	> .slider-track > .scale { display: none; }
+}
+
+//What is being carried can be dropped here.
+.can-drop
+{
+	border: 1px solid rgba( $green, 0.4 );
+	transition: border-color $fast $ease, background-color $fast $ease, transform $fast $ease;
+}
+
+//And the pointer is over it now.
+.is-drop-target
+{
+	border-color: rgba( $green, 0.7 );
+	background-color: rgba( $green, 0.08 );
+	transform: scale( 1.02 );
+
+	//Refused - the same place, a different answer.
+	&.no-drop
+	{
+		border-color: rgba( $red, 0.6 );
+		background-color: rgba( $red, 0.07 );
+		transform: scale( 1 );
+	}
+}
+
+//While it is carried it stays where it was, as a ghost.
+.is-grabbed
+{
+	opacity: 0.3;
+	cursor: grabbing;
+}
+
+//Small print: a count, a type, a unit, a section heading.
+.micro
+{
+	@include micro;
+}
+
+//── the layer over the window ───────────────────────────────────────────────
+
+//Over the window: tooltips, popups, the dock compass. It catches nothing itself.
+.editor-overlay
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 1000;
+	pointer-events: none;
+}
+
+//The frame the eyedropper and the style picker draw round what they are aiming
+//at. Placed by code - left, top and size come from the panel being outlined.
+.style-picker-highlight,
+.eyedropper-highlight
+{
+	position: absolute;
+	pointer-events: none;
+	border: 2px solid $accent;
+	border-radius: $control-radius;
+	background-color: rgba( $accent, 0.15 );
+}
+
+.eyedropper-highlight
+{
+	background-color: rgba( $accent, 0.18 );
+
+	//The name of the file a click would open, written above the box - and underneath it where the box is against the top of the
+	//window and there is no room above. Placed in the box's own space, so nothing has to keep a second coordinate in step with it.
+	> .eyedropper-caption
+	{
+		position: absolute;
+		pointer-events: none;
+		left: 0;
+		bottom: 100%;
+		margin-bottom: 4px;
+
+		&.below
+		{
+			bottom: auto;
+			top: 100%;
+			margin-bottom: 0;
+			margin-top: 4px;
+		}
+
+		&.hidden { display: none; }
+	}
+}
+
+//The sheet the eyedropper and the style picker catch a click with: over the whole
+//layer, an open menu included, and the only thing on it that takes the pointer.
+.picker-catcher
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 10000;
+	pointer-events: all;
+
+	//The colour eyedropper aims with a cross.
+	&.sampling { cursor: crosshair; }
+}
+
+//What the thing under the pointer is.
+.tooltip
+{
+	position: absolute;
+	z-index: 100;
+	pointer-events: none;
+	max-width: 320px;
+	padding: 6px 9px;
+
+	//The popup's grey in the window frame, like a menu - see frame-thin.
+	background-color: $popup-background;
+	@include fade( $fast );
+
+	@include frame-thin;
+	border-radius: $radius-2;
+
+	font-family: $font;
+	font-size: 12px;
+	color: $ink;
+
+	//It and everything in it: the rule above hands "all" to anything, and a child with "all" inside
+	//a deaf parent still catches the mouse - the tooltip under the pointer would flicker at itself.
+	pointer-events: none;
+
+	*
+	{
+		pointer-events: none;
+	}
+}
+
+//What is carried under the pointer.
+.drag-preview
+{
+	position: absolute;
+	pointer-events: none;
+	padding: 4px 8px;
+	max-width: 260px;
+
+	@include glass-deep;
+	@include pop( $fast );
+
+	border: 1px solid $edge-lit;
+	border-radius: $radius-2;
+	box-shadow: $shadow-float;
+
+	font-family: $font;
+	font-size: 12px;
+	color: $ink;
+	opacity: 0.9;
+	transform: rotate( -2deg );
+
+	pointer-events: none;
+
+	*
+	{
+		pointer-events: none;
+	}
+
+	//A picture being dragged is the preview, so it needs no frame.
+	&.picture
+	{
+		padding: 0px;
+		background-color: transparent;
+		border-width: 0px;
+		box-shadow: none;
+	}
+}
+
+//A menu. A widget, but it draws nothing: the slab, the shadow and the arrival are from here, the rows are .menu-row panels below. A
+//context menu, a combo box drop-down and a toolbar drop-down are all the one Menu widget, so what is written here is true of all three.
+.menu
+{
+	//Over a sheet, if one is up - see .modal-sheet.
+	z-index: 100;
+
+	//Solid rounded menu slab with hairline edge and shadow; rows inset 5px inside the corners
+	background-color: $popup-background;
+
+	//The window frame, one pixel of band deep - see frame-thin in the tokens.
+	@include frame-thin;
+	border-radius: $slab-radius;
+
+	//Fade/scale transitions via classes from Menu.Panels.cs, since menus are reshown, not recreated
+	transition: opacity $fast $ease, transform $fast $ease;
+
+	//It grows from the corner it was anchored to - the cursor, a button, a name in the menu bar - rather than from the middle.
+	transform-origin: 0% 0%;
+
+	&.away
+	{
+		opacity: 0;
+		transform: scale( 0.97 ) translateY( -4px );
+	}
+}
+
+//Menu row, positioned by MenuRow code; spacing values must match it. Direct children only
+.menu > .menu-row
+{
+	position: absolute;
+	flex-direction: row;
+	align-items: center;
+
+	color: $ink;
+	font-size: 12px;
+
+	//The backing, not the row itself: it is what lightens under the pointer, so the menu keeps its margins - the row spans the whole width.
+	.body
+	{
+		flex-grow: 1;
+		flex-direction: row;
+		align-items: center;
+
+		height: 100%;
+		margin: 0 5px;
+		padding-right: 20px;
+		border-radius: $radius-2;
+	}
+
+	&:hover .body
+	{
+		background-color: $veil-hover;
+
+		@include lit;
+	}
+
+	.icon
+	{
+		flex-shrink: 0;
+		width: 20px;
+		font-size: 14px;
+		text-align: center;
+	}
+
+	//A picture instead of a glyph - an asset type icon in the "new" menu. 14px and 3px either side is the same 20px a glyph takes.
+	.picture
+	{
+		flex-shrink: 0;
+		width: 14px;
+		height: 14px;
+		margin: 0 3px;
+		background-size: 100% 100%;
+	}
+
+	.text
+	{
+		flex-grow: 1;
+		white-space: nowrap;
+	}
+
+	.shortcut
+	{
+		flex-shrink: 0;
+		margin-left: 24px;
+		color: $ink-off;
+	}
+
+	//The arrow lives in the right-hand gutter, so a row with a submenu has none.
+	&.has-submenu .body { padding-right: 0; }
+
+	.arrow
+	{
+		flex-shrink: 0;
+		width: 16px;
+		font-size: 14px;
+		text-align: center;
+	}
+
+	//On: the picked plate under the row, its words white - the same as everything else that is on.
+	&.checked
+	{
+		.body { background-color: $picked; }
+
+		.text { color: $ink; }
+	}
+
+	//A section heading is not chosen, so it gets no icon and no highlight.
+	&.heading
+	{
+		.body
+		{
+			padding-left: 4px;
+			background-color: $veil;
+		}
+
+		.icon { display: none; }
+		.text { font-weight: 700; }
+	}
+
+	//The row, not the sheet, turns the mouse off: an inline style would win anyway - see MenuRow.Sync.
+	&.disabled
+	{
+		color: $ink-off;
+	}
+
+	//The line between groups: a hairline fitted into an 11px row.
+	&.separator
+	{
+		.line
+		{
+			flex-grow: 1;
+			height: 1px;
+			margin: 0 5px;
+			background-color: $edge;
+		}
+	}
+}
+
+//The shell every inspector editor wears. Its own sheet says what goes inside it; this is the
+//half of a sheet row an editor fills, and how it behaves when the property is not editable.
+.control
+{
+	position: relative;
+	color: $text-control;
+	caret-color: $text-control;
+
+	//Never grow here: a control also stands in a header or a toolbar, and one with an aspect-ratio - the checkbox
+	//- would take the whole row and grow as tall. Whichever type fills a sheet row says so in its own sheet.
+	min-width: 0;
+	pointer-events: all;
+
+	&:not( .no-background )
+	{
+		background-color: $control-background;
+		border: $control-border;
+		border-radius: $control-radius;
+	}
+
+	//Hover edge and faint wash on inspector field shells; never on .readonly
+	&:not( .no-background ):hover
+	{
+		border-color: $edge-lit;
+
+		@include lit;
+	}
+
+	&.multiple-rows
+	{
+		min-height: $control-row-height;
+		flex-direction: column;
+		gap: $vertical-gap;
+	}
+
+	&:not( .multiple-rows )
+	{
+		height: $control-row-height;
+		flex-direction: row;
+		gap: $horizontal-gap;
+	}
+
+	&.info-control > .label
+	{
+		white-space: nowrap;
+		height: 100%;
+		align-items: center;
+		padding: $control-text-padding;
+	}
+
+	&.readonly
+	{
+		cursor: default;
+		pointer-events: none;
+		opacity: 0.55;
+		filter: saturate( 0.35 );
+
+		*
+		{
+			cursor: default;
+		}
+	}
+
+	//A message standing in for an editor: nothing to press, but its text can still be selected, so it keeps
+	//the pointer even when the property cannot be edited. After .readonly, which would otherwise take it away.
+	&.info-control
+	{
+		pointer-events: all;
+	}
+}
+
+//A field that is pressed rather than typed into - a tick, a picker, a list, a swatch - says so under the pointer the way the key-bind field
+//always did: its ground comes up a step, as well as its edge. A text field keeps the edge alone; it is reached into with the caret, not pressed.
+BoolControl.control:hover,
+ShaderNameControl.control:hover,
+ComponentControl.control:not( .no-background ):hover,
+GameObjectControl.control:not( .no-background ):hover,
+InterfaceControl.control:not( .no-background ):hover,
+ResourceControl.control:not( .no-background ):hover,
+MovieResourceControl.control:not( .no-background ):hover,
+TextureImageControl.control:not( .no-background ):hover,
+AssetPathControl.control:not( .no-background ):hover,
+.datetime-control.control:hover,
+ControlDropDown.dropdown:hover,
+InputActionControl.control:hover > .field,
+EmbeddedResourceControl.control:hover > .field,
+IconNameControl.control:hover > .field,
+TypeControl.control .row:hover > .field,
+ColorControl.control > .colorswatch:hover,
+GradientControl.control > .preview:hover
+{
+	background-color: $control-background-light;
+}
+
+//Shared dropdown arrow for both class names in use, sized like other glyphs
+.control > .indicator,
+.control > .dropdown_indicator
+{
+	position: absolute;
+	right: 8px;
+
+	color: $text-light;
+	font-size: $type-large;
+	pointer-events: none;
+}
+
+//── shared bricks ───────────────────────────────────────────────────────────
+
+//Icon button: transparent at rest, surface on hover, pressed deeper; glyph always white
+.toolbarbutton
+{
+	@include pressable;
+
+	width: $row;
+	height: $row;
+	flex-shrink: 0;
+	pointer-events: all;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid transparent;
+	border-radius: $radius-2;
+	color: $ink;
+
+	i,
+	> .icon
+	{
+		font-family: Material Icons;
+		font-size: 16px;
+		color: inherit;
+		pointer-events: none;
+	}
+
+	//A surface and an edge; the glyph is already white and has nowhere to go.
+	&:hover
+	{
+		background-color: $veil-hover;
+
+		@include lit;
+	}
+
+	&:active
+	{
+		background-color: $veil-down;
+		transform: scale( 0.92 );
+	}
+
+	//On: the picked plate with the glyph left white, the same as .is-active.
+	&.active
+	{
+		background-color: $picked;
+		border-color: transparent;
+		color: $ink;
+	}
+
+	&.disabled
+	{
+		color: $ink-off;
+		background-color: transparent;
+		border-color: transparent;
+		cursor: default;
+		pointer-events: none;
+	}
+
+	//Half width: an arrow that only opens the neighbouring button's menu.
+	&.narrow { width: 12px; }
+
+	//The key it is on, in the corner - the same pill the tool strips over the scene view wear (ToolStripButton.cs.scss), readable on any plate.
+	> .key
+	{
+		position: absolute;
+		right: 0px;
+		bottom: 0px;
+		padding: 0px 2px;
+		border-radius: 3px;
+		background-color: $veil;
+		font-size: $type-micro;
+		font-weight: 700;
+		letter-spacing: $tracking;
+		color: $ink;
+		pointer-events: none;
+	}
+
+	//With a key in the corner the glyph moves up and left, so the two do not sit on each other.
+	&.keyed
+	{
+		position: relative;
+
+		i { margin: 0px 4px 4px 0px; }
+	}
+
+	&.active > .key
+	{
+		background-color: $solid;
+	}
+
+	&.disabled > .key
+	{
+		color: $ink-off;
+	}
+}
+
+//A tool's buttons, read as one thing. The same plate the groups on the viewport bar wear: a
+//tool puts its strip on that bar and on the mapping bar, and it has to look the same in both.
+.toolbar-strip
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	height: $row;
+	padding: 0px 2px;
+	gap: 2px;
+	border-radius: $radius-2;
+	background-color: $veil;
+
+	//The strip also arrives where the mouse cannot reach it on its own.
+	pointer-events: all;
+}
+
+//A live number: frame time, resolution, a counter.
+.toolbarreadout
+{
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	padding: 0px 8px;
+
+	@include micro;
+
+	color: $ink-dim;
+	white-space: nowrap;
+	transition: color $normal $ease;
+
+	&:hover { color: $ink; }
+}
+
+//The hole a widget that has not been ported yet stands in.
+.widgetpanel
+{
+	height: $row;
+	flex-shrink: 0;
+}
+
+//The same hole, standing in a column rather than in a bar: as wide as the column and as tall as what is in it.
+//The height is written by the panel each tick - see WidgetPanel.WidthFromLayout - so only the width is said here.
+.widgetpanel.resource-editor-host
+{
+	width: 100%;
+	flex-shrink: 0;
+}
+
+//Room for a panel built by code rather than by the markup around it.
+.panelslot
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+}
+
+//── tool settings ── Tool column: heading, setting cards, buttons, shortcuts; inspector look
+
+.tool-settings
+{
+	flex-direction: column;
+	flex-grow: 1;
+	gap: $gap-section;
+	padding: $pad-panel;
+	pointer-events: all;
+
+	//Docked: column fills the dock and scrolls as a whole, not inner sheets
+	&.docked
+	{
+		height: 100%;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: scroll;
+		scrollbar-width: thin;
+
+		.controlsheet > .body
+		{
+			overflow: visible;
+		}
+	}
+
+	//The tool's name: the first card, as a GameObject's name is.
+	> .tool-title
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: $gap-label;
+		padding: $pad-card-y $pad-card;
+		background-color: $base-alt;
+		border: 1px solid $border;
+		border-top-color: $border-light;
+		border-radius: $radius-1;
+
+		> .mark
+		{
+			width: $row;
+			height: $row;
+			flex-shrink: 0;
+			align-items: center;
+			justify-content: center;
+			border-radius: $control-radius;
+			background-color: $control-background;
+			border: $control-border;
+
+			//The glyph is its own box, the size of the letter, and the square centres that box. Giving the letter the square's
+			//size left it on the baseline, in the bottom corner, and a drawn icon hung out of the square the same way.
+			> .glyph
+			{
+				flex-shrink: 0;
+				font-size: 16px;
+				color: $accent;
+			}
+		}
+
+		> .text
+		{
+			flex-grow: 1;
+			min-width: 0;
+			font-size: 13px;
+			font-weight: 600;
+			color: $ink;
+		}
+	}
+
+	//Settings nested in someone else.s: a primitive inside the primitive tool. Whoever holds them has already given the padding.
+	.tool-settings.nested
+	{
+		padding: 0px;
+	}
+
+	//A note from the tool: how many are selected, how many were found.
+	.note
+	{
+		flex-shrink: 0;
+		padding: 2px 4px;
+		font-size: 11px;
+		color: $ink-faint;
+	}
+
+	//A group's buttons, two to a row and lined up down the column - see ButtonGridPanel. Every
+	//row has a cell per column, so a short last row keeps its buttons the width of the ones above.
+	.button-grid
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		gap: 4px;
+
+		> .button-row
+		{
+			flex-direction: row;
+			flex-shrink: 0;
+			gap: 4px;
+
+			> .cell
+			{
+				flex-direction: column;
+				flex-grow: 1;
+				flex-shrink: 1;
+				flex-basis: 0px;
+				min-width: 0;
+			}
+		}
+	}
+
+	//A tool's button: a picture, the word for it and its key. A field that is pressed, as in the inspector: the field's
+	//black and edge, a step up under the pointer, the picked plate when it is the one on - see SidebarButtonPanel.
+	.tool-button
+	{
+		@include pressable;
+
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		height: $row;
+		padding: 0px 6px;
+		gap: 6px;
+		border: $control-border;
+		border-radius: $control-radius;
+		background-color: $control-background;
+		color: $ink;
+		pointer-events: all;
+
+		> .icon
+		{
+			flex-shrink: 0;
+			width: 16px;
+			height: 16px;
+			font-size: 16px;
+			color: inherit;
+			pointer-events: none;
+		}
+
+		> .text
+		{
+			flex-grow: 1;
+			font-size: 11px;
+			color: inherit;
+			pointer-events: none;
+
+			@include one-line;
+		}
+
+		> .key
+		{
+			flex-shrink: 0;
+			font-size: $type-micro;
+			color: $ink-faint;
+			pointer-events: none;
+		}
+
+		&:hover
+		{
+			background-color: $control-background-light;
+			border-color: $edge-lit;
+		}
+
+		&:active { background-color: $tile-down; }
+
+		&.active
+		{
+			background-color: $picked;
+			border-color: rgba( $accent, 0.6 );
+			color: $ink;
+
+			> .key { color: $ink-faint; }
+		}
+
+		&.disabled
+		{
+			opacity: 0.4;
+			cursor: default;
+			pointer-events: none;
+		}
+	}
+
+	//A button and the value it works with, side by side in one row - a count beside the button it counts for. Half each.
+	.row > .button-grid,
+	.row > .controlsheet
+	{
+		flex-grow: 1;
+		flex-shrink: 1;
+		flex-basis: 0px;
+		min-width: 0;
+	}
+
+	//The type button: what is chosen, and an arrow onto the rest.
+	> .sidebar-group .type-picker
+	{
+		> .text
+		{
+			flex-grow: 1;
+			text-align: left;
+			@include one-line;
+		}
+
+		> .chevron { flex-shrink: 0; }
+	}
+
+	//A chip: an icon on a backing of its own. The panel lies over the scene, and without one the icon is lost in the picture behind it.
+	.toolbarbutton.chip
+	{
+		width: 28px;
+		height: 28px;
+		border-color: transparent;
+		background-color: $window-ground;
+		color: $ink;
+
+		i
+		{
+			font-size: 20px;
+		}
+
+		&:hover
+		{
+			background-color: $tile-hover;
+
+			@include lit;
+		}
+
+		&.active
+		{
+			background-color: $picked;
+			border-color: transparent;
+			color: $ink;
+		}
+	}
+}
+
+//A group of settings: a card, as a component is in the inspector - a bar with its
+//name across the top, folding it away where it can be folded, and its rows under it.
+.sidebar-group
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 0px;
+	margin: 0px;
+	padding: 0px;
+	background-color: $base-alt;
+	border: 1px solid $border;
+	border-top-color: $border-light;
+	border-radius: $radius-1;
+
+	> .header
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+		min-height: 28px;
+		padding: 0px $pad-card;
+		background-color: $panel-background;
+		border-bottom: 1px solid $sunken;
+		border-top-left-radius: $radius-1;
+		border-top-right-radius: $radius-1;
+
+		> .chevron
+		{
+			font-size: 16px;
+			color: $ink-faint;
+		}
+
+		> .title
+		{
+			flex-grow: 1;
+			min-width: 0;
+			font-size: 13px;
+			font-weight: 600;
+			color: $ink;
+
+			@include one-line;
+		}
+	}
+
+	> .content
+	{
+		flex-direction: column;
+		gap: $gap-row;
+		padding: $pad-card-y $pad-card;
+	}
+
+	//The rows of a sheet bring their own side room; in a card that has given it already, they lie on its edge.
+	> .content > .controlsheet .controlsheetrow,
+	> .content > .controlsheet ControlSheetRow
+	{
+		padding: 0px;
+	}
+
+	&.collapsible > .header
+	{
+		cursor: pointer;
+
+		&:hover { background-color: #3a3a3a; }
+		&:hover > .chevron { color: $ink-dim; }
+	}
+
+	//Folded: the bar is all that is left, and the arrow points sideways.
+	&.collapsed
+	{
+		> .content { display: none; }
+
+		> .header
+		{
+			border-bottom-color: transparent;
+			border-radius: $radius-1;
+
+			> .chevron { transform: rotate( -90deg ); }
+		}
+	}
+}
+
+//What the keyboard does: the name on the left, the keys on the right, striped.
+.shortcut-list
+{
+	flex-direction: column;
+	flex-shrink: 0;
+
+	> .shortcut
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		height: 20px;
+		padding: 0px 8px;
+		border-radius: 2px;
+
+		&:nth-child( even ) { background-color: $veil; }
+
+		> .name
+		{
+			flex-grow: 1;
+			font-size: 11px;
+			color: $ink-dim;
+			@include one-line;
+		}
+
+		> .keys
+		{
+			flex-shrink: 0;
+			font-size: 11px;
+			color: $ink-faint;
+		}
+	}
+}
+
+//── the bar over the viewport ───────────────────────────────────────────────
+
+//What stands on the scene view's bar: a little taller than a field, as the bar is a little taller than a dock's - the
+//view's controls are reached for more than any other, and at a row's height they read as small beside the picture.
+$viewport-bar-control: 26px;
+
+.viewport-toolbar
+{
+	flex-direction: row;
+	align-items: center;
+	width: 100%;
+	height: 100%;
+	padding: 0px 6px;
+	gap: 6px;
+
+	//A plate: the bar the viewport's controls stand on is exactly where the hands keep going, and grey
+	//here means that. The viewport itself and the strip of open scenes stay on the window's ground.
+	background-color: $panel-ground;
+
+	pointer-events: all;
+
+	//The bar is part of the scene window rather than something lying over its neighbours. Buttons do not squeeze (the icon would stop
+	//reading), so in a narrow dock they run out of room; without this the extras simply draw past the dock's edge, or the window's.
+	overflow: hidden;
+
+	.section
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 6px;
+
+		//A section is never narrower than its buttons, so it has nothing to run into its neighbour with; the bar
+		//clips at the dock's edge. The bound is here for a widget whose width the layout cannot know in advance.
+		min-width: 0px;
+		overflow: hidden;
+
+		//Ends share space evenly so play stays centred between left and right groups
+		&.left,
+		&.right
+		{
+			flex-grow: 1;
+			flex-shrink: 0;
+			flex-basis: auto;
+		}
+
+		//The middle is never cut: play, pause, stop are what the bar is looked at for.
+		&.center
+		{
+			flex-grow: 0;
+			flex-shrink: 0;
+			flex-basis: auto;
+		}
+
+		//Only the left tools shrink when narrow, so the right-side view buttons stay visible
+		&.left
+		{
+			flex-shrink: 1;
+			min-width: 0px;
+		}
+
+		&.left { justify-content: flex-start; }
+		&.center { justify-content: center; }
+		&.right { justify-content: flex-end; }
+	}
+
+	//Several buttons side by side, close together. Each is a box of its own - below - so the group itself wears nothing.
+	.group
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		height: $viewport-bar-control;
+		padding: 0px;
+		gap: 2px;
+
+		//What the tool put on the bar itself: it has its own look and is given only the room.
+		&.plain
+		{
+			background-color: transparent;
+			padding: 0px;
+			gap: 6px;
+		}
+	}
+
+	.divider
+	{
+		width: 1px;
+		height: 16px;
+		flex-shrink: 0;
+		background-color: $edge;
+	}
+
+	//Every button on the bar the height of the dropdown beside it, on the editor's black - a field's ground and edge - and a step up under the
+	//pointer, the way a field that is pressed does (10-07: the buttons were glyphs on a grey veil, a different size from everything else on the bar).
+	.group > .toolbarbutton,
+	.snap-step,
+	.resolution-mode,
+	.tool-mode-picker
+	{
+		height: $viewport-bar-control;
+		background-color: $control-background;
+		border: 1px solid $border;
+		border-radius: $control-radius;
+	}
+
+	.group > .toolbarbutton
+	{
+		width: $viewport-bar-control;
+	}
+
+	.group > .toolbarbutton:hover,
+	.snap-step:hover,
+	.resolution-mode:hover
+	{
+		background-color: $control-background-light;
+		border-color: $edge-lit;
+	}
+
+	//On is still the picked plate, the same as everywhere else.
+	.group > .toolbarbutton.active
+	{
+		background-color: $picked;
+		border-color: rgba( $accent, 0.6 );
+	}
+}
+
+//── widget chrome ── Widgets get their type names as classes; styled only once OnPaint is gone
+
+//The window ground - $window-ground, the launcher's. No picture goes here: a url the UI cannot find comes out solid magenta.
+
+.window
+{
+	background-color: $window-ground;
+}
+
+//The window's own caption - the same bar the launcher wears, drawn by CoreUiWindow on every window that asked for one.
+.window-caption
+{
+	flex-direction: row;
+	align-items: center;
+
+	width: 100%;
+	height: 30px;
+	flex-shrink: 0;
+
+	background-color: rgba( 0, 0, 0, 0.25 );
+	border-bottom: 1px solid $veil;
+
+	pointer-events: all;
+
+	i
+	{
+		font-family: Material Icons;
+		font-size: 16px;
+	}
+}
+
+.window-caption .drag
+{
+	flex-grow: 1;
+	height: 100%;
+
+	flex-direction: row;
+	align-items: center;
+
+	padding-left: 12px;
+}
+
+.window-caption .what
+{
+	font-family: $font;
+	font-size: 12px;
+	color: $ink;
+	opacity: 0.55;
+}
+
+.window-caption .controls
+{
+	flex-direction: row;
+	align-items: center;
+	height: 100%;
+}
+
+.window-caption .control
+{
+	width: 44px;
+	height: 100%;
+
+	align-items: center;
+	justify-content: center;
+
+	color: $ink;
+	opacity: 0.6;
+
+	transition: background-color 0.08s ease-out, opacity 0.08s ease-out;
+
+	i { font-size: 16px; }
+
+	&:hover
+	{
+		opacity: 1;
+		background-color: rgba( 255, 255, 255, 0.08 );
+	}
+}
+
+.window-caption .control.shut:hover
+{
+	background-color: #c42b1c;
+	opacity: 1;
+}
+
+.captioned
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	background-color: $window-ground;
+}
+
+.window-body
+{
+	flex-grow: 1;
+	flex-shrink: 1;
+	width: 100%;
+	min-height: 0;
+	position: relative;
+}
+
+//The dock area is that same ground, showing between panels and through the seams.
+.dockmanager
+{
+	background-color: transparent;
+}
+
+//Text entries look the same everywhere in the editor
+textentry,
+.textentry
+{
+	cursor: text;
+	flex-direction: row;
+	align-items: center;
+	min-height: $control-row-height;
+	white-space: nowrap;
+	overflow: hidden;
+
+	> .content-label,
+	> .label
+	{
+		flex-grow: 1;
+		min-width: 0;
+		pointer-events: none;
+	}
+
+	//The overlay repeats the field's own layout so the placeholder stands exactly where typed text will. Only this sheet knows the field's padding.
+	> .placeholder-wrap
+	{
+		padding: $control-text-padding;
+	}
+}
+
+//Inspector uses panel grey everywhere, even outside docks; fields go darker, never lighter
+.inspector
+{
+	background-color: $panel-ground;
+}
+
+//Property values stay on one line with ellipsis; the full text is in the tooltip
+.control .label.value
+{
+	@include one-line;
+}
+
+//An editor popup. The base addon's sheet paints .popup-panel in the game's colours rather than the editor's, which is why
+//every popup used to carry its own ApplyChrome in code. One class now: a popup adds .editor-popup and is dressed here.
+.popup-panel.editor-popup
+{
+	z-index: 100;
+
+	background-color: $popup-background;
+	color: $text-control;
+	border: $popup-border;
+	border-radius: $popup-radius;
+	box-shadow: $popup-shadow;
+	overflow: hidden;
+	flex-direction: column;
+	pointer-events: all;
+}
+
+//The inspector body: it fills the dock and lets itself be squeezed vertically.
+.inspector-panel
+{
+	flex-grow: 1;
+	min-height: 0;
+}
+
+//Dock toolbar under a tab: tab grey, side and bottom edges, cell dividers
+.dock-bar
+{
+	flex-direction: row;
+	align-items: stretch;
+	flex-shrink: 0;
+	gap: 0px;
+	padding: 0px 4px 0px 0px;
+	min-height: 28px;
+	background-color: $tab-background;
+	border-left: 1px solid $border;
+	border-right: 1px solid $border;
+	border-bottom: 1px solid $border;
+
+	> .toolbarbutton
+	{
+		width: 34px;
+		height: auto;
+		border-radius: 0px;
+		border-width: 0px;
+		border-right: 1px solid $border;
+	}
+
+	//The last thing in the bar wants no line after it.
+	> .toolbarbutton:last-child
+	{
+		border-right-width: 0px;
+	}
+
+	> .spacer
+	{
+		flex-grow: 1;
+	}
+
+	//A search opened in the bar: the field takes the room the spacer had, a row tall like every field.
+	> .search
+	{
+		flex-grow: 1;
+		min-width: 0;
+		height: $row;
+		align-self: center;
+		margin: 0px 4px;
+	}
+}
+
+//A dock that is a tree: its bar, the room the inspector leaves between its bar and its cards, and the tree straight on the dock's ground - no edge
+//round it; only the rows inside a folder stand on the card's grey - with the seam to the next dock said again on its right, as the inspector's is.
+.tree-dock
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+	min-width: 0;
+	gap: $gap-section;
+	background-color: transparent;
+
+	> .dock-bar,
+	> .tree-frame
+	{
+		margin-right: $separator-width;
+	}
+}
+
+.tree-frame
+{
+	flex-grow: 1;
+	min-height: 0;
+	min-width: 0;
+	background-color: transparent;
+}
+
+//Inspector cards: a head card for the object, then cards with a title bar and rows
+.inspector-head
+{
+	flex-shrink: 0;
+	flex-direction: column;
+	gap: $gap-items;
+	padding: $pad-card-y $pad-card;
+	pointer-events: all;
+	background-color: $base-alt;
+	border: 1px solid $border;
+	border-top-color: $border-light;
+	border-radius: $radius-1;
+}
+
+//Every button in the first card is a square with a hairline round it, the same well the fields are.
+.inspector-head .toolbarbutton
+{
+	min-width: $row;
+	min-height: $row;
+	background-color: $control-background;
+	border: 1px solid $border;
+	border-radius: $radius-1;
+
+	&:hover { border-color: $border-light; }
+}
+
+.inspector-card
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	background-color: $base-alt;
+	border: 1px solid $border;
+	border-top-color: $border-light;
+	border-radius: $radius-1;
+
+	> .content
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		gap: $gap-row;
+		padding: $pad-card-y 0px;
+	}
+}
+
+//The bar across the top of a card, left to right: the card's glyph in a cell of its own, its switch, its name, then the fold arrow and a menu at
+//the far end. The cells are parted by the same dark groove that runs under the bar. Children are added in another order, so `order` places them.
+.inspector-card-header
+{
+	flex-direction: row;
+	align-items: center;
+	gap: 0px;
+	padding: 0px 3px 0px 0px;
+	min-height: 28px;
+	flex-shrink: 0;
+	background-color: $panel-background;
+	border-bottom: 1px solid $sunken;
+	border-top-left-radius: $radius-1;
+	border-top-right-radius: $radius-1;
+	color: $ink;
+	cursor: pointer;
+	pointer-events: all;
+	font-family: $font;
+
+	@include pressable;
+
+	//The whole bar is pressed to fold the card away, so it says so under the pointer like everything else does.
+	&:hover
+	{
+		background-color: #3a3a3a;
+	}
+
+	> .chevron,
+	> .icon
+	{
+		flex-shrink: 0;
+		pointer-events: none;
+		align-self: stretch;
+		align-items: center;
+		justify-content: center;
+	}
+
+	//A square switch after the glyph's cell. Named in full so it is read over .control's row height, which made it a tall box.
+	> BoolControl.control.enabled
+	{
+		order: 1;
+		flex-grow: 0;
+		flex-shrink: 0;
+		//The height of the menu square at the other end, so the bar's three boxes read as one set.
+		width: 22px;
+		min-width: 22px;
+		max-width: 22px;
+		height: 22px;
+		min-height: 22px;
+		max-height: 22px;
+		align-self: center;
+		margin: 0px $pad-card 0px 0px;
+		align-items: center;
+		justify-content: center;
+
+		.icon
+		{
+			width: 100%;
+			height: 100%;
+			font-size: 16px;
+			text-align: center;
+			align-items: center;
+			justify-content: center;
+		}
+	}
+
+	//The card's own glyph, in the accent, first, in a cell with a groove after it. A label is centred by
+	//its text, not by justify-content - without text-align the glyph sat against the cell's left side.
+	> .icon
+	{
+		order: 0;
+		width: 32px;
+		font-size: 17px;
+		text-align: center;
+		color: $accent;
+		border-right: 1px solid $sunken;
+		margin-right: $pad-card;
+	}
+
+	> .title
+	{
+		order: 2;
+		flex-grow: 1;
+		font-weight: 600;
+		font-size: 13px;
+		min-width: 0;
+		color: inherit;
+		pointer-events: none;
+		@include one-line;
+	}
+
+	//Whether it is open, said quietly at the end rather than first: the whole bar is what folds it.
+	> .chevron
+	{
+		order: 3;
+		width: 22px;
+		margin-right: 3px;
+		font-size: 16px;
+		color: $ink-faint;
+	}
+
+	&:hover > .chevron
+	{
+		color: $ink-dim;
+	}
+
+	//The menu is a square of its own at the end of the bar.
+	> .menu-button
+	{
+		order: 4;
+		flex-shrink: 0;
+		pointer-events: all;
+		width: 26px;
+		height: 22px;
+		background-color: $control-background;
+		border: 1px solid $border;
+		border-radius: $radius-1;
+
+		&:hover
+		{
+			border-color: $border-light;
+		}
+	}
+
+	&.collapsed
+	{
+		border-bottom-color: transparent;
+		border-radius: $radius-1;
+	}
+
+	//A card that does not fold: its bar is a heading, and says nothing under the pointer.
+	&.fixed
+	{
+		cursor: default;
+
+		&:hover { background-color: $panel-background; }
+	}
+}
+
+//GenericControl popup: the chrome comes from .editor-popup, the sheet inside is its own.
+.popup-panel.generic-control-popup
+{
+	> .controlsheet
+	{
+		background-color: transparent;
+		border-radius: $control-radius;
+		overflow: hidden;
+		max-height: 480px;
+
+		> .body
+		{
+			overflow: scroll;
+		}
+	}
+}
+
+//Every dock uses panel grey; the dark seams between docks separate them. A picker's browser has no dock and wears it too
+.dockwidget,
+.treebrowserwidget
+{
+	background-color: $panel-ground;
+}
+
+//The inspector's dock has no ground of its own: its tab opens into the bar across its top, and the cards under that lie straight on the window's
+//dark. DockWidget names what it holds as a class - dock-inspector. The docks that are a tree are the same: a bar, and the tree in a frame on the dark.
+.dockwidget.dock-inspector,
+.dockwidget.dock-inspector > .inspector,
+.dockwidget.dock-scenetreewidget,
+.dockwidget.dock-modeloutliner,
+.dockwidget.dock-effecttree,
+.dockwidget.dock-hierarchy
+{
+	background-color: transparent;
+}
+
+//The strip of open scenes over a viewport, and the strip of documents in a workspace: headers, like the strip of tabs
+//over a group of docks, and the same dark. The tab that is open carries the panel's grey down into what it opens.
+.tabbar,
+.tabbarwidget
+{
+	background-color: $window-ground;
+}
+
+//The window's bars have no backing of their own: they stand on the header's dark, which is the window itself.
+.toolbar,
+.menubar,
+.statusbar
+{
+	background-color: transparent;
+}

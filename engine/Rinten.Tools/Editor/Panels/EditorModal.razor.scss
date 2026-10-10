@@ -1,0 +1,102 @@
+//The one modal card for every editor question, spaced on the editor's 8/16 step
+
+//Dims the whole window and catches the pointer until the question is answered.
+EditorModal,
+.editor-modal
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+	pointer-events: all;
+
+	//Over a ModalSheet: a question asked while one is up is the thing to answer.
+	z-index: 100;
+
+	> .card
+	{
+		flex-direction: column;
+		gap: 8px;
+		width: 420px;
+		max-width: 90%;
+		padding: 16px;
+
+		//The pane's grey in the window frame the launcher wears: a window over the window, not a card lying on it.
+		background-color: $panel-ground;
+
+		@include frame;
+
+		.title
+		{
+			font-size: $type-default;
+			font-weight: 600;
+			color: $ink;
+		}
+
+		//The title with what it is about beside it - an icon, or the thing's own picture - one row high, so the card keeps its step either way.
+		> .head
+		{
+			flex-direction: row;
+			align-items: center;
+			gap: 8px;
+
+			> .title
+			{
+				flex-grow: 1;
+				flex-shrink: 1;
+			}
+
+			> .badge
+			{
+				flex-shrink: 0;
+				width: $row;
+				height: $row;
+				align-items: center;
+				justify-content: center;
+				border-radius: $radius-2;
+				background-color: $veil-down;
+				background-size: contain;
+				background-position: center;
+				background-repeat: no-repeat;
+
+				> i
+				{
+					font-family: Material Icons;
+					font-size: 18px;
+					color: $ink-dim;
+				}
+			}
+		}
+
+		> .message
+		{
+			font-size: $type-body;
+			line-height: 1.4;
+			white-space: pre-wrap;
+			color: $ink-dim;
+		}
+
+		> .field
+		{
+			flex-shrink: 0;
+			min-height: $row;
+		}
+
+		//The answer stands away from the question - the card's own gap again on top of
+		//it, so 16 - and sits at the right, which is the corner a dialog is answered in.
+		> .actions
+		{
+			flex-direction: row;
+			justify-content: flex-end;
+			align-items: center;
+			gap: 8px;
+			margin-top: 8px;
+
+			//Wide enough that "No" and "Delete" are the same brick. .btn itself is 12 either side, which leaves a short word looking like a chip.
+			> .btn { min-width: 80px; }
+		}
+	}
+}

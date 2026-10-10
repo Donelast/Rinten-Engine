@@ -1,0 +1,77 @@
+//The animations: a toolbar with the button that adds one, and a row per animation under it. The well the rows
+//stand on and the scroll are design.scss's .well and .scroll, the buttons its .toolbarbutton, and are not restated.
+
+.animation-list
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+
+	> .toolbar
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		padding: 2px 4px;
+	}
+
+	> .rows
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		padding: 4px;
+		gap: 2px;
+	}
+}
+
+.animation-row
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	width: 100%;
+	height: $list-row-height + 6px;
+	padding: 0 4px 0 8px;
+	gap: 2px;
+	border-radius: $control-radius;
+	border-top: 2px solid transparent;
+	font-family: $font-family;
+	font-size: $type-body;
+	cursor: pointer;
+
+	> .name
+	{
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		color: rgba( $text-control, 0.85 );
+	}
+
+	//The box the name turns into while it is being typed over. Shorter than a field on a sheet, so the row does not jump when it opens.
+	> .rename
+	{
+		height: $list-row-height;
+		padding: 0 6px;
+	}
+
+	//The row's own buttons stay out of the way until the row is pointed at.
+	> .toolbarbutton { opacity: 0; }
+
+	&:hover
+	{
+		background-color: rgba( $selected-background, 0.25 );
+
+		> .toolbarbutton { opacity: 1; }
+	}
+
+	&.selected
+	{
+		background-color: rgba( $primary, 0.5 );
+
+		> .name { color: $text-control; }
+		> .toolbarbutton { opacity: 1; }
+	}
+
+	//Another row is being carried over this one and would land in its place.
+	&.drop-target { border-top-color: $primary; }
+}

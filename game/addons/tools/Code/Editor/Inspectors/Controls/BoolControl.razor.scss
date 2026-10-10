@@ -1,0 +1,28 @@
+//Checkbox forced square: the row stretches its right column, which aspect-ratio alone can't stop
+BoolControl.control
+{
+    cursor: pointer;
+    font-family: $font-family;
+    aspect-ratio: 1;
+
+    //Not stretched across the column, not grown down it, and not shrunk when the inspector
+    //gets narrow. The height comes from the row, and the width from the aspect ratio.
+    align-self: flex-start;
+    flex-grow: 0;
+    flex-shrink: 0;
+
+    //On is a tick in the accent on the same dark well - the box itself does not change.
+    &.active {
+        background-color: $control-background;
+    }
+
+    .icon {
+        position: relative;
+        color: $primary;
+        font-size: 16px;
+        height: 100%;
+        aspect-ratio: 1;
+        align-items: center;
+        justify-content: center;
+    }
+}

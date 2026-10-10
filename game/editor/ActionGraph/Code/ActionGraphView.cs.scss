@@ -1,0 +1,80 @@
+//What an action graph adds to the node graph: the value on a plug, the value that just went down a wire, and the band saying the graph cannot be saved.
+
+.value-chip
+{
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+	padding: 1px 8px;
+	border-radius: 2px;
+	border: 2px solid transparent;
+	background-color: $control-background;
+
+	> .swatch
+	{
+		width: 14px;
+		height: 14px;
+		border-radius: 2px;
+
+		&.hidden { display: none; }
+	}
+
+	> .icon
+	{
+		font-size: 16px;
+		color: $text-control;
+
+		&.hidden { display: none; }
+	}
+
+	> .text
+	{
+		color: $text-control;
+		font-size: 12px;
+		white-space: nowrap;
+	}
+}
+
+//A value on a plug is for display only: a click on it belongs to the plug.
+.value-editor
+{
+	flex-direction: row;
+	align-items: center;
+	pointer-events: none;
+
+	&.hidden { display: none; }
+
+	&.input-value { justify-content: flex-end; }
+	&.output-value { justify-content: flex-start; }
+}
+
+.pulse-value
+{
+	pointer-events: none;
+}
+
+//A bar over the graph when there is nowhere to save it: it covers the viewport and takes no pointer, so work continues underneath.
+.warning-frame
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 200;
+	pointer-events: none;
+	border: 8px solid transparent;
+	justify-content: flex-end;
+	align-items: flex-end;
+	padding: 4px;
+
+	&.hidden { display: none; }
+
+	> .message
+	{
+		padding: 4px 8px;
+		color: #000000;
+		font-size: 13px;
+		white-space: nowrap;
+	}
+}

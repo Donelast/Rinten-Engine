@@ -1,0 +1,36 @@
+﻿IconGridPanel,
+.icon-grid-panel {
+	flex-direction: column;
+	flex-grow: 1;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+	padding: 4px;
+	gap: 4px;
+	overflow: hidden;
+	color: $ink-dim;
+
+	//The same ground the grid inside it stands on. The canvas is a well - see IconGridCanvasPanel - and this was left showing
+	//the panel grey, so the module read as a dark picture in a grey frame: the tiles and their toolbar were two different rooms.
+	background-color: $sunken;
+
+	> .toolbar {
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+		height: $row;
+
+		> .path {
+			flex-grow: 1;
+			min-width: 0;
+			font-size: $type-small;
+			color: $ink-faint;
+		}
+	}
+	> .grid {
+		flex-grow: 1;
+		min-width: 0;
+		min-height: 0;
+	}
+}

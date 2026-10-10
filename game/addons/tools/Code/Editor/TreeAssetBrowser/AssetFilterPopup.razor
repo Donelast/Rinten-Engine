@@ -1,0 +1,77 @@
+@namespace Editor.TreeBrowser
+@using Rinten.UI
+@attribute [StyleSheet( "AssetFilterPopup.razor.scss" )]
+@inherits Popup
+
+<root class="asset-filter-popup">
+	<div class="body">
+		<div class="head">
+			<span class="heading">Filter by Type</span>
+			@if ( Filter.IsActive )
+			{
+				<span class="clear" onclick="@ClearAll">Clear</span>
+			}
+		</div>
+		@if ( Groups.Count == 0 )
+		{
+			<span class="empty">No assets found</span>
+		}
+		else
+		{
+			@foreach ( var group in Groups )
+			{
+				<AssetFilterGroupRow Owner="@this" Group="@group" Filter="@Filter" />
+			}
+		}
+	</div>
+</root>
+
+@code
+{
+	public AssetTypeFilter Filter { get; set; }
+
+	IReadOnlyList<AssetTypeFilter.Group> Groups = [];
+	AssetFilterTypesPopup openGroup;
+
+	//Opens the category list under the toolbar button that asked for it.
+	public static AssetFilterPopup Open( Panel anchor, AssetTypeFilter filter )
+	{
+		if ( anchor is null || !anchor.IsValid() )
+			return null;
+
+		var popup = new AssetFilterPopup { Filter = filter };
+		popup.SetPositioning( anchor, PositionMode.BelowRight, 4 );
+		popup.AnchorPanel = anchor;
+		popup.CloseWhenParentIsHidden = true;
+		popup.Groups = AssetTypeFilter.PresentGroups();
+		popup.AddClass( "editor-popup" );
+		popup.SyncAnchor();
+
+		return popup;
+	}
+
+	//Only one category is open at a time, so nothing lands on top of anything.
+	public void ShowTypes( AssetFilterGroupRow row, AssetTypeFilter.Group group )
+	{
+		if ( openGroup.IsValid() )
+			openGroup.Delete();
+
+		openGroup = AssetFilterTypesPopup.Open( row, group, Filter );
+	}
+
+	void ClearAll()
+	{
+		Filter.Clear();
+		StateHasChanged();
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( !openGroup.IsValid() )
+			openGroup = null;
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Groups.Count, Filter?.Count ?? 0 );
+}

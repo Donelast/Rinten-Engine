@@ -1,0 +1,14 @@
+{
+  "Shader": "shaders/complex.shader",
+  "Tint": "1.0,1.0,1.0,1.0",
+  "ColorMap": "models/vr/controllers/meta-quest-touch-pro/controllermatstingrayrt.png",
+  "Normal": "",
+  "RoughMetalAmbient": "",
+  "Emission": "",
+  "Roughness": 1.0,
+  "Metalness": 0.0,
+  "EmissionStrength": 0.0,
+  "TwoSided": true,
+  "Blend": "Opaque",
+  "AlphaCutoff": 0.5
+}

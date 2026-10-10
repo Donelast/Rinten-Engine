@@ -1,0 +1,95 @@
+//How the material sheet's cards stack; card and row styles come from design.scss and ControlSheet
+
+.material-sheet
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+
+	//The cards lie on the window's dark, as they do in the inspector - in the material editor's own dock too, so the two read as one thing.
+	background-color: $window-ground;
+
+	> .scroll
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		overflow: scroll;
+		gap: $gap-section;
+		padding-bottom: $gap-section;
+		align-items: stretch;
+
+		> * { flex-shrink: 0; }
+	}
+
+	//The rows in it are the inspector's, which bring their own side room, so the card gives its sides only to the band naming the file.
+	.inspector-head
+	{
+		padding-left: 0px;
+		padding-right: 0px;
+
+		> .top-row
+		{
+			flex-direction: row;
+			align-items: center;
+			gap: $gap-items;
+			padding: 0px $pad-card;
+
+			> .words
+			{
+				flex-direction: column;
+				flex-grow: 1;
+				min-width: 0;
+
+				> .title
+				{
+					font-size: $type-body;
+					font-weight: 600;
+					color: $ink;
+					@include one-line;
+				}
+
+				//The folder dim under the name - a material's path is long and its last word is the one worth reading.
+				> .path
+				{
+					font-size: $type-micro;
+					color: $ink-dim;
+					@include one-line;
+				}
+			}
+		}
+	}
+
+	> .scroll > .cards
+	{
+		flex-direction: column;
+		gap: $gap-section;
+	}
+
+	.material-card > .content > .body
+	{
+		flex-direction: column;
+		gap: $gap-section;
+	}
+
+	//A picture and its numbers stand in from the card's side as its rows do.
+	.material-card .material-map
+	{
+		padding: 0px $pad-card;
+	}
+
+	.section
+	{
+		flex-direction: column;
+	}
+
+	//What to say instead of controls while nothing is open.
+	.note
+	{
+		padding: 8px;
+		text-align: center;
+		white-space: pre-wrap;
+		color: rgba( $text-control, 0.7 );
+	}
+}

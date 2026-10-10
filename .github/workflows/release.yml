@@ -1,0 +1,208 @@
+name: release
+
+# Builds the editor for Linux and Windows and publishes both zips as one release; private while the repo is
+# A tag v* makes one, or Run workflow with a version, which tags the commit it ran on
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without the v, e.g. 0.1'
+        required: true
+      prerelease:
+        description: 'Mark as a pre-release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event_name == 'push' && github.ref_name || format('v{0}', inputs.version) }}
+  MSBUILDDISABLENODEREUSE: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
+jobs:
+  # What both zips carry and only Linux builds: the web and Android cores, and the compiled hosts their exports need without sources
+  shared:
+    runs-on: ubuntu-latest
+    env:
+      # Per-user, so the workloads install without sudo; build-web.sh finds Emscripten here
+      DOTNET_INSTALL_DIR: /home/runner/.dotnet
+    steps:
+      - uses: actions/checkout@v4
+
+      # A runner starts with ~14 GB free; the workloads, the NDK and a full build need more. The Android SDK and the JDK stay
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+            /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft /opt/google
+          sudo docker image prune --all --force > /dev/null
+          df -h /
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      # What build-linux.sh needs for the core and the SDL it builds from source
+      - name: Install what it builds against
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang libx11-dev libxext-dev \
+            libxcursor-dev libxi-dev libxrandr-dev libxfixes-dev libxss-dev libxtst-dev \
+            libwayland-dev libxkbcommon-dev libegl-dev libgl-dev libdrm-dev libgbm-dev \
+            libdbus-1-dev libudev-dev libasound2-dev libpulse-dev
+
+      - name: Install the workloads
+        run: dotnet workload install wasm-tools android
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27
+
+      - name: Build
+        run: dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- build
+
+      - name: Web and Android cores
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          ./engine/Core/build-web.sh
+          ./engine/Core/build-android.sh
+
+      # The engine's own shaders compiled, which an exported game has no compiler for; Slang only, no GPU
+      - name: Bake shaders
+        run: dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- build-shaders
+
+      - name: Export kits
+        run: dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- build-export-kits
+
+      # Each desktop's game launcher, which an engine without sources cannot publish for another platform
+      - name: Game launchers
+        run: |
+          for target in win-x64:win64 linux-x64:linuxsteamrt64; do
+            into="game/launchers/${target#*:}"
+            dotnet publish engine/Launcher/RintenStandalone/Rinten-Standalone.csproj -c Release -r "${target%%:*}" \
+              --self-contained false -p:PublishSingleFile=false -p:OutputPath="$PWD/$into/build/" \
+              -p:SolutionDir="$PWD/engine/" -o "$into"
+            rm -rf "$into/build"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shared
+          path: |
+            game/bin/wasm32/
+            game/bin/android-arm64/
+            game/bin/linuxsteamrt64/
+            game/launchers/
+            game/core/shaders/
+            dist/kits/
+          if-no-files-found: error
+
+  linux:
+    needs: [ shared, windows ]
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_INSTALL_DIR: /home/runner/.dotnet
+    steps:
+      - uses: actions/checkout@v4
+
+      # A runner starts with ~14 GB free; the workloads, the NDK and a full build need more. The Android SDK and the JDK stay
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+            /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft /opt/google
+          sudo docker image prune --all --force > /dev/null
+          df -h /
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      # What build-linux.sh needs for the core and the SDL it builds from source
+      - name: Install what it builds against
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang libx11-dev libxext-dev \
+            libxcursor-dev libxi-dev libxrandr-dev libxfixes-dev libxss-dev libxtst-dev \
+            libwayland-dev libxkbcommon-dev libegl-dev libgl-dev libdrm-dev libgbm-dev \
+            libdbus-1-dev libudev-dev libasound2-dev libpulse-dev
+
+      - name: Build
+        run: dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- build
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared
+          path: .
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bin-win64
+          path: game/bin/win64
+
+      - name: Package
+        run: dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- package-release --version "${TAG#v}" --output dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: dist/*.zip
+          if-no-files-found: error
+
+  windows:
+    needs: shared
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet run --project .\engine\Tools\RintenBuild\RintenBuild.csproj -- build
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared
+          path: .
+
+      - name: Package
+        shell: bash
+        run: dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- package-release --version "${TAG#v}" --output dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: dist/*.zip
+          if-no-files-found: error
+
+      # Windows' natives for the Linux zip, so a game can be exported for Windows from Linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-win64
+          path: game/bin/win64/
+          if-no-files-found: error
+
+  publish:
+    needs: [ linux, windows ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ github.event_name == 'push' || inputs.prerelease }}
+        run: |
+          flags=(--repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Rinten $TAG" --generate-notes)
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" dist/*.zip "${flags[@]}"

@@ -1,0 +1,10 @@
+//The ground the clip's timeline is painted on. The ruler, the event lane and the playhead are the picture, and live in the paint.
+
+.clip-timeline
+{
+	flex-grow: 1;
+	min-width: 0;
+	min-height: 64px;
+	background-color: $control-background;
+	pointer-events: all;
+}

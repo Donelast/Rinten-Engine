@@ -1,0 +1,70 @@
+BoxSidesControl.control
+{
+	flex-grow: 1;
+	flex-shrink: 0;
+	align-items: center;
+
+	> .grid
+	{
+		flex-direction: column;
+		gap: 1px;
+
+		> .row
+		{
+			flex-direction: row;
+			gap: 1px;
+
+			> .gap
+			{
+				width: 45px;
+				height: 45px;
+			}
+
+			> .face
+			{
+				width: 45px;
+				height: 45px;
+				align-items: center;
+				justify-content: center;
+				background-color: $control-background-light;
+				border-radius: 2px;
+				pointer-events: all;
+				cursor: pointer;
+
+				> .name
+				{
+					font-size: $type-micro;
+					font-weight: 500;
+					color: rgba($text, 0.5);
+				}
+
+				&:hover
+				{
+					background-color: lighten( $control-background-light, 0.2 );
+				}
+
+				&.selected
+				{
+					background-color: rgba($accent, 0.8);
+
+					> .name
+					{
+						color: rgba(white, 0.75);
+					}
+
+					&:hover
+					{
+						background-color: $accent;
+					}
+				}
+
+				&.readonly
+				{
+					pointer-events: none;
+					cursor: default;
+					opacity: 0.5;
+				}
+			}
+		}
+	}
+}

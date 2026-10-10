@@ -1,0 +1,12 @@
+SphereControl.control.no-background
+{
+	flex-direction: row;
+	gap: 2px;
+	flex-grow: 1;
+
+	//The radius is a narrow field; the centre takes the rest of the row.
+	> .radius
+	{
+		max-width: 80px;
+	}
+}

@@ -1,0 +1,107 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!-- Engine, base and game AOT-compiled into one wasm module by NativeAOT-LLVM; published by the web export, never built alone -->
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>disable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<!-- The engine lets its internals to this name - the player it replaces. -->
+		<AssemblyName>Rinten-Web</AssemblyName>
+		<PublishTrimmed>true</PublishTrimmed>
+		<SelfContained>true</SelfContained>
+		<MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+		<DebugType>none</DebugType>
+		<DotNetJsApi>true</DotNetJsApi>
+		<!-- Reflection is not fought on this step (Н1.3): every warning about it is expected. -->
+		<SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+		<IlcLlvmVersion>10.0.0-rc.1.26357.1</IlcLlvmVersion>
+		<RintenSkiaFlavour>3.1.56/st,simd</RintenSkiaFlavour>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.DotNet.ILCompiler.LLVM" Version="$(IlcLlvmVersion)" />
+		<PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).Microsoft.DotNet.ILCompiler.LLVM" Version="$(IlcLlvmVersion)" />
+	</ItemGroup>
+
+	<!-- A release has no sources: prebuilt/ holds this host compiled and the assemblies it was compiled against -->
+	<PropertyGroup>
+		<RintenPrebuilt Condition="Exists('$(MSBuildThisFileDirectory)prebuilt/Rinten-Web.dll')">true</RintenPrebuilt>
+		<RintenWasmBin Condition="'$(RintenWasmBin)' == ''">$(MSBuildThisFileDirectory)../../../game/bin/wasm32/</RintenWasmBin>
+		<CustomAfterMicrosoftCSharpTargets Condition="'$(RintenPrebuilt)' == 'true'">$(MSBuildThisFileDirectory)../Prebuilt.targets</CustomAfterMicrosoftCSharpTargets>
+		<ProduceReferenceAssembly Condition="'$(RintenPrebuilt)' == 'true'">false</ProduceReferenceAssembly>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(RintenPrebuilt)' != 'true'">
+		<ProjectReference Include="..\..\Rinten.Engine\Rinten.Engine.csproj" />
+		<ProjectReference Include="..\..\Rinten.GameInstance\Rinten.GameInstance.csproj" />
+		<ProjectReference Include="..\..\Rinten.System\Rinten.System.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<SupportedPlatform Include="browser" />
+	</ItemGroup>
+
+	<!-- The game's own code, compiled in. -->
+	<ItemGroup Condition="'$(RintenGameBin)' != ''">
+		<Reference Include="$(RintenGameBin)/package.*.dll" Private="true" />
+	</ItemGroup>
+
+	<!-- What is made by name - resources, components and graphs are types named in files - has to be kept. A web export says which of the engine's types those are in its directives (the type library, see WebDirectives)
+	     and the rest of the engine is trimmed to what is called; built by hand without them, the engine is kept whole. The game's own assemblies the same way: their types made by name are in the directives. -->
+	<ItemGroup Condition="'$(RintenRdXml)' == ''">
+		<TrimmerRootAssembly Include="Rinten.Engine" />
+		<TrimmerRootAssembly Include="Rinten.System" />
+		<TrimmerRootAssembly Include="Rinten.GameInstance" />
+	</ItemGroup>
+	<ItemGroup>
+		<TrimmerRootAssembly Include="Facepunch.ActionGraphs" />
+	</ItemGroup>
+	<!-- The game's own assemblies are trimmed like the engine's: what files name by type is in the directives,
+	     the rest is what is called (plan Н3). Built by hand without directives, they are kept whole. -->
+	<ItemGroup Condition="'$(RintenGameBin)' != '' and '$(RintenRdXml)' == ''">
+		<RintenGameAssembly Include="$(RintenGameBin)/package.*.dll" />
+		<TrimmerRootAssembly Include="@(RintenGameAssembly->'%(Filename)')" />
+	</ItemGroup>
+
+	<!-- What System.Text.Json's reflection path makes generic over the value types the engine's and the game's members carry - code nothing names
+	     statically, so the compiler is told. Generated from the compiler's own inputs: ~/.cache/rinten-perf/rdgen (probe tool; a source generator is Н2's). -->
+	<ItemGroup Condition="'$(RintenRdXml)' != ''">
+		<RdXmlFile Include="$(RintenRdXml)" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(RintenRdXml)' == '' and Exists('rd.xml')">
+		<RdXmlFile Include="rd.xml" />
+	</ItemGroup>
+
+	<!-- Wasm SIMD for the compiler's IR: the AOT compiler has no wasm vector intrinsics, but LLVM vectorises loops of its own once it may - particles 11.0 -> 10.8 ms, rigidbody 0.95 -> 0.91, nothing slower, the module 2 MB smaller (plan Н3). Every browser
+	     with WebGPU or WebXR runs simd128. On the compiler's command itself: the objects are compiled by plain clang, which reads no EMCC_CFLAGS, and with arguments the compile target writes afresh - but its command is the CppCompiler set before it runs. -->
+	<Target Name="RintenWasmSimd" BeforeTargets="CompileWasmObjects" DependsOnTargets="SetupOSSpecificProps">
+		<PropertyGroup>
+			<CppCompiler>$(CppCompiler) -msimd128</CppCompiler>
+		</PropertyGroup>
+	</Target>
+
+	<!-- The native halves, linked into the module: the engine's, Skia's and HarfBuzz's. -->
+	<ItemGroup>
+		<PackageReference Include="SkiaSharp.NativeAssets.WebAssembly" Version="3.116.0" ExcludeAssets="build;buildTransitive" GeneratePathProperty="true" />
+		<PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" Version="8.3.0" ExcludeAssets="build;buildTransitive" GeneratePathProperty="true" />
+		<NativeLibrary Include="$(RintenWasmBin)rintencore.a" />
+		<NativeLibrary Include="$(PkgSkiaSharp_NativeAssets_WebAssembly)/buildTransitive/netstandard1.0/libSkiaSharp.a/$(RintenSkiaFlavour)/libSkiaSharp.a" />
+		<NativeLibrary Include="$(PkgHarfBuzzSharp_NativeAssets_WebAssembly)/buildTransitive/netstandard1.0/libHarfBuzzSharp.a/$(RintenSkiaFlavour)/libHarfBuzzSharp.a" />
+		<DirectPInvoke Include="rintencore" />
+		<DirectPInvoke Include="libSkiaSharp" />
+		<DirectPInvoke Include="libHarfBuzzSharp" />
+		<DirectPInvoke Include="libSystem.IO.Compression.Native" />
+	</ItemGroup>
+
+	<!-- .NET's own zlib, which the browser's link leaves out (the Unix targets add it, the wasm ones do not): without
+	     it every compressed stream throws on a page. Added once the compiler has said where its native libraries are. -->
+	<Target Name="RintenNativeZlib" BeforeTargets="LinkNativeLlvm">
+		<ItemGroup>
+			<NativeLibrary Include="$(IlcFrameworkNativePath)libSystem.IO.Compression.Native.a" />
+			<NativeLibrary Include="$(IlcFrameworkNativePath)libz.a" />
+		</ItemGroup>
+	</Target>
+</Project>

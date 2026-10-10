@@ -1,0 +1,38 @@
+ProjectSettingsBannerPanel,
+.project-banner
+{
+	flex-direction: row;
+	align-items: center;
+	gap: 12px;
+	padding: 6px 12px;
+	flex-shrink: 0;
+	width: 100%;
+	cursor: pointer;
+
+	ProjectThumbPanel
+	{
+		flex-shrink: 0;
+		width: 42px;
+		height: 42px;
+	}
+
+	> .info
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+		gap: 2px;
+
+		> .title
+		{
+			font-size: $type-default;
+			font-weight: 600;
+		}
+
+		> .ident
+		{
+			font-size: $type-small;
+			opacity: 0.5;
+		}
+	}
+}

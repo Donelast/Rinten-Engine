@@ -1,0 +1,55 @@
+.track-toggle-option
+{
+	flex-direction: row;
+	align-items: center;
+	gap: 8px;
+	padding: 0px 8px 0px 16px;
+	height: 100%;
+	border-radius: 3px;
+	color: $text-control;
+	font-family: $font-family;
+	font-size: $control-text-size;
+	pointer-events: all;
+	cursor: pointer;
+
+	> .tick
+	{
+		width: 13px;
+		flex-shrink: 0;
+		font-family: Material Icons;
+		font-size: $type-body;
+		opacity: 0;
+	}
+
+	> .title
+	{
+		flex-grow: 1;
+		white-space: nowrap;
+	}
+
+	> .remove
+	{
+		flex-shrink: 0;
+		font-family: Material Icons;
+		font-size: $type-default;
+		color: $red;
+		pointer-events: all;
+		cursor: pointer;
+	}
+
+	&:hover
+	{
+		background-color: $surface-background;
+	}
+
+	//On: the picked plate, the words left white, like everything else that is on.
+	&.active
+	{
+		background-color: $picked;
+
+		> .tick
+		{
+			opacity: 1;
+		}
+	}
+}

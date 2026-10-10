@@ -1,0 +1,21 @@
+﻿@namespace Rinten.Test.Generated
+@using Rinten.UI
+
+<root>
+
+    <Panel>
+        <Template:ChildContent>
+            <span>Hello!</span>
+            <span>This is a variable!</span>
+        </Template:ChildContent>
+    </Panel>
+
+    <div>@ChildContent</div>
+
+</root>
+
+
+@code
+{
+    public RenderFragment ChildContent;
+}

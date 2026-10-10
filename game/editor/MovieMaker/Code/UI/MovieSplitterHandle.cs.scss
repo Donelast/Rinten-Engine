@@ -1,0 +1,31 @@
+.movie-splitter
+{
+	width: $separator-width;
+	flex-shrink: 0;
+	background-color: $separator-color;
+	pointer-events: all;
+	cursor: e-resize;
+
+	&:hover,
+	&.dragging
+	{
+		background-color: $separator-hover-color;
+	}
+}
+
+.movie-splitter.hidden
+{
+	display: none;
+}
+
+//The two halves either side of the handle: code writes one's width, the other takes the rest.
+.splitter-sized
+{
+	flex-grow: 0;
+	flex-shrink: 0;
+}
+
+.splitter-flexible
+{
+	flex-grow: 1;
+}

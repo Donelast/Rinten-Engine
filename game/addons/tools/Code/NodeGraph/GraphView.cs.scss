@@ -1,0 +1,395 @@
+﻿//The node graph: a canvas that pans and zooms, nodes laid out on it with flexbox, and one layer under them that the wires are drawn on.
+
+$node-radius: 4px;
+$node-row: 24px;
+$node-handle: 10px;
+
+//Anything placed in the graph: a node, a comment, a selection box. Code writes their place and size - those are in graph units, not screen pixels.
+.graph-item
+{
+	position: absolute;
+	pointer-events: all;
+}
+
+.graph-view
+{
+	flex-grow: 1;
+	position: relative;
+	overflow: hidden;
+	pointer-events: all;
+	background-color: $window-background;
+	font-family: $font-family;
+
+	//The hand cursor appears only over a wire.
+	&.over-connection
+	{
+		cursor: pointer;
+	}
+
+	> .graph-world
+	{
+		position: absolute;
+		left: 0px;
+		top: 0px;
+		width: 100%;
+		height: 100%;
+		overflow: visible;
+		pointer-events: none;
+
+		//Pan and zoom: the transform comes from code. It turns about the top-left corner
+		//rather than the centre, because that is what the viewport measures from.
+		transform-origin: 0% 0%;
+	}
+}
+
+//The grid under the graph and the wire layer - below the nodes and past the pointer.
+.graph-background,
+.connection-layer
+{
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+.graph-background { z-index: -100; }
+
+.connection-layer
+{
+	overflow: visible;
+	z-index: -10;
+}
+
+.marquee
+{
+	background-color: rgba( 47, 52, 189, 0.35 );
+	border: 1px solid $accent;
+	pointer-events: none;
+}
+
+.connection-handle
+{
+	background-color: $border-light;
+	border: 2px solid $pink;
+	border-radius: $radius-1;
+	cursor: ns-resize;
+
+	&.horizontal { cursor: ew-resize; }
+
+	&.moved { background-color: $ink; }
+	&:hover { background-color: $ink; }
+}
+
+//A node
+
+.node
+{
+	position: absolute;
+	flex-direction: column;
+	align-items: stretch;
+	border-radius: $node-radius;
+	border: 1px solid transparent;
+	cursor: move;
+	pointer-events: all;
+
+	//The ring is only there when the node is selected, wrong, or pointed at - the colour is written from the code, and this is what shows it.
+	&:hover { border-width: 1px; }
+	&.selected { border-width: 2px; }
+	&.error { border-width: 2px; }
+
+	&.unreachable { opacity: 0.75; }
+
+	> .title
+	{
+		flex-direction: row;
+		align-items: center;
+		min-height: $node-row;
+		padding: 0px 4px;
+		gap: 4px;
+
+		&.hidden { display: none; }
+
+		> .icon
+		{
+			flex-shrink: 0;
+			font-size: 17px;
+		}
+
+		> .name
+		{
+			flex-grow: 1;
+			font-size: $type-body;
+			font-weight: 500;
+			white-space: nowrap;
+		}
+
+		> .title-plugs
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-shrink: 0;
+			gap: 2px;
+		}
+	}
+
+	> .body
+	{
+		flex-direction: row;
+		align-items: stretch;
+		border-radius: $node-radius - 2px;
+		margin: 0px 3px 3px 3px;
+
+		> .inputs,
+		> .outputs
+		{
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		> .outputs { align-items: flex-end; }
+
+		> .middle
+		{
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			flex-grow: 1;
+			padding: 4px;
+
+			&.hidden { display: none; }
+		}
+	}
+
+	//A node with no title bar is a picture or a symbol, and is square.
+	&.no-title
+	{
+		> .body
+		{
+			margin: 0px;
+			min-width: 36px;
+			min-height: 36px;
+		}
+	}
+
+	> .error
+	{
+		align-self: center;
+		margin-top: -6px;
+		padding: 0px 4px;
+		background-color: $red;
+		border-radius: 2px;
+		color: $text-control;
+		font-size: $type-small;
+		font-weight: 700;
+
+		&.hidden { display: none; }
+	}
+}
+
+.thumb
+{
+	width: 72px;
+	height: 72px;
+
+	&.hidden { display: none; }
+}
+
+.node.no-title .thumb
+{
+	width: 88px;
+	height: 88px;
+}
+
+.body-icon
+{
+	font-size: 28px;
+	color: $text-control;
+
+	&.hidden { display: none; }
+}
+
+.body-name
+{
+	max-width: 88px;
+	padding: 1px 4px;
+	background-color: rgba( 0, 0, 0, 0.35 );
+	border-radius: 2px;;
+	color: $text-control;
+	font-size: $type-small;
+	text-align: center;
+	word-break: break-word;
+
+	&.hidden { display: none; }
+}
+
+//A socket
+
+.plug
+{
+	flex-direction: row;
+	align-items: center;
+	min-height: $node-row;
+	gap: 4px;
+	cursor: pointer;
+	pointer-events: all;
+
+	> .handle
+	{
+		flex-shrink: 0;
+		width: $node-handle;
+		height: $node-handle;
+		border-radius: 2px;;
+		justify-content: center;
+		align-items: center;
+		pointer-events: none;
+
+		&.circle { border-radius: $node-handle; }
+
+		&.arrow { background-color: transparent; }
+
+		> .arrow
+		{
+			font-size: $node-handle + 4px;
+
+			&.hidden { display: none; }
+		}
+	}
+
+	> .label
+	{
+		flex-direction: row;
+		align-items: baseline;
+		min-width: 0px;
+		gap: 0px;
+
+		&.hidden { display: none; }
+
+		> .title
+		{
+			font-size: 12px;
+			white-space: nowrap;
+		}
+
+		> .group
+		{
+			font-size: $type-small;
+			font-style: italic;
+			opacity: 0.8;
+			white-space: nowrap;
+
+			&.hidden { display: none; }
+		}
+	}
+
+	> .value-editor
+	{
+		flex-grow: 1;
+		min-width: 0px;
+
+		&.hidden { display: none; }
+	}
+
+	&.plug-in
+	{
+		padding-left: 0px;
+		padding-right: 8px;
+
+		> .handle { margin-left: -5px; }
+	}
+
+	&.plug-out
+	{
+		justify-content: flex-end;
+		padding-left: 8px;
+		padding-right: 0px;
+
+		> .handle { margin-right: -5px; }
+	}
+
+	&.unreachable > .label { opacity: 0.5; }
+}
+
+//A reroute: a dot with a word over it
+
+.node.reroute
+{
+	border-radius: 10px;;
+	border-width: 0px;
+	align-items: center;
+	justify-content: center;
+
+	//The pointer reaches the end there is something to do with: on an empty reroute that is the input, on a fed one the output.
+	> .plugs.in { z-index: 2; }
+	> .plugs.out { z-index: 0; }
+
+	&.prefer-output
+	{
+		> .plugs.in { z-index: 0; }
+		> .plugs.out { z-index: 2; }
+	}
+
+	> .plugs
+	{
+		position: absolute;
+		left: 1px;
+		top: 1px;
+		width: 14px;
+		height: 14px;
+	}
+
+	> .reroute-comment
+	{
+		position: absolute;
+		top: -22px;
+		max-width: 500px;
+		padding: 1px 10px;
+		background-color: rgba( 24, 24, 24, 0.8 );
+		border-radius: 2px;;
+		color: $text-control;
+		font-size: $type-small;
+		white-space: nowrap;
+		pointer-events: none;
+
+		&.hidden { display: none; }
+	}
+}
+
+//A comment: a box round part of the graph
+
+.node.comment
+{
+	border-radius: 4px;
+	border: 1px solid transparent;
+
+	> .comment-title
+	{
+		flex-direction: row;
+		align-items: center;
+		height: 34px;
+		margin: 3px;
+		padding: 0px 6px;
+		border-radius: 3px;;
+		gap: 6px;
+		flex-shrink: 0;
+
+		> .icon { font-size: 19px; }
+
+		> .name
+		{
+			font-size: $type-default;
+			font-weight: 500;
+			white-space: nowrap;
+		}
+	}
+
+	> .comment-description
+	{
+		margin: 8px 16px;
+		font-size: $type-default;
+		word-break: break-word;
+
+		&.hidden { display: none; }
+	}
+}

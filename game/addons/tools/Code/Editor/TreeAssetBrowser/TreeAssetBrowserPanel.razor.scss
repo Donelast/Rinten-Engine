@@ -1,0 +1,134 @@
+﻿TreeAssetBrowserPanel,
+.tree-asset-browser {
+	flex-direction: row;
+	flex-grow: 1;
+	min-width: 0;
+	min-height: 0;
+	color: $ink-dim;
+
+	> .scopes {
+		flex-direction: column;
+		flex-shrink: 0;
+		width: 34px;
+		padding-top: 4px;
+		gap: 2px;
+		//Chrome rather than a surface: this is the frame the browser is worked in, so it takes the window's own dark like every other strip
+		//that holds tabs. Left at the panel grey it was the one part of the browser that agreed with neither the tree beside it nor the grid.
+		background-color: $window-background;
+
+		position: relative;
+
+		//Divider drawn as a hairline that fades out at the top and bottom, rather than a full border
+		&::after
+		{
+			content: "";
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			right: 0;
+			width: 1px;
+			pointer-events: none;
+
+			background-image: linear-gradient( to bottom,
+				transparent,
+				$edge-lit 12%,
+				$edge-lit 88%,
+				transparent );
+		}
+	}
+
+	> .main {
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+		min-height: 0;
+	}
+
+	.toolbar {
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 4px;
+		padding: 4px;
+		height: $row;
+
+		//Two thirds of the row it stands in, and no longer the thing that takes whatever width is going: what
+		//is to the right of it - the pinned folders - is worth more of the bar than an empty search box.
+		> .search {
+			flex-grow: 0;
+			flex-shrink: 1;
+			width: 140px;
+			min-width: 90px;
+			height: 18px;
+			font-size: $type-small;
+		}
+
+		//The pinned folders, where they are reached from rather than listed. They were a heading in the tree, which is a place to go and look;
+		//a pin is for the folder somebody keeps coming back to, so it belongs on the bar where it can be pressed without going anywhere first.
+		> .pins {
+			flex-direction: row;
+			align-items: center;
+			flex-grow: 1;
+			flex-shrink: 1;
+			min-width: 0;
+			gap: 2px;
+			overflow: hidden;
+
+			> .pin {
+				@include pressable;
+				@include one-line;
+
+				flex-shrink: 1;
+				max-width: 140px;
+				align-items: center;
+				padding: 0px 8px;
+				height: 18px;
+
+				border-radius: $radius-2;
+				background-color: $veil;
+				color: $ink-faint;
+				font-size: $type-small;
+
+				&:hover
+				{
+					background-color: $veil-hover;
+					color: $ink;
+
+					@include lit;
+				}
+
+				&:active { background-color: $veil-down; }
+			}
+		}
+
+		> .tabs {
+			flex-direction: row;
+			flex-grow: 1;
+			min-width: 0;
+			gap: 2px;
+		}
+
+		> .filters {
+			flex-shrink: 1;
+			max-width: 260px;
+			font-size: $type-small;
+			color: $green;
+			@include one-line;
+		}
+	}
+
+	.panels {
+		flex-direction: row;
+		flex-grow: 1;
+		flex-shrink: 1;
+		min-width: 0;
+		min-height: 0;
+		height: 100%;
+
+		//A panel whose width the splitter set; the last one takes the rest of the row.
+		> .fixed {
+			flex-grow: 0;
+			flex-shrink: 0;
+		}
+	}
+}

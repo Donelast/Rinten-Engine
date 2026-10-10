@@ -1,0 +1,49 @@
+﻿InputActionControl.control
+{
+	flex-grow: 1;
+	min-width: 0;
+	cursor: pointer;
+
+	> .field
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-grow: 1;
+		min-width: 0;
+		min-height: $control-row-height;
+		padding: $control-text-padding;
+		padding-right: 28px;
+		background-color: $control-background;
+		border: $control-border;
+		border-radius: $control-radius;
+
+		> .value
+		{
+			flex-grow: 1;
+			min-width: 0;
+			color: $text-control;
+			font-size: $control-text-size;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+
+			&.multiple { color: $multiple-values; }
+		}
+
+	}
+
+	&:hover > .field > .value
+	{
+		color: $text;
+	}
+
+	&.open > .field
+	{
+		border-color: $primary;
+	}
+
+	&.readonly
+	{
+		cursor: default;
+	}
+}

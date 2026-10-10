@@ -1,0 +1,45 @@
+CurveControl.control.no-background,
+CurveRangeControl.control.no-background
+{
+	flex-grow: 1;
+	min-width: 0;
+	min-height: $control-row-height;
+
+	> .preview
+	{
+		flex-grow: 1;
+		min-height: $control-row-height;
+		cursor: pointer;
+		pointer-events: all;
+		border-radius: $control-radius;
+		border: 1px solid $border;
+		background-color: $control-background;
+		overflow: hidden;
+		position: relative;
+
+		//The curve bitmap: code sets its size, its place and stretch come from here.
+		> image
+		{
+			position: absolute;
+			left: 0;
+			top: 0;
+			pointer-events: none;
+			object-fit: fill;
+		}
+
+		&:hover
+		{
+			border-color: $border-light;
+		}
+
+		&.multiple
+		{
+			background-color: $multiple-values;
+		}
+	}
+}
+
+CurvePreviewPanel
+{
+	flex-grow: 1;
+}

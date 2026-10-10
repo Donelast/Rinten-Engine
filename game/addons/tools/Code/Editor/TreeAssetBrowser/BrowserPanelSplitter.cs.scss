@@ -1,0 +1,15 @@
+//The strip between the folder tree and the grid: the same seam as every other splitter
+//in the editor, and the same width, colour and hover as the gap between two docks.
+BrowserPanelSplitter {
+	flex-shrink: 0;
+	width: $separator-width;
+	cursor: ew-resize;
+	pointer-events: all;
+	background-color: $separator-color;
+	transition: background-color $fast $ease;
+
+	&:hover,
+	&.dragging {
+		background-color: $separator-hover-color;
+	}
+}

@@ -1,0 +1,113 @@
+//The editor's one slider, matched to the old tool GUI: hairline groove, 7x11 grip, 1x5 ticks
+
+$slider-groove-dark: #1c1c1c;
+$slider-groove-lit: #696969;
+$slider-groove-dim: #3b3b3b;
+$slider-grip: #4e4e4e;
+$slider-grip-lit: #8c8c8c;
+$slider-grip-top: #6c6c6c;
+$slider-grip-shade: #1e1e1e;
+$slider-tick: #626262;
+$slider-number: #8a8a8a;
+
+.slider-track
+{
+    position: relative;
+    flex-direction: column;
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+
+    //Room for half a grip past each end, and half a number.
+    padding: 0 8px;
+    cursor: pointer;
+
+    > .track
+    {
+        position: relative;
+        height: 13px;
+        flex-shrink: 0;
+        pointer-events: all;
+
+        //Over the ruler, which is pulled up under the groove and runs under the grip.
+        z-index: 1;
+
+        //Two dark lines, one lit, one dim.
+        > .groove
+        {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 5px;
+            height: 2px;
+            background-color: $slider-groove-dark;
+            box-shadow: 0px 1px 0px $slider-groove-lit, 0px 2px 0px $slider-groove-dim;
+            pointer-events: none;
+
+            //Filled in the accent up to the grip, like a gauge.
+            > .fill
+            {
+                position: absolute;
+                left: 0;
+                top: 0;
+                height: 100%;
+                background-color: $accent;
+                pointer-events: none;
+            }
+        }
+
+        > .thumb
+        {
+            position: absolute;
+            top: 1px;
+            width: 7px;
+            height: 11px;
+            background-color: $slider-grip;
+            border-left: 1px solid $slider-grip-lit;
+            border-top: 1px solid $slider-grip-top;
+            border-right: 1px solid $slider-grip-shade;
+            border-bottom: 1px solid $slider-grip-shade;
+            box-shadow: 1px 1px 0px rgba( 0, 0, 0, 0.8 );
+            transform: translateX( -50% );
+            pointer-events: none;
+        }
+
+        &:hover > .thumb
+        {
+            background-color: lighten( $slider-grip, 0.12 );
+        }
+    }
+
+    //Ticks and numbers share one row hung under the groove and take no height, so the groove centres
+    > .scale
+    {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        top: 9px;
+        height: 9px;
+        pointer-events: none;
+
+        //Hung straight off the groove.
+        > .tick
+        {
+            position: absolute;
+            top: 0;
+            width: 1px;
+            height: 5px;
+            background-color: $slider-tick;
+        }
+
+        > .label
+        {
+            position: absolute;
+            top: 0;
+            height: 9px;
+            align-items: center;
+            font-size: 9px;
+            color: $slider-number;
+            white-space: nowrap;
+            transform: translateX( -50% );
+        }
+    }
+}

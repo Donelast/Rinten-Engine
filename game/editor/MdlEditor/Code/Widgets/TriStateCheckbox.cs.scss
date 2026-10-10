@@ -1,0 +1,13 @@
+//The third state of a checkbox, and nothing else. The box, the word and the tick are design.scss's .checkbox - one look for
+//every checkbox in the window. Only "some of these" is missing there, because Rinten.UI.Checkbox has no such state to style.
+
+.checkbox.tri-state
+{
+	//Partial: lit like ticked, but with a dimmed bar so the two are easy to tell apart
+	&.partial
+	{
+		color: $ink;
+
+		> .checkmark { color: rgba( $primary, 0.55 ); }
+	}
+}

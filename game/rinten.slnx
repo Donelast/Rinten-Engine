@@ -1,0 +1,8 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+  </Configurations>
+  <Folder Name="/Addons/">
+    <Project Path="addons/base/code/Base Library.csproj" />
+  </Folder>
+</Solution>

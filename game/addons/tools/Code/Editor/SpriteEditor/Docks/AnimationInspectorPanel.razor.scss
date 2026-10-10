@@ -1,0 +1,15 @@
+//The inspector: one scroll, and the sheet in it. The scroll is design.scss's .scroll and is not restated.
+
+.animation-inspector
+{
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+
+	> .scroll
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+	}
+}

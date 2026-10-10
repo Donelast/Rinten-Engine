@@ -1,0 +1,769 @@
+﻿using Rinten.Internal;
+using System.Collections.Concurrent;
+using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
+
+namespace Rinten;
+
+/// <summary>Describes a type. We use this class to wrap and return <see cref="System.Type">System.Type</see>'s that are safe to interact with. Returned by <see cref="Internal.TypeLibrary"/>.</summary>
+[SkipHotload]
+public sealed class TypeDescription : ISourceLineProvider
+{
+	internal readonly Internal.TypeLibrary library;
+
+	/// <summary>The type this class describes.</summary>
+	public Type TargetType { get; private set; }
+
+	/// <summary>The base type. This can return null if the type isn't in the type library!</summary>
+	public TypeDescription BaseType => TargetType.BaseType is not null ? library.GetType( TargetType.BaseType ) : null;
+
+	/// <summary>Whether the class is valid or not, i.e. whether the type still exists.</summary>
+	public bool IsValid { get; private set; }
+
+	//Is from an assembly built here rather than one we were handed, so we are happy to expose all of its members.
+	internal bool IsDynamicAssembly { get; set; }
+
+	//Attributes that we, and our bases, implement
+	internal List<System.Attribute> Attributes = new();
+
+	//Attributes that we implement directly
+	internal List<System.Attribute> OwnAttributes = new();
+
+	/// <summary>All members (methods, properties, etc) of this type.</summary>
+	public MemberDescription[] Members
+	{
+		get { EnsureMembers(); return members; }
+		private set => members = value;
+	}
+
+	/// <summary>Members (methods, properties, etc) declared by exactly this type, and not inherited.</summary>
+	public MemberDescription[] DeclaredMembers
+	{
+		get { EnsureMembers(); return declaredMembers; }
+		private set => declaredMembers = value;
+	}
+
+	/// <summary>All methods of this type.</summary>
+	public MethodDescription[] Methods
+	{
+		get { EnsureMembers(); return methods; }
+		private set => methods = value;
+	}
+
+	/// <summary>All properties of this type.</summary>
+	public PropertyDescription[] Properties
+	{
+		get { EnsureMembers(); return properties; }
+		private set => properties = value;
+	}
+
+	/// <summary>All fields on this type.</summary>
+	public FieldDescription[] Fields
+	{
+		get { EnsureMembers(); return fields; }
+		private set => fields = value;
+	}
+
+	private MemberDescription[] members;
+	private MemberDescription[] declaredMembers;
+	private MethodDescription[] methods;
+	private PropertyDescription[] properties;
+	private FieldDescription[] fields;
+
+	//Whether this type's members have been worked out yet.
+	private bool membersBuilt;
+
+	private readonly object membersLock = new();
+
+	//Types known vs types actually asked about, to show how few need their members described
+	internal static int TypesKnown;
+	internal static int TypesAsked;
+
+	//Works the members out, once, on whoever asks first.
+	private void EnsureMembers()
+	{
+		if ( membersBuilt ) return;
+
+		lock ( membersLock )
+		{
+			if ( membersBuilt ) return;
+			if ( TargetType is null ) { membersBuilt = true; return; }
+
+			var asked = System.Threading.Interlocked.Increment( ref TypesAsked );
+
+			//Trace who asked at the 200th type, to find whatever walks every type
+			if ( asked == 200 && !EagerMembers )
+				Logging.GetLogger( "Type Library" ).Trace( $"asked about {TargetType} by " + System.Environment.StackTrace );
+
+			BuildMembers( TargetType );
+
+			membersBuilt = true;
+
+			library.RegisterMembers( this );
+		}
+	}
+
+	//Whether the members have been described - see EnsureMembers.
+	internal bool MembersBuilt => membersBuilt;
+
+	//The members if they have been described, and nothing otherwise - for whoever must not describe them by asking.
+	internal MemberDescription[] BuiltMembers => membersBuilt ? members ?? [] : [];
+
+	//Describes the members now, on this thread.
+	internal void EnsureMembersBuilt() => EnsureMembers();
+
+	/// <summary>True if the target type is an interface</summary>
+	public bool IsInterface => TargetType.IsInterface;
+
+	/// <summary>True if the target type is an enum</summary>
+	public bool IsEnum => TargetType.IsEnum;
+
+	/// <summary>True if the target type is static</summary>
+	public bool IsStatic => TargetType.IsAbstract && TargetType.IsSealed;
+
+	/// <summary>True if the target type is a class</summary>
+	public bool IsClass => TargetType.IsClass;
+
+	/// <summary>True if the target type is a value</summary>
+	public bool IsValueType => TargetType.IsValueType;
+
+	/// <summary>Gets a value indicating whether the System.Type is abstract and must be overridden.</summary>
+	public bool IsAbstract => TargetType.IsAbstract;
+
+	/// <summary>Name of this type.</summary>
+	public string Name => TargetType.Name;
+
+	/// <summary>Namespace of this type.</summary>
+	public string Namespace => TargetType.Namespace;
+
+	/// <summary>Full name of this type.</summary>
+	public string FullName => TargetType.FullName;
+
+	//Preferred name to use when serializing this type.
+	internal string SerializedName => _useClassNameWhenSerializing ? ClassName : FullName;
+
+	public string Title => displayInfo.Name;
+
+	public string Description => displayInfo.Description;
+
+	public string Icon => displayInfo.Icon;
+
+	public string Group => displayInfo.Group;
+
+	public int Order => displayInfo.Order;
+
+	/// <summary>Tags are set via the [Tag] attribute</summary>
+	public string[] Tags { get; internal set; }
+
+	public string[] Aliases => displayInfo.Alias;
+
+	/// <summary>An integer that represents this type. Based off the class name.</summary>
+	public int Identity { get; internal set; }
+
+	/// <summary>A string representing this class name. Historically this was provided by [Library( classname )]. If no special name is provided, this will be type.Name.</summary>
+	public string ClassName => displayInfo.ClassName;
+
+	/// <summary>The line number of this member</summary>
+	public int SourceLine { get; internal set; }
+
+	/// <summary>The file containing this member</summary>
+	public string SourceFile { get; internal set; }
+
+	string ISourcePathProvider.Path => SourceFile;
+	int ISourceLineProvider.Line => SourceLine;
+
+	DisplayInfo displayInfo;
+
+	private bool _useClassNameWhenSerializing;
+
+	static bool ShouldExposeMember( MemberInfo member, Internal.TypeLibrary lib, TypeDescription source )
+	{
+		//|               |  public  | protected | private | |---------------|---------|-----------|---------| | package.*/*   |    ✅   |     ✅    |    ✅   |
+		//| Rinten.*/*   |    ✅   |     ✅    |    ❌   | | System.*/*    |    ✅   |     ❌    |    ❌   | Note: only intrinsic types from System.* are included
+
+		// Ignore compiler generated fields, except for event backing fields
+		if ( member is FieldInfo fielda && fielda.HasAttribute( typeof( CompilerGeneratedAttribute ) ) )
+		{
+			if ( fielda.GetEventInfo() is null )
+			{
+				return false;
+			}
+		}
+
+		if ( member is MethodInfo methodInfo )
+		{
+			//Skip finalizers; the name is a literal so type registration doesn't pull in Roslyn
+			if ( methodInfo.Name == "Finalize" ) return false;
+
+			// Ignore getter/setter methods
+			if ( methodInfo.IsSpecialName ) return false;
+			if ( methodInfo.Name == "GetType" ) return false;
+			if ( methodInfo.Name == "ToString" ) return false;
+			if ( methodInfo.Name == "Equals" ) return false;
+			if ( methodInfo.Name == "GetHashCode" ) return false;
+		}
+
+		//Assume we're a System or something else if we're not package or Rinten
+		var assembly = member.DeclaringType.Assembly;
+
+		//This could be a bit shitty. We're looking at the derived types, so we try to get the derived type
+		//here. What if that type isn't in the library yet? I'll tell you what, we just fucked up. That's what.
+		if ( source.TargetType.Assembly == assembly )
+		{
+			//This is a dynamic assembly, allow anything
+			if ( source.IsDynamicAssembly )
+				return true;
+		}
+		else
+		{
+			//this assembly is dynamic, allow anything
+			var dt = lib.GetType( member.DeclaringType );
+			if ( dt is not null && dt.IsDynamicAssembly ) return true;
+		}
+
+		var asmName = assembly.GetName().Name!;
+
+		//Fallback for game assemblies without the package. prefix, e.g. when loaded in unit tests
+		if ( asmName.StartsWith( "package." ) )
+			return true;
+
+		var isSystemType = !asmName.StartsWith( "Rinten.", StringComparison.OrdinalIgnoreCase );
+
+		//If we're not a Rinten.* assembly, we're either something like System.* or SkiaSharp.* etc. Only intrinsic types are allowed from these.
+		if ( isSystemType && !TypeLibrary.ShouldExposePublicSystemMember( member ) )
+		{
+			return false;
+		}
+
+		//Members with [Expose] or [ActionGraphInclude] are always exposed
+		if ( member.HasAttribute( typeof( ExposeAttribute ) ) )
+			return true;
+
+		if ( member.HasAttribute( typeof( ActionGraphIncludeAttribute ) ) )
+			return true;
+
+		//Rinten.* and intrinsic types from System.* - allow public and protected (family)
+
+		if ( member is MethodBase method )
+		{
+			if ( method.IsPublic ) return true;
+			if ( !isSystemType && method.IsFamily ) return true;
+		}
+
+		if ( member is PropertyInfo property )
+		{
+			//should be able to access get if public
+			if ( property.GetMethod?.IsPublic ?? false ) return true;
+
+			if ( (property.GetMethod?.IsPublic ?? true) && (property.SetMethod?.IsPublic ?? true) ) return true;
+			if ( !isSystemType && (property.GetMethod?.IsFamily ?? true) && (property.SetMethod?.IsFamily ?? true) ) return true;
+		}
+
+		if ( member is FieldInfo field )
+		{
+			if ( field.IsPublic ) return true;
+			if ( !isSystemType && field.IsFamily ) return true;
+		}
+
+		return lib.ShouldExposePrivateMember?.Invoke( member ) ?? false;
+	}
+
+	internal static TypeDescription Create( TypeLibrary typeLibrary, Type type, bool dynamicAssembly, TypeDescription target )
+	{
+		target ??= new TypeDescription( typeLibrary );
+
+		target.Init( type, dynamicAssembly );
+
+
+		return target;
+	}
+
+	internal TypeDescription( Internal.TypeLibrary lib )
+	{
+		IsValid = true;
+		library = lib;
+	}
+
+	internal static int GetTypeIdentity( Type type )
+	{
+		return $"{type.FullName},{type.Assembly.FullName.Split( "," ).FirstOrDefault()}".FastHash();
+	}
+
+	//This needs to generate a unique string per member on a type.
+	static string GetMemberIdentity( MemberInfo info )
+	{
+		return $"{info.DeclaringType}/{info}";
+	}
+
+	private void Init( Type type, bool dynamicAssembly )
+	{
+		TargetType = type;
+		IsDynamicAssembly = dynamicAssembly;
+		Identity = GetTypeIdentity( type );
+		GenericArguments = type.GetGenericArguments();
+		Interfaces = type.GetInterfaces();
+
+		//Reset cached factory so it recompiles against the new Type after hotload
+		_parameterlessFactory = null;
+		_parameterlessFactoryResolved = false;
+
+		System.Threading.Interlocked.Increment( ref TypesKnown );
+
+		//The members are not worked out here any more - see EnsureMembers. A hotload has to redo them if they
+		//were done, though: the descriptions point at MemberInfo from the assembly that has just been replaced.
+		var hadMembers = membersBuilt;
+
+		membersBuilt = false;
+
+		if ( hadMembers || EagerMembers ) EnsureMembers();
+
+		CaptureAttributes();
+		displayInfo = DisplayInfo.ForMember( type, true, Attributes );
+
+		if ( !string.IsNullOrWhiteSpace( displayInfo.ClassName ) )
+		{
+			Rinten.Internal.TypeLibrary.OnClassName?.Invoke( displayInfo.ClassName );
+		}
+	}
+
+	//Describe all members at registration instead of on first ask; off unless -eagermembers
+	private static readonly bool EagerMembers =
+		System.Environment.GetCommandLineArgs().Contains( "-eagermembers" );
+
+	//False if the member names a type from an assembly this build lacks, so it is skipped
+	private static bool Resolves( MemberInfo member, Func<bool> read )
+	{
+		try
+		{
+			return read();
+		}
+		catch ( System.IO.FileNotFoundException e )
+		{
+			Missing( member, e.FileName );
+			return false;
+		}
+		catch ( TypeLoadException e )
+		{
+			Missing( member, e.TypeName );
+			return false;
+		}
+	}
+
+	private static readonly ConcurrentDictionary<string, bool> saidMissing = new();
+	private static readonly Logger missingLog = new( "TypeLibrary" );
+
+	//Says once, for each assembly, that members naming it were left out.
+	private static void Missing( MemberInfo member, string what )
+	{
+		if ( saidMissing.TryAdd( what ?? "", true ) )
+			missingLog.Info( $"members naming {what} are not described - this build does not carry it (first: {member.Name})" );
+	}
+
+	private void BuildMembers( Type type )
+	{
+		var members = type.GetMembers( BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static )
+								.Where( x => Resolves( x, () => ShouldExposeMember( x, library, this ) ) )
+								.ToList();
+
+
+		//If GetMemberIdentity isn't creating unique per type then something is wrong. Debug here.
+
+		/*
+		var groups = members.GroupBy( x => GetMemberIdentity( x ) ).Where( x => x.Count() > 1 );
+		if ( groups.Any() )
+		{
+			throw new System.Exception( $"DUPLOICATES: {groups.First().Key}" );
+		}*/
+
+		//The field, not the property: the property builds, and building from inside the build is an endless one.
+		Dictionary<string, MemberDescription> previousPool = this.members?.ToDictionary( x => x.Ident, x => x );
+		ConcurrentBag<MemberDescription> md = new();
+		void AddMember( MemberInfo x ) => Resolves( x, () => { AddResolvedMember( x ); return true; } );
+
+		void AddResolvedMember( MemberInfo x )
+		{
+			var ident = GetMemberIdentity( x );
+
+			MemberDescription previous = null;
+			previousPool?.TryGetValue( ident, out previous );
+			var memberDesc = MemberDescription.Create( this, x, previous );
+
+			if ( memberDesc is not null )
+			{
+				memberDesc.Ident = ident;
+				md.Add( memberDesc );
+			}
+		}
+
+		if ( OperatingSystem.IsBrowser() )
+		{
+			foreach ( var x in members )
+				AddMember( x );
+		}
+		else
+		{
+			System.Threading.Tasks.Parallel.ForEach( members, AddMember );
+		}
+
+		//If we don't have source lines, then order by the order we were in the GetMembers array. which is usually ordered by source lines anyway.
+		foreach ( var member in md.Where( x => x.SourceLine == 0 ) )
+		{
+			member.SourceLine = members.IndexOf( member.MemberInfo );
+		}
+
+		//Assigned to the fields rather than through the properties: the properties ask for
+		//the members, and asking from inside the build is how a lock becomes a deadlock.
+		this.members = md.OrderBy( x => x.SourceLine ).ToArray();
+		declaredMembers = this.members.Where( x => x.MemberInfo.DeclaringType == type ).ToArray();
+		methods = this.members.OfType<MethodDescription>().ToArray();
+		properties = this.members.OfType<PropertyDescription>().ToArray();
+		fields = this.members.OfType<FieldDescription>().ToArray();
+	}
+
+	internal void Dispose()
+	{
+		foreach ( var attr in Attributes )
+		{
+			if ( attr is ITypeAttribute ita )
+			{
+				try
+				{
+					ita.TypeUnregister();
+				}
+				catch ( System.Exception e )
+				{
+					//Cheeky but we definitely want to print a warning for this
+					Logging.GetLogger( "Type Library" ).Warning( e, $"Exception when calling {attr.GetType()}.TypeUnregister()" );
+				}
+			}
+		}
+
+		//clear the member info so hotload isn't gonna find anything and shit itself The field: a type whose
+		//members were never described has none to let go of, and the property would describe them on the way out.
+		foreach ( var member in members ?? Array.Empty<MemberDescription>() )
+		{
+			member.Dispose();
+		}
+
+		//TargetType = null; // no! HotloadUpgrader needs it!
+		IsValid = false;
+	}
+
+	void CaptureAttributes()
+	{
+		OwnAttributes.Clear();
+		Attributes.Clear();
+
+		_useClassNameWhenSerializing = false;
+
+		HashSet<string> tags = null;
+
+		//Get our attributes
+		var attributes = TargetType.GetCustomAttributes<System.Attribute>( false );
+
+		OwnAttributes.AddRange( attributes );
+		Attributes.AddRange( OwnAttributes );
+
+		//and any base attributes that we're allowed to inherit
+		if ( TargetType.BaseType != null )
+		{
+			var baseAttributes = TargetType.BaseType.GetCustomAttributes<System.Attribute>( true ).Where( x => x is not IUninheritable );
+			Attributes.AddRange( baseAttributes );
+		}
+
+		foreach ( var attr in Attributes )
+		{
+			if ( attr is ITypeAttribute ita )
+			{
+				ita.TargetType = TargetType;
+				library.PostAddCallbacks.Enqueue( () => ita.TypeRegister() );
+			}
+
+			if ( attr is TagAttribute tag )
+			{
+				foreach ( var n in tag.EnumerateValues() )
+				{
+					tags ??= new();
+					tags.Add( n.ToLower() );
+				}
+			}
+		}
+
+		SourceLine = 0;
+		SourceFile = null;
+
+		if ( OwnAttributes.OfType<SourceLocationAttribute>().MinBy( x => x.Path.Length ) is { } sourceLocation )
+		{
+			SourceLine = sourceLocation.Line;
+			SourceFile = sourceLocation.Path;
+		}
+
+		foreach ( var attr in OwnAttributes )
+		{
+			//TODO: decide if we want to always serialize as the [ClassName], then we can get rid of the ".comp" check
+			if ( attr is ClassNameAttribute className && className.Value?.EndsWith( ".comp", StringComparison.OrdinalIgnoreCase ) is true )
+			{
+				_useClassNameWhenSerializing = true;
+			}
+		}
+
+		Tags = tags?.ToArray() ?? Array.Empty<string>();
+	}
+
+	/// <summary>Returns true if this is named the passed name, either through classname, target class name or an alias</summary>
+	public bool IsNamed( string name, bool exactFullName = false )
+	{
+		if ( string.Equals( name, displayInfo.Fullname, StringComparison.OrdinalIgnoreCase ) )
+			return true;
+
+		if ( Aliases.Length > 0 && Aliases.Any( x => string.Equals( name, x, StringComparison.OrdinalIgnoreCase ) ) )
+			return true;
+
+		if ( exactFullName ) return false;
+
+		if ( string.Equals( name, ClassName, StringComparison.OrdinalIgnoreCase ) )
+			return true;
+
+		return string.Equals( Name, name, StringComparison.OrdinalIgnoreCase );
+	}
+
+	/// <summary>Returns the first attribute of given type, if any are present.</summary>
+	public T GetAttribute<T>( bool inherited = false ) where T : Attribute
+	{
+		return (inherited ? Attributes : OwnAttributes).OfType<T>().FirstOrDefault();
+	}
+
+	/// <summary>Returns all attributes of given type, if any are present.</summary>
+	public IEnumerable<T> GetAttributes<T>( bool inherited = false ) where T : Attribute
+	{
+		return (inherited ? Attributes : OwnAttributes).OfType<T>();
+	}
+
+	/// <summary>Returns true if the class has this attribute</summary>
+	public bool HasAttribute<T>( bool inherited = true ) where T : Attribute
+	{
+		return (inherited ? Attributes : OwnAttributes).OfType<T>().Any();
+	}
+
+	/// <summary>True if we have this tag.</summary>
+	public bool HasTag( string tag ) => Tags.Contains( tag );
+
+	/// <summary>Get property by name (will not find static properties)</summary>
+	public PropertyDescription GetProperty( string name ) => Properties.FirstOrDefault( x => !x.IsStatic && x.IsNamed( name ) );
+
+	/// <summary>Get static property by name</summary>
+	public PropertyDescription GetStaticProperty( string name ) => Properties.FirstOrDefault( x => x.IsStatic && x.IsNamed( name ) );
+
+	//Get field by name (will not find static fields)
+	internal FieldDescription GetField( string name ) => Fields.FirstOrDefault( x => !x.IsStatic && x.IsNamed( name ) );
+
+	/// <summary>Get value by field or property name (will not find static members)</summary>
+	public object GetValue( object instance, string name )
+	{
+		return GetValue( instance, name, false, out _ );
+	}
+
+	/// <summary>Get value by field or property name, and which type the member is declared to store (will not find static members)</summary>
+	public object GetStaticValue( string name )
+	{
+		return GetValue( null, name, true, out _ );
+	}
+
+	//Get value by field or property name, and which type the member is declared to store
+	internal object GetValue( object instance, string name, bool isStatic, out Type memberType )
+	{
+		var member = Members.FirstOrDefault( x => x.IsStatic == isStatic && x.IsNamed( name ) );
+
+		switch ( member )
+		{
+			case PropertyDescription pd:
+				memberType = pd.PropertyType;
+				return pd.GetValue( instance );
+			case FieldDescription fd:
+				memberType = fd.FieldType;
+				return fd.GetValue( instance );
+			default:
+				memberType = null;
+				return default;
+		}
+	}
+
+	/// <summary>Set value by field or property name (will not set static members)</summary>
+	public bool SetValue( object instance, string name, object value )
+	{
+		return SetValue( instance, name, value, false );
+	}
+
+	/// <summary>Set static value by field or property name</summary>
+	public bool SetStaticValue( string name, object value )
+	{
+		return SetValue( null, name, value, true );
+	}
+
+	internal bool SetValue( object instance, string name, object value, bool isStatic )
+	{
+		var member = Members.Where( x => x.IsStatic == isStatic && x.IsNamed( name ) ).FirstOrDefault();
+		if ( member is null ) return default;
+
+		if ( member is PropertyDescription pd )
+		{
+			pd.SetValue( instance, value );
+			return true;
+		}
+
+		if ( member is FieldDescription fd )
+		{
+			fd.SetValue( instance, value );
+			return true;
+		}
+
+		return default;
+	}
+
+	/// <summary>Get a method by name (will not find static methods)</summary>
+	public MethodDescription GetMethod( string name ) => Methods.FirstOrDefault( x => !x.IsStatic && x.IsNamed( name ) );
+
+
+	/// <summary>Get a method by name (will not find static methods)</summary>
+	public MethodDescription GetStaticMethod( string name ) => Methods.FirstOrDefault( x => x.IsStatic && x.IsNamed( name ) );
+
+	/// <summary>True if we're a generic type</summary>
+	public bool IsGenericType => TargetType.IsGenericType;
+
+	//PAIN DAY TODO: Rename to GenericParameters, since this will never be a constructed generic type
+	/// <summary>If we're a generic type this will return our generic parameters.</summary>
+	public Type[] GenericArguments { get; private set; }
+
+	/// <summary>If we implement any interfaces they will be here</summary>
+	public Type[] Interfaces { get; private set; }
+
+	//Compiled factory delegate for parameterless construction. Avoids Activator.CreateInstance + DefaultBinder overhead on every call.
+	private Func<object> _parameterlessFactory;
+	private bool _parameterlessFactoryResolved;
+
+	private Func<object> GetParameterlessFactory()
+	{
+		if ( _parameterlessFactoryResolved )
+			return _parameterlessFactory;
+
+		_parameterlessFactoryResolved = true;
+
+		if ( TargetType.IsAbstract || TargetType.IsInterface )
+			return null;
+
+		var ctor = TargetType.GetConstructor( Type.EmptyTypes );
+		if ( ctor is null )
+			return null;
+
+		_parameterlessFactory = Expression.Lambda<Func<object>>(
+			Expression.Convert( Expression.New( ctor ), typeof( object ) )
+		).Compile();
+
+		return _parameterlessFactory;
+	}
+
+	/// <summary>Create an instance of this class, return it as a T. If it can't be cast to a T we won't create it and will return null.</summary>
+	public T Create<T>( object[] args = null )
+	{
+		var type = typeof( T );
+
+		if ( !TargetType.IsAssignableTo( type ) )
+			return default;
+
+		if ( args is null or { Length: 0 } )
+		{
+			var factory = GetParameterlessFactory();
+			if ( factory is not null )
+				return (T)factory();
+		}
+
+		return (T)System.Activator.CreateInstance( TargetType, args );
+	}
+
+
+	/// <summary>Create an instance of this class using generic arguments We're going to assume you know what you're doing here and let it throw any exceptions it wants.</summary>
+	public T CreateGeneric<T>( Type[] typeArgs = null, object[] args = null )
+	{
+		//PAIN DAY TODO: maybe typeArguments shouldn't have a default value? Why do we allow null?
+
+		var genericType = MakeGenericType( typeArgs );
+		if ( genericType is null ) return default;
+
+		//create a new type
+		return (T)System.Activator.CreateInstance( genericType, args );
+	}
+
+	/// <summary>For generic type definitions, create a type by substituting the given types for each type parameter. Returns null if any of the type arguments violate the generic constraints.</summary>
+	public Type MakeGenericType( Type[] inargs )
+	{
+		//make a copy of the type args so they can't change them on a thread while we're validating
+		var typeArgs = inargs?.ToArray();
+
+		//Check that all the types are safe for us to instantiate.
+		foreach ( var arg in typeArgs )
+		{
+			library.AssertType( arg );
+		}
+
+		//Validate generic constraints
+		var genericParams = TargetType.GetGenericArguments();
+		if ( genericParams.Length != typeArgs.Length )
+			return null;
+
+		for ( int i = 0; i < genericParams.Length; i++ )
+		{
+			var param = genericParams[i];
+			var arg = typeArgs[i];
+			var attributes = param.GenericParameterAttributes;
+
+			//Check reference type constraint (class)
+			if ( (attributes & GenericParameterAttributes.ReferenceTypeConstraint) != 0 )
+			{
+				if ( arg.IsValueType )
+					return null;
+			}
+
+			//Check value type constraint (struct)
+			if ( (attributes & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0 )
+			{
+				if ( !arg.IsValueType || Nullable.GetUnderlyingType( arg ) != null )
+					return null;
+			}
+
+			//Check new() constraint
+			if ( (attributes & GenericParameterAttributes.DefaultConstructorConstraint) != 0 )
+			{
+				if ( !arg.IsValueType && arg.GetConstructor( Type.EmptyTypes ) == null )
+					return null;
+			}
+
+			//Check managed/unmanaged constraints via attributes
+			foreach ( var constraintAttr in param.GetCustomAttributes( false ) )
+			{
+				var attrType = constraintAttr.GetType();
+
+				//Check for 'unmanaged' constraint
+				if ( attrType.Name == "IsUnmanagedAttribute" )
+				{
+					if ( !SandboxedUnsafe.IsAcceptablePod( arg ) )
+						return null;
+				}
+			}
+
+			//Check base type and interface constraints
+			var constraints = param.GetGenericParameterConstraints();
+			foreach ( var constraint in constraints )
+			{
+				if ( !constraint.IsAssignableFrom( arg ) )
+					return null;
+			}
+		}
+
+		return TargetType.MakeGenericType( typeArgs );
+	}
+
+
+	public override string ToString() => TargetType.FullName;
+
+
+}

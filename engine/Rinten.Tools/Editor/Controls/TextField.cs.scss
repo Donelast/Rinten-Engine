@@ -1,0 +1,74 @@
+﻿//A field to type in. Sunk into the panel, one hairline round it, and the hairline goes white when it is the thing being typed into - which is
+//what the look this is taken from does (LonePine: .input-text). The design tokens are put in front of this as it is parsed (EditorTokens).
+
+TextField
+{
+	flex-direction: row;
+	align-items: center;
+
+	height: 28px;
+	padding: 0px 8px;
+
+	//The field is what the hint below is placed against. Without this it is static, and an absolutely placed child then measures from the
+	//nearest ancestor that is placed at all - which is the whole window, so the placeholder went and stood 10 pixels from the window's left edge.
+	position: relative;
+
+	@include well;
+
+	font-family: $font;
+	font-size: $type-body;
+	color: $ink;
+	caret-color: $ink;
+
+	cursor: text;
+
+	transition: background-color $normal $ease, border-color $normal $ease;
+
+	&:hover { border-color: $edge-lit; }
+
+	//Typed into: a shade off the well it was, and the ring around it in the accent. The fill stays dark - a field
+	//that lightens to a card while it is being typed into stops looking like a field at the moment it matters.
+	&.focused
+	{
+		background-color: $base;
+
+		@include focus-ring;
+	}
+
+	.mark
+	{
+		font-family: Material Icons;
+		font-size: $type-large;
+		color: $ink-faint;
+
+		margin-right: 8px;
+
+		transition: color $normal $ease;
+	}
+
+	&.focused .mark { color: $ink; }
+
+	.text
+	{
+		flex-grow: 1;
+
+		//The text scrolls inside the field rather than pushing it wider.
+		overflow: hidden;
+		white-space: pre;
+	}
+
+	//Behind the text rather than beside it: it is what the empty field says, and the moment there is text it is gone.
+	.hint
+	{
+		position: absolute;
+		left: 10px;
+
+		color: $ink-off;
+		pointer-events: none;
+	}
+
+	//Out from under the icon, where there is one.
+	&.marked .hint { left: 34px; }
+
+	.hidden { display: none; }
+}

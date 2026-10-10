@@ -1,0 +1,27 @@
+GameObjectInspectorPanel,
+.gameobject-inspector
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+}
+
+GameObjectInspectorPanel > .scroll,
+.gameobject-inspector > .scroll
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+	overflow: scroll;
+
+	//Cards on the panel, a little room between each.
+	gap: $gap-section;
+	padding-bottom: $gap-section;
+	align-items: stretch;
+}
+
+GameObjectInspectorPanel > .scroll > *,
+.gameobject-inspector > .scroll > *
+{
+	flex-shrink: 0;
+}

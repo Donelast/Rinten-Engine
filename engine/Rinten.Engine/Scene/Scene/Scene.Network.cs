@@ -1,0 +1,177 @@
+using Rinten.Network;
+
+namespace Rinten;
+
+public partial class Scene : GameObject
+{
+	[Obsolete( "Moved to ProjectSettings.Networking.UpdateRate" )]
+	public float NetworkFrequency { get; set; }
+
+	/// <summary>One divided by ProjectSettings.Networking.UpdateRate.</summary>
+	public float NetworkRate => 1.0f / ProjectSettings.Networking.UpdateRate.Clamp( 1, 500 );
+
+	internal readonly HashSet<NetworkObject> networkedObjects = new();
+
+	internal void RegisterNetworkedObject( NetworkObject obj )
+	{
+		networkedObjects.Add( obj );
+	}
+
+	internal void UnregisterNetworkObject( NetworkObject obj )
+	{
+		//When a network object is removed, we can clean up any snapshot data.
+		var system = SceneNetworkSystem.Instance;
+		system?.DeltaSnapshots?.ClearNetworkObject( obj );
+
+		networkedObjects.Remove( obj );
+	}
+
+	RealTimeSince _timeSinceNetworkUpdate = 0f;
+
+	//Send any pending network updates at our desired NetworkRate.
+	internal void SceneNetworkUpdate()
+	{
+		if ( SceneNetworkSystem.Instance is not { } system )
+			return;
+
+		if ( _timeSinceNetworkUpdate < NetworkRate )
+			return;
+
+		_timeSinceNetworkUpdate = 0f;
+
+		SendClientTick( system );
+
+		system.DeltaSnapshots.UpdateTime();
+
+		var connections = system.GetFilteredConnections( Connection.ChannelState.Connected );
+		var connectionsArray = connections as Connection[] ?? connections.ToArray();
+
+		//Partition objects into dirty (pending changes) and clean (fully ACK'd). Dirty objects are processed
+		//first so they end up in earlier clusters, which are less likely to be delayed under network congestion.
+		_dirtySnapshotObjects.Clear();
+		_cleanSnapshotObjects.Clear();
+
+		foreach ( var n in networkedObjects )
+		{
+			if ( n.LocalSnapshotState.UpdatedConnections.Count == 0 )
+				_dirtySnapshotObjects.Add( n );
+			else
+				_cleanSnapshotObjects.Add( n );
+		}
+
+		IEnumerable<IDeltaSnapshot> objects = _dirtySnapshotObjects.Concat( _cleanSnapshotObjects );
+
+		//If we're the host, include any GameObjectSystems.
+		if ( Networking.IsHost )
+			objects = objects.Concat( systems.Values );
+
+		system.DeltaSnapshots.Send( objects, connectionsArray );
+
+		system.DeltaSnapshots.Tick();
+	}
+
+	internal void SerializeNetworkObjects( Connection source, List<object> collection )
+	{
+		var included = new HashSet<NetworkObject>();
+
+		foreach ( var target in networkedObjects )
+		{
+			if ( target.GameObject?.IsDestroyed ?? true )
+				continue;
+
+			//Filter on the root's real visibility, not ShouldTransmit which is stale for a fresh join.
+			var root = target.RootNetworkObject;
+			if ( source is null || target.ShouldIncludeInSnapshot( source )
+				|| (root != target && (root?.ShouldIncludeInSnapshot( source ) ?? false)) )
+			{
+				AddWithAncestors( source, target, included, collection );
+			}
+		}
+	}
+
+	//Emit the create message for target and every networked ancestor above it, each
+	//at most once. A networked child must never be sent without its parent chain.
+	internal void AddWithAncestors( Connection source, NetworkObject target, HashSet<NetworkObject> included, List<object> collection )
+	{
+		var current = target;
+		while ( current is not null )
+		{
+			if ( current.GameObject?.IsDestroyed ?? true )
+				break;
+
+			if ( !included.Add( current ) )
+				break;
+
+			collection.Add( current.GetCreateMessage() );
+
+			if ( source is not null )
+				current.MarkCreateMessageSent( source );
+
+			current = current.GameObject.Parent?._net;
+		}
+	}
+
+	//Do appropriate actions based on the NetworkOrphaned mode for all networked objects owned by a specific connection.
+	internal void DoOrphanedActions( Connection connection )
+	{
+		var objects = networkedObjects.Where( n => n.Owner == connection.Id ).ToArray();
+
+		foreach ( var o in objects )
+		{
+			o.DoOrphanedAction();
+		}
+	}
+
+	//Send all of our visibility origins to other clients. These are points we can observe
+	//from, which helps to determine the visibility of network objects and sends a user command.
+	internal void SendClientTick( SceneNetworkSystem system )
+	{
+		var localConnection = Connection.Local;
+
+		//Conna: in the future we might support multiple visibility origins. For now
+		//though, we'll just use the main camera position as our primary viewing source.
+		if ( localConnection.VisibilityOrigins.Length == 0 )
+			localConnection.VisibilityOrigins = new Vector3[1];
+
+		localConnection.VisibilityOrigins[0] = Camera?.WorldPosition ?? default;
+
+		var userCommand = UserCommand.Create();
+		localConnection.BuildUserCommand( ref userCommand );
+
+		foreach ( var connection in system.GetFilteredConnections() )
+		{
+			var msg = ByteStream.Create( 256 );
+			msg.Write( InternalMessageType.ClientTick );
+
+			//Broadcast our visibility origins to everyone
+			{
+				msg.Write( (char)localConnection.VisibilityOrigins.Length );
+
+				for ( var i = 0; i < localConnection.VisibilityOrigins.Length; i++ )
+				{
+					var source = localConnection.VisibilityOrigins[i];
+					msg.Write( source.x );
+					msg.Write( source.y );
+					msg.Write( source.z );
+				}
+			}
+
+			if ( connection.IsHost )
+			{
+				userCommand.Serialize( ref msg );
+			}
+
+			connection.SendStream( msg, NetFlags.UnreliableNoDelay );
+			msg.Dispose();
+		}
+	}
+
+	readonly List<IDeltaSnapshot> _dirtySnapshotObjects = new();
+	readonly List<IDeltaSnapshot> _cleanSnapshotObjects = new();
+
+	/// <summary>Are these bounds visible to the specified <see cref="Connection"/>?</summary>
+	public bool IsBBoxVisibleToConnection( Connection target, BBox box ) => target is not null;
+
+	/// <summary>Is a position visible to the specified <see cref="Connection"/>? Always, as far as the scene can tell - see <see cref="IsBBoxVisibleToConnection"/>.</summary>
+	public bool IsPointVisibleToConnection( Connection target, Vector3 position ) => target is not null;
+}

@@ -1,0 +1,12 @@
+//An asset's page: its first card, the page under it, and the preview's card - the room between them the inspector's between any two cards.
+AssetInspectorPanel
+{
+	flex-direction: column;
+	gap: $gap-section;
+}
+
+//The preview brings its own plate; on a card it is the card's.
+AssetInspectorPanel > .preview > .content
+{
+	padding: $pad-card-y $pad-card;
+}

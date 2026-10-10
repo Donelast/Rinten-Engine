@@ -1,0 +1,82 @@
+//A ranged float, measured off the old tool GUI: the value in a box at the left and the slider (Editor.SliderTrack,
+//which has its own sheet) - and no plate under either: the row's panel shows through, the way it does in that GUI.
+
+$slider-ink: #b4b4b4;
+
+SliderControl.control
+{
+    position: relative;
+    flex-direction: row;
+
+    //It gives way like any other row editor. With flex-shrink: 0 and a 60px entry
+    //beside the track it stayed at its content width and ran off the inspector.
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    gap: 1px;
+
+    //The box is as tall as the row, the way every other field in the inspector is, and the slider - groove and ruler together - stands in the middle of it.
+    align-items: stretch;
+    pointer-events: all;
+
+    > .slider-track
+    {
+        align-self: center;
+    }
+
+    > .entry
+    {
+        flex-shrink: 0;
+        flex-grow: 0;
+        width: 52px;
+
+        //The well every other field in the inspector is: its ground, its edge, its corners - not a box of the old GUI's greys of its own.
+        background-color: $control-background;
+        border: $control-border;
+        border-radius: $control-radius;
+
+        &:hover { border-color: $edge-lit; }
+
+        > textentry
+        {
+            flex-grow: 1;
+
+            //It fills the box rather than asking for a row of its own (design.scss's textentry): the box is the row, less its own edge.
+            min-height: 0;
+            height: 100%;
+            background-color: transparent;
+            color: $slider-ink;
+            font-size: 12px;
+
+            //From the left edge, like the text in any other field, rather than in the middle of the box.
+            justify-content: flex-start;
+            text-align: left;
+
+            > .content-label
+            {
+                flex-grow: 1;
+                padding: 0px 6px;
+                text-align: left;
+                justify-content: flex-start;
+            }
+        }
+    }
+}
+
+
+//Under 140px the track hides and the number takes the row; sliders without a number box keep it
+SliderControl.control.has-text-entry.under-140
+{
+    > .slider-track
+    {
+        display: none;
+    }
+
+    > .entry
+    {
+        flex-grow: 1;
+        flex-shrink: 1;
+        width: auto;
+        min-width: 0;
+    }
+}

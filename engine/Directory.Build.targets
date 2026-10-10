@@ -1,0 +1,21 @@
+﻿<Project>
+
+	<!-- Every project under engine/, including the ones with a Directory.Build.props of their own -
+	     props and targets are searched for separately, and neither Tests nor Launcher has a targets file. -->
+
+	<!-- Drops the NuGet native assets for runtime identifiers nothing here can ever run on. SkiaSharp and HarfBuzz carry a build of themselves for every platform .NET supports, and a build with no RuntimeIdentifier copies all of them: seventeen folders under game/bin/managed/runtimes, a hundred and twelve megabytes, of which four are for a platform this engine exports to. The rest are musl, riscv, loongarch, 32-bit arm and x86 - none of which is in ExportPlatform.All, and none of which anything in this tree
+	     can produce a game for. Kept rather than trimmed to the host's own: the managed build installs these into game/bin/<platform> for every platform somebody can export for, so a game exported for Windows from Linux gets its Skia. See InstallRestoredNatives. Only the native assets. runtimes/<rid>/lib holds managed assemblies - System.Speech's Windows half, System.Drawing.Common's - which are resolved by the host through deps.json rather than by our own resolver, and are a megabyte and a half in total. -->
+	<PropertyGroup>
+		<RintenKeptRuntimeIdentifiers>win-x64|linux-x64|linux-arm64|osx|osx-arm64|android-arm64|android|browser-wasm</RintenKeptRuntimeIdentifiers>
+	</PropertyGroup>
+
+	<Target Name="RintenTrimForeignRuntimeNatives" AfterTargets="ResolveReferences">
+		<ItemGroup>
+			<ReferenceCopyLocalPaths
+				Remove="@(ReferenceCopyLocalPaths)"
+				Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ReferenceCopyLocalPaths.DestinationSubDirectory)', '^runtimes[\\/][^\\/]+[\\/]native[\\/]'))
+					And !$([System.Text.RegularExpressions.Regex]::IsMatch('%(ReferenceCopyLocalPaths.DestinationSubDirectory)', '^runtimes[\\/]($(RintenKeptRuntimeIdentifiers))[\\/]native[\\/]'))" />
+		</ItemGroup>
+	</Target>
+
+</Project>

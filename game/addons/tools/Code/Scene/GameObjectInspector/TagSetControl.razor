@@ -1,0 +1,102 @@
+@namespace Editor
+@using Editor.Inspectors
+@inherits BaseControl
+@attribute [CustomEditor( typeof( ITagSet ) )]
+@attribute [CustomEditor( typeof( GameTags ) )]
+
+<root class="tagsetcontrol">
+	<div class="tags" @ref="TagsHost"></div>
+	<ToolbarButton Icon="local_offer" ToolTip="Tags" OnPressed="@OpenAddMenu" />
+</root>
+
+@code
+{
+	public override bool SupportsMultiEdit => true;
+
+	internal Panel TagsHost { get; private set; }
+
+	TagSetPickerPopup pickerPopup;
+	int tagHash;
+
+	public override void Rebuild()
+	{
+		if ( TagsHost is null ) return;
+
+		TagsHost.DeleteChildren();
+		if ( Property is null ) return;
+
+		var tags = Property.GetValue<ITagSet>();
+		if ( tags is null ) return;
+
+		foreach ( var tag in tags.TryGetAll().Take( 32 ) )
+			TagsHost?.AddChild( new TagChipPanel( tag, RemoveTag ) );
+	}
+
+	void OpenAddMenu()
+	{
+		if ( IsReadOnly || Property is null ) return;
+
+		if ( pickerPopup is { IsValid: true } )
+		{
+			pickerPopup.Delete();
+			pickerPopup = null;
+			return;
+		}
+
+		pickerPopup = TagSetPickerPopup.Open( this, Property, () =>
+		{
+			SyncTagsIfNeeded( force: true );
+		} );
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		if ( pickerPopup is not null && !pickerPopup.IsValid() )
+			pickerPopup = null;
+
+		SyncTagsIfNeeded();
+	}
+
+	void SyncTagsIfNeeded( bool force = false )
+	{
+		var hash = BuildTagHash();
+		if ( !force && hash == tagHash ) return;
+
+		tagHash = hash;
+		Rebuild();
+	}
+
+	int BuildTagHash()
+	{
+		if ( Property is null ) return 0;
+
+		var tags = Property.GetValue<ITagSet>();
+		if ( tags is null ) return 0;
+
+		var hc = new HashCode();
+		foreach ( var tag in tags.TryGetAll().Take( 32 ) )
+			hc.Add( tag );
+
+		return hc.ToHashCode();
+	}
+
+	protected override int BuildHash() => BuildTagHash();
+
+	void RemoveTag( string tag )
+	{
+		var tags = Property.GetValue<ITagSet>();
+		if ( tags is null ) return;
+		tags.Remove( tag );
+		Property.Parent?.NoteChanged( Property );
+		SyncTagsIfNeeded( force: true );
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+		if ( firstTime )
+			SyncTagsIfNeeded( force: true );
+	}
+}

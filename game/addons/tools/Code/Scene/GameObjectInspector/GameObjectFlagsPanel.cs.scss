@@ -1,0 +1,10 @@
+﻿.gameobject-flags
+{
+	flex-shrink: 0;
+}
+
+.gameobject-flags > .toolbarbutton
+{
+	min-width: $row;
+	min-height: $row;
+}

@@ -1,0 +1,227 @@
+@namespace Editor
+@using System
+@using System.Diagnostics
+@using Rinten.UI
+
+@inherits Panel
+
+@* The bar in the bottom left corner: whatever EditorProgress is showing, out
+   from the left edge while there is something to show and back behind it when
+   there is not.
+
+   A panel on the window's overlay rather than a window of its own. The two
+   notices this replaces were parentless Widgets - which used to be a floating
+   tool window and, since the editor's interface became panels, is a widget whose
+   surface has no parent and so is never drawn. That is why nothing appeared for
+   a compile or a scatter any more.
+
+   It reads the job every tick rather than being told: the tick runs with the
+   window, including while a project is being opened and the main thread is
+   pumping the windows itself, which is when there is the most to say. *@
+
+<root class="editor-progress @Mood">
+	<div class="row">
+		<i class="glyph">@Icon</i>
+
+		<div class="body">
+			<div class="title">@Title</div>
+
+			@if ( !string.IsNullOrEmpty( Status ) )
+			{
+				<div class="status">@Status</div>
+			}
+		</div>
+
+		@if ( Others > 0 )
+		{
+			<div class="count">@( $"+{Others}" )</div>
+		}
+
+		@if ( Known )
+		{
+			<div class="percent">@( $"{Percent}%" )</div>
+		}
+
+		@if ( CanStop )
+		{
+			<i class="stop" onclick="@Stop">close</i>
+		}
+	</div>
+
+	<div class="track">
+		<div @ref="Fill" class="fill"></div>
+	</div>
+</root>
+
+@code
+{
+	//What is being shown, so a press knows what it is pressing.
+	EditorProgress.Job job;
+
+	//The state of the job last shown, so a change of state is said once.
+	EditorProgress.State? shownState;
+
+	//How many other jobs are running behind the one being shown.
+	int Others { get; set; }
+
+	//What the bar says, out of the job - held as fields so the markup has one source.
+	string Title { get; set; } = "";
+	string Status { get; set; } = "";
+	string Icon { get; set; } = "hourglass_bottom";
+
+	//Whether anybody knows how far along it is.
+	bool Known { get; set; }
+
+	int Percent { get; set; }
+
+	//Whether it can be stopped - the cross is there only then.
+	bool CanStop { get; set; }
+
+	//The classes that say how it is going: out at all, and in what colour.
+	string Mood { get; set; } = "";
+
+	//The line along the bottom, placed by code - see Track.
+	Panel Fill { get; set; }
+
+	//Real time, which carries on between frames the editor is not running - the sliding
+	//segment is the only thing on the bar saying anything while a job holds the main thread.
+	readonly Stopwatch clock = Stopwatch.StartNew();
+
+	//Whether it is the whole of a window of its own rather than a corner of the editor's.
+	bool floating;
+
+	public EditorProgressBar()
+	{
+		//The look is the sheet's; where it sits is set here as well, so a sheet that did not load leaves a bar that is plain rather than a bar that
+		//is nowhere. Out of the assembly rather than by [StyleSheet], which looks the name up in the mounted game filesystem - see EditorStyles.
+		Style.Position = PositionMode.Absolute;
+		Style.Left = Length.Pixels( 16 );
+		Style.Bottom = Length.Pixels( 16 );
+		Style.Width = Length.Pixels( 340 );
+		Style.ZIndex = 60;
+
+		if ( !EditorStyles.Apply( this, "EditorProgressBar.razor.scss" ) )
+			EditorProgress.Log.Warning( "the progress bar's stylesheet is not in the assembly - it will be unstyled" );
+	}
+
+	//It is the whole of its own window: it fills it, and the window coming and going is what puts it on the screen rather than the slide. The corner it
+	//sits in is the window's business then - see EditorProgressWindow - so the placement the constructor set for the editor's overlay is given back.
+	public void FillsItsOwnWindow()
+	{
+		floating = true;
+
+		Style.Position = PositionMode.Relative;
+		Style.Left = null;
+		Style.Bottom = null;
+		Style.Width = Length.Percent( 100 );
+		Style.Height = Length.Percent( 100 );
+		Style.ZIndex = null;
+
+		AddClass( "floating" );
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		var (showing, others) = EditorProgress.Pick();
+
+		//What the bar is showing, each time that changes - the other half of "job started / job ended" when a bar will not go away.
+		if ( !ReferenceEquals( showing, job ) || showing?.State != shownState )
+		{
+			shownState = showing?.State;
+			EditorProgress.Log.Trace( showing is null
+				? "bar: nothing to show - hidden"
+				: $"bar: showing {showing.Title} ({showing.State})" );
+		}
+
+		job = showing;
+		Others = others;
+
+		if ( job is null )
+		{
+			//In its own window there is nothing to slide away - the window goes.
+			Mood = floating ? "shown" : "";
+			return;
+		}
+
+		Title = job.Title ?? "";
+		Status = job.Subtitle ?? "";
+		Icon = job.Icon;
+
+		Known = job.Fraction >= 0f;
+		Percent = (int)( job.Fraction.Clamp( 0f, 1f ) * 100f );
+
+		CanStop = job.Cancelled is not null && !job.IsDone;
+
+		Mood = job.State switch
+		{
+			EditorProgress.State.Done => "shown ok",
+			EditorProgress.State.Failed => "shown bad",
+			_ => job.Pressed is null ? "shown" : "shown pressable",
+		};
+
+		Track();
+	}
+
+	//Updates the fill (or indeterminate slider) per frame outside the markup, so it doesn't rebuild
+	void Track()
+	{
+		if ( !Fill.IsValid() ) return;
+
+		if ( Known )
+		{
+			Fill.Style.Left = Length.Fraction( 0f );
+			Fill.Style.Width = Length.Fraction( job.Fraction.Clamp( 0f, 1f ) );
+			return;
+		}
+
+		if ( job.IsDone )
+		{
+			Fill.Style.Left = Length.Fraction( 0f );
+			Fill.Style.Width = Length.Fraction( 1f );
+			return;
+		}
+
+		const float width = 0.3f;
+
+		//Eased at both ends by the sine, so it reads as something working rather than as a readout of anything.
+		var phase = ( MathF.Sin( (float)clock.Elapsed.TotalSeconds * 1.8f ) + 1f ) * 0.5f;
+
+		Fill.Style.Left = Length.Fraction( ( 1f - width ) * phase );
+		Fill.Style.Width = Length.Fraction( width );
+	}
+
+	//The cross: stop whatever it is.
+	void Stop()
+	{
+		job?.Cancelled?.Invoke();
+	}
+
+	//A press on the bar - what the job says it does, where it says anything.
+	protected override void OnClick( MousePanelEvent e )
+	{
+		base.OnClick( e );
+
+		//The cross has a handler of its own, and a press on it is not a press on the bar - the event bubbles up to here either way.
+		if ( e.Target?.HasClass( "stop" ) == true ) return;
+
+		job?.Pressed?.Invoke();
+
+		e.StopPropagation();
+	}
+
+	//The right click: take it off the bar, whatever it is doing.
+	protected override void OnRightClick( MousePanelEvent e )
+	{
+		base.OnRightClick( e );
+
+		EditorProgress.Dismiss( job );
+
+		e.StopPropagation();
+	}
+
+	//What the markup is made of. Everything here is read from the job every tick, so this is what says whether any of it moved.
+	protected override int BuildHash()
+		=> HashCode.Combine( Title, Status, Icon, Others, Known, Percent, CanStop, Mood );
+}

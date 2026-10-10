@@ -1,0 +1,46 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Multiplayer" ), Icon( "wifi" )]
+@using Editor.ProjectSettingsUI
+@using Editor.ProjectSettingPages.Categories.Settings
+@inherits ProjectSettingsCategoryPanel
+
+<root class="project-settings-category">
+	<div class="body" @ref="Body">
+		<div @ref="metaHost"></div>
+
+		<label class="settings-section-header">Peer to Peer</label>
+		<div @ref="networkingHost"></div>
+	</div>
+</root>
+
+@code
+{
+	MultiplayerMetaSettings meta;
+	NetworkingSettings networking;
+	Panel metaHost;
+	Panel networkingHost;
+
+	protected override void OnInit( Project project )
+	{
+		meta = new MultiplayerMetaSettings();
+		meta.Load( project );
+
+		var metaSheet = metaHost.AddChild<Editor.Inspectors.ControlSheet>();
+		metaSheet.Target = meta.GetSerialized();
+		metaSheet.Rebuild();
+		ListenForChanges( meta.GetSerialized() );
+
+		networking = EditorUtility.LoadProjectSettings<NetworkingSettings>( "Networking.config" );
+		var sheet = networkingHost.AddChild<Editor.Inspectors.ControlSheet>();
+		sheet.Target = networking.GetSerialized();
+		sheet.Rebuild();
+		ListenForChanges( networking.GetSerialized() );
+	}
+
+	public override void OnSave()
+	{
+		meta.Apply( Project );
+		EditorUtility.SaveProjectSettings( networking, "Networking.config" );
+		base.OnSave();
+	}
+}

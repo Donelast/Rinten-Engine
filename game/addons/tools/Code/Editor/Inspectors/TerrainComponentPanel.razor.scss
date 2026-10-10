@@ -1,0 +1,239 @@
+//The terrain's inspector: three pages under one bar of tabs. See TerrainComponentPanel.razor for the markup and .razor.cs for what it does.
+.terrain-inspector
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	row-gap: 6px;
+	padding: 4px 0 8px 0;
+	font-family: $font;
+	pointer-events: all;
+
+	i
+	{
+		font-family: Material Icons;
+		font-size: 15px;
+		flex-shrink: 0;
+	}
+
+	label
+	{
+		font-size: $type-body;
+		color: $ink;
+	}
+
+	> .tabbar
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		column-gap: 4px;
+		padding: 2px 6px;
+
+		> .tab
+		{
+			flex-direction: row;
+			flex-grow: 1;
+			align-items: center;
+			justify-content: center;
+			column-gap: 6px;
+			min-height: 26px;
+			padding: 2px 8px;
+			border-radius: $radius-1;
+			background-color: $chip;
+			cursor: pointer;
+			opacity: 0.6;
+			transition: opacity $fast $ease, background-color $fast $ease;
+
+			> label { pointer-events: none; white-space: nowrap; }
+			> i { pointer-events: none; }
+
+			&:hover
+			{
+				opacity: 0.9;
+				background-color: $chip-hover;
+			}
+
+			&.selected
+			{
+				opacity: 1;
+				background-color: $chip-on;
+			}
+		}
+	}
+
+	> .page
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		row-gap: 6px;
+	}
+
+	.heading
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		padding: 6px 8px 0 8px;
+		row-gap: 2px;
+
+		> .title
+		{
+			font-size: $type-default;
+			font-weight: 600;
+		}
+
+		> .note
+		{
+			font-size: $type-small;
+			color: $ink-faint;
+		}
+	}
+
+	.empty
+	{
+		padding: 6px 8px;
+		font-size: $type-small;
+		color: $ink-faint;
+	}
+
+	//The layers, as chips that wrap: their number and their name, the one the paint tool lays down lit.
+	.layers
+	{
+		flex-direction: row;
+		flex-wrap: wrap;
+		flex-shrink: 0;
+		gap: 4px;
+		padding: 0 8px;
+
+		> .layer
+		{
+			flex-direction: row;
+			align-items: center;
+			column-gap: 6px;
+			min-height: 26px;
+			padding: 2px 8px 2px 4px;
+			border-radius: $radius-1;
+			border: 1px solid $edge-soft;
+			background-color: $chip;
+			cursor: pointer;
+			transition: background-color $fast $ease, border-color $fast $ease;
+
+			> .index
+			{
+				display: flex;
+				min-width: 18px;
+				height: 18px;
+				padding: 0 4px;
+				text-align: center;
+				line-height: 18px;
+				justify-content: center;
+				align-items: center;
+				border-radius: $radius-1;
+				background-color: $sunken;
+				font-size: $type-small;
+				color: $ink-dim;
+				pointer-events: none;
+			}
+
+			> .name
+			{
+				white-space: nowrap;
+				pointer-events: none;
+			}
+
+			&:hover { background-color: $chip-hover; }
+
+			&.selected
+			{
+				background-color: $chip-on;
+				border-color: $accent;
+
+				> .index
+				{
+					background-color: $accent-fill;
+					color: $ink;
+				}
+			}
+		}
+	}
+
+	.buttons
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		justify-content: flex-end;
+		column-gap: 6px;
+		padding: 0 8px;
+
+		> .button
+		{
+			flex-direction: row;
+			align-items: center;
+			column-gap: 4px;
+			min-height: 24px;
+			padding: 2px 10px 2px 6px;
+			border-radius: $radius-1;
+			background-color: $slab;
+			cursor: pointer;
+			transition: background-color $fast $ease;
+
+			> label, > i { pointer-events: none; }
+
+			&:hover { background-color: $slab-hover; }
+			&:active { background-color: $slab-down; }
+		}
+	}
+
+	//What the bake is doing: a line, amber while chunks are out on the workers.
+	.status
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		align-items: center;
+		column-gap: 6px;
+		margin: 0 8px;
+		padding: 4px 8px;
+		border-radius: $radius-1;
+		background-color: $sunken;
+
+		> i { color: $green; }
+		> label { color: $ink-dim; font-size: $type-small; }
+
+		&.busy > i { color: $gold; }
+	}
+
+	.inserts
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		row-gap: 2px;
+		padding: 0 8px;
+
+		> .insert
+		{
+			flex-direction: row;
+			align-items: center;
+			column-gap: 6px;
+			min-height: 24px;
+			padding: 2px 6px;
+			border-radius: $radius-1;
+			cursor: pointer;
+
+			> i { color: $ink-dim; pointer-events: none; }
+
+			> .name
+			{
+				flex-grow: 1;
+				white-space: nowrap;
+				pointer-events: none;
+			}
+
+			> .kind
+			{
+				font-size: $type-small;
+				color: $ink-faint;
+				pointer-events: none;
+			}
+
+			&:hover { background-color: $veil-hover; }
+		}
+	}
+}

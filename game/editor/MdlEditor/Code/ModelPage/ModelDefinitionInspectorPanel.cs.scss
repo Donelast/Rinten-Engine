@@ -1,0 +1,63 @@
+//Model page in the inspector: a head card with the parts tree, then the picked node's card
+
+ModelDefinitionInspectorPanel,
+.model-definition-inspector
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+
+	> .scroll
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		overflow: scroll;
+		gap: $gap-section;
+		padding-bottom: $gap-section;
+		align-items: stretch;
+
+		> * { flex-shrink: 0; }
+	}
+
+	.inspector-head > .top-row
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: $gap-items;
+
+		> .words
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			min-width: 0;
+
+			> .title
+			{
+				font-size: $type-body;
+				font-weight: 600;
+				color: $ink;
+				@include one-line;
+			}
+
+			//The folder dim under the name; its last word is the one worth reading.
+			> .path
+			{
+				font-size: $type-micro;
+				color: $ink-dim;
+				@include one-line;
+			}
+		}
+	}
+
+	//The node's fields lie on the card, not on a ground of their own.
+	.node .model-inspector
+	{
+		background-color: transparent;
+	}
+
+	.hidden
+	{
+		display: none;
+	}
+}

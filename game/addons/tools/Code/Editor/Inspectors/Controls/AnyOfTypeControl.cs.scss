@@ -1,0 +1,19 @@
+//A type picker with the chosen type's property sheet below it.
+AnyOfTypeControl.control.no-background.multiple-rows
+{
+	flex-direction: column;
+	min-height: 0;
+	gap: 2px;
+
+	> .control
+	{
+		flex-shrink: 0;
+	}
+
+	> .controlsheet
+	{
+		flex-grow: 1;
+		flex-shrink: 0;
+		min-height: 0;
+	}
+}

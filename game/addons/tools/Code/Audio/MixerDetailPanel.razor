@@ -1,0 +1,163 @@
+@using Rinten.Audio
+@using Editor.Inspectors
+@namespace Editor.Audio
+@inherits Panel
+
+<root class="mixer-detail">
+	@if ( Mixer is null )
+	{
+		return;
+	}
+	
+	<div class="nav">
+		<div class="header">
+			<label class="icon material-icon">settings_input_component</label>
+			<label class="title">@Mixer.Name</label>
+		</div>
+		<div class="section-header">
+			<label class="label">Config</label>
+		</div>
+		<MixerNavOptionPanel
+			Title="Mixer Settings"
+			Icon="settings"
+			Selected="@ReferenceEquals( selectedSource, Mixer )"
+			OnPressed="@SelectSettings" />
+		<div class="section-header">
+			<label class="label">Processors</label>
+			<ToolbarButton Icon="add" ToolTip="Add Processor" OnPressed="@AddProcessorMenu" />
+		</div>
+		@foreach ( var processor in Mixer.GetProcessors() )
+		{
+			<MixerNavOptionPanel
+				Title="@processor.ToString()"
+				Icon="@GetIcon( processor )"
+				Processor="@processor"
+				Selected="@ReferenceEquals( selectedSource, processor )"
+				OnPressed="@(() => SelectProcessor( processor ))"
+				OpenContextMenu="@(() => ProcessorContextMenu( processor ))" />
+		}
+	</div>
+	<div class="content" @ref="contentPanel"></div>
+</root>
+
+@code
+{
+	[Parameter]
+	public Mixer Mixer { get; set; }
+
+	ControlSheet sheet;
+	Panel contentPanel;
+	object selectedSource;
+	object sheetSource;
+	Mixer boundMixer;
+
+	protected override int BuildHash()
+	{
+		var hash = HashCode.Combine( Mixer, selectedSource );
+		if ( Mixer is null ) return hash;
+
+		hash = HashCode.Combine( hash, Mixer.Name, Mixer.ProcessorCount );
+		foreach ( var processor in Mixer.GetProcessors() )
+			hash = HashCode.Combine( hash, processor, processor.GetType() );
+
+		return hash;
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( sheet is null && contentPanel is not null )
+			sheet = contentPanel.AddChild<ControlSheet>();
+
+		var mixerChanged = !ReferenceEquals( boundMixer, Mixer );
+		if ( mixerChanged )
+		{
+			boundMixer = Mixer;
+			selectedSource = Mixer;
+			sheetSource = null;
+		}
+
+		SyncSheet();
+	}
+
+	void SyncSheet()
+	{
+		if ( sheet is null || !sheet.IsValid() || Mixer is null )
+			return;
+
+		var source = selectedSource ?? Mixer;
+		if ( source is not AudioProcessor && !ReferenceEquals( source, Mixer ) )
+			return;
+
+		if ( ReferenceEquals( sheetSource, source ) )
+			return;
+
+		sheetSource = source;
+		sheet.Target = source;
+		sheet.Rebuild();
+	}
+
+	void SelectSettings()
+	{
+		if ( ReferenceEquals( selectedSource, Mixer ) ) return;
+
+		selectedSource = Mixer;
+		SyncSheet();
+		StateHasChanged();
+	}
+
+	void SelectProcessor( AudioProcessor processor )
+	{
+		if ( ReferenceEquals( selectedSource, processor ) ) return;
+
+		selectedSource = processor;
+		SyncSheet();
+		StateHasChanged();
+	}
+
+	static string GetIcon( AudioProcessor processor )
+	{
+		var td = EditorTypeLibrary.GetType( processor.GetType() );
+		return td?.Icon ?? "people";
+	}
+
+	void AddProcessorMenu()
+	{
+		var menu = new ContextMenu( null );
+
+		foreach ( var type in EditorTypeLibrary.GetTypes<AudioProcessor>().OrderBy( x => x.Title ) )
+		{
+			var o = menu.AddOption( type.Title, type.Icon, () => AddProcessor( type ) );
+			o.ToolTip = type.Description;
+		}
+
+		menu.OpenAtCursor();
+	}
+
+	void AddProcessor( TypeDescription type )
+	{
+		Mixer.AddProcessor( type.Create<AudioProcessor>() );
+		StateHasChanged();
+	}
+
+	void ProcessorContextMenu( AudioProcessor processor )
+	{
+		var menu = new ContextMenu( null );
+		menu.AddOption( "Delete", "clear", () => RemoveProcessor( processor ) );
+		menu.OpenAtCursor();
+	}
+
+	void RemoveProcessor( AudioProcessor processor )
+	{
+		if ( ReferenceEquals( selectedSource, processor ) )
+		{
+			selectedSource = Mixer;
+			sheetSource = null;
+		}
+
+		Mixer.RemoveProcessor( processor );
+		SyncSheet();
+		StateHasChanged();
+	}
+}

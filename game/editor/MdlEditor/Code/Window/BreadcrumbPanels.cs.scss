@@ -1,0 +1,78 @@
+﻿//The two buttons a breadcrumb is made of. Each is a box with a glyph and a word, so both are laid out rather
+//than painted, and the trail's width is the words in it rather than a measurement taken every time one changes.
+
+//An arrow through the navigation history: a rounded plate that lights under the pointer.
+.nav-button
+{
+	width: 24px;
+	height: $row-height;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	border-radius: $control-radius;
+	background-color: $control-background;
+	color: $ink-dim;
+	cursor: pointer;
+	transition: background-color $fast $ease, color $fast $ease;
+
+	> .material-icon { font-size: $type-default; }
+
+	&:hover { background-color: lighten( $control-background, 0.1 ); }
+
+	//Nowhere to go. The plate stays and only the glyph goes out: design.scss's .is-disabled clears the background
+	//as well, which would leave a hole in the row, and it stops the pointer, which would take the tooltip with it.
+	&.disabled
+	{
+		color: rgba( $text-control, 0.25 );
+		cursor: default;
+
+		//Still under the pointer, so it can still say what it would have done.
+		&:hover { background-color: $control-background; }
+	}
+}
+
+//One step of the trail.
+.crumb-button
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 4px;
+	height: $row-height;
+	padding-right: 4px;
+	color: $text-control;
+	cursor: default;
+	transition: color $fast $ease;
+
+	> .icon
+	{
+		width: 18px;
+		flex-shrink: 0;
+		font-size: $type-default;
+		text-align: center;
+	}
+
+	> .title
+	{
+		flex-shrink: 0;
+		font-size: $type-micro;
+		font-weight: 400;
+		white-space: nowrap;
+	}
+
+	//A step behind you, which clicking goes back to.
+	&.link
+	{
+		cursor: pointer;
+
+		&:hover { color: $ink; }
+	}
+
+	//Where you are: brighter and heavier, and it leads nowhere.
+	&.current
+	{
+		color: $text;
+
+		> .title { font-weight: 600; }
+	}
+}

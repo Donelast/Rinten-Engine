@@ -1,0 +1,540 @@
+@namespace Editor.ProjectSettingPages.Categories
+@attribute [Title( "Configuration" )]
+@attribute [StyleSheet( "ProjectPage.razor.scss" )]
+@using System
+@using System.IO
+@using System.Linq
+@using System.Threading.Tasks
+@using Editor.ProjectSettingsUI
+@using Editor.ProjectSettingPages.Categories.Settings
+@inherits ProjectSettingsCategoryPanel
+
+@*
+	The project on one page, top to bottom: what it is called and where it is,
+	the picture it wears, and - for a game - the platforms it is built for. The
+	picture is the builds' icon too, so it is set once, here, rather than once
+	per platform.
+*@
+<root class="project-settings-category project-page">
+	<div class="body" @ref="Body">
+		<div class="page-section">
+			<div @ref="identityHost"></div>
+		</div>
+
+		<div class="page-section">
+			<label class="section-title">Project Image</label>
+			<div class="image-row">
+				<ProjectThumbPanel class="image" Project="@Project" />
+				<div class="image-side">
+					<label class="hint">Shown in the editor and the launcher, and used as the icon of every build.</label>
+					<div class="settings-button-row">
+						<div class="btn" onclick="@PickImage">
+							<label class="material-icon">image</label>
+							<label>Choose Image...</label>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		@if ( IsGame )
+		{
+			<div class="page-section">
+				<label class="section-title">Build</label>
+
+				<div class="platform-list">
+					@foreach ( var platform in ExportPlatform.Offered )
+					{
+						var on = platforms.Contains( platform.Id );
+						var missing = WhatIsMissing( platform );
+
+						<div class="platform @(on ? "checked" : null)">
+							<div class="toggle" onclick="@(() => TogglePlatform( platform ))">
+								<label class="material-icon check">@(on ? "check_box" : "check_box_outline_blank")</label>
+								<label class="material-icon icon">@PlatformIcon( platform )</label>
+								<label class="name">@platform.Title</label>
+							</div>
+
+							@if ( platform.IsWeb && on )
+							{
+								<div class="option @(createZip ? "on" : null)" onclick="@ToggleZip">
+									<label class="material-icon">@(createZip ? "check_box" : "check_box_outline_blank")</label>
+									<label>Zip for upload</label>
+								</div>
+							}
+
+							@if ( platform.IsAndroid && on )
+							{
+								<div class="option on" onclick="@NextOrientation">
+									<label class="material-icon">@OrientationIcon</label>
+									<label>Screen: @OrientationTitle</label>
+								</div>
+							}
+
+							@if ( on && ToolsMissing( platform ) is { } tools )
+							{
+								<div class="option on" onclick="@(() => InstallTools( platform ))">
+									<label class="material-icon">download</label>
+									<label>@(ExportToolchain.Installing ? installStep ?? "Installing..." : "Install")</label>
+								</div>
+
+								<label class="missing">⚠ needs @tools</label>
+							}
+
+							@if ( on && missing is not null )
+							{
+								<label class="missing">⚠ @missing</label>
+							}
+						</div>
+					}
+				</div>
+
+				<div class="option @(exportDebug ? "on" : null)" onclick="@ToggleDebug">
+					<label class="material-icon">@(exportDebug ? "check_box" : "check_box_outline_blank")</label>
+					<label>Export debug - the game may show its frame rate and its log</label>
+				</div>
+
+				<div @ref="folderHost"></div>
+
+				<div class="settings-button-row">
+					<div class="btn" onclick="@OpenFolder">
+						<label class="material-icon">folder</label>
+						<label>Open Folder</label>
+					</div>
+					<div class="btn good @(building || platforms.Count == 0 ? "disabled" : null)" onclick="@Build">
+						<label class="material-icon">save_alt</label>
+						<label>@(building ? "Building..." : BuildLabel)</label>
+					</div>
+				</div>
+
+				@if ( !string.IsNullOrWhiteSpace( status ) )
+				{
+					<SettingsCalloutPanel Html="@status" Warning="@statusIsWarning" />
+				}
+			</div>
+		}
+	</div>
+</root>
+
+@code
+{
+	//What the settings tree calls this page.
+	public const string PageTitle = "Configuration";
+
+	//Opens the settings on this page. An event because the File menu is built on the
+	//engine side, which cannot name a type in this addon - see EditorMainWindow .
+	[Event( "project.build.open" )]
+	public static void OpenPage() => ProjectSettingsWindow.OpenForProject( Project.Current, PageTitle );
+
+	ProjectPackageSettings settings;
+
+	Panel identityHost;
+	Panel folderHost;
+
+	//The ids of the platforms that are ticked, in the order ExportPlatform.All has them.
+	readonly HashSet<string> platforms = new();
+
+	bool createZip = true;
+
+	//Which way up a phone holds the game: landscape, portrait or auto (turns with the phone). Read by the Android export - see StandaloneExporter.Android.
+	string orientation = "landscape";
+
+	static readonly string[] Orientations = [ "landscape", "portrait", "auto" ];
+
+	string OrientationTitle => orientation switch
+	{
+		"portrait" => "portrait",
+		"auto" => "turns with the phone",
+		_ => "landscape",
+	};
+
+	string OrientationIcon => orientation switch
+	{
+		"portrait" => "stay_current_portrait",
+		"auto" => "screen_rotation",
+		_ => "stay_current_landscape",
+	};
+
+	//See ExportConfig.ExportDebug.
+	bool exportDebug;
+	string executableName;
+	string status;
+	bool statusIsWarning;
+	bool building;
+
+	bool IsGame => Project?.Config?.Type == "game";
+
+	//Where the builds go. Each platform gets its own folder inside this one, so building for a second does not write over the first.
+	[Title( "Build Folder" ), FolderPath]
+	public string BuildFolder { get; set; }
+
+	string BuildLabel => platforms.Count switch
+	{
+		0 => "Build",
+		1 => "Build 1 Platform",
+		_ => $"Build {platforms.Count} Platforms"
+	};
+
+	protected override void OnInit( Project project )
+	{
+		settings = new ProjectPackageSettings();
+		settings.Load( project );
+
+		var identitySo = settings.GetSerialized();
+		var identity = identityHost.AddChild<Editor.Inspectors.ControlSheet>();
+		identity.Target = identitySo;
+		identity.Rebuild();
+		ListenForChanges( identitySo );
+
+		//The picture panel and the build list are drawn from the project, which the first render did not have yet.
+		Redraw();
+
+		if ( !IsGame ) return;
+
+		LoadBuild( project );
+
+		var so = this.GetSerialized();
+		var sheet = folderHost.AddChild<Editor.Inspectors.ControlSheet>();
+		sheet.Target = new List<SerializedProperty> { so.GetProperty( nameof( BuildFolder ) ) };
+		sheet.Rebuild();
+		ListenForChanges( so );
+
+		Redraw();
+	}
+
+	//What was answered here last time, or what the project can answer for itself where it was never asked: the platform the editor runs on.
+	void LoadBuild( Project project )
+	{
+		var config = project.Config;
+
+		platforms.Clear();
+
+		var ticked = config.GetMetaOrDefault<string>( "Build.Platforms", null );
+
+		//One platform at a time was all the old page could build; that one is where the list starts.
+		ticked ??= config.GetMetaOrDefault( "Build.Platform", ExportPlatform.Host.Id );
+
+		foreach ( var id in ticked.Split( ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries ) )
+		{
+			if ( ExportPlatform.Offered.Any( x => x.Id == id ) )
+				platforms.Add( id );
+		}
+
+		//Beside the project rather than in a folder nobody can find.
+		BuildFolder = config.GetMetaOrDefault( "Build.Folder", Path.Combine( project.GetRootPath(), "Builds" ) );
+
+		executableName = config.GetMetaOrDefault( "Build.ExecutableName", project.Package?.Ident ?? config.Ident ?? "game" );
+		createZip = config.GetMetaOrDefault( "Build.Zip", true );
+		exportDebug = config.GetMetaOrDefault( "Build.Debug", false );
+		orientation = config.GetMetaOrDefault( "Build.Orientation", "landscape" );
+		if ( !Orientations.Contains( orientation ) ) orientation = "landscape";
+	}
+
+	void SaveBuild()
+	{
+		if ( !IsGame || Project?.Config is not { } config ) return;
+
+		config.SetMeta( "Build.Platforms", string.Join( ",", ExportPlatform.Offered.Where( x => platforms.Contains( x.Id ) ).Select( x => x.Id ) ) );
+		config.SetMeta( "Build.Folder", BuildFolder );
+		config.SetMeta( "Build.Zip", createZip );
+		config.SetMeta( "Build.Debug", exportDebug );
+		config.SetMeta( "Build.Orientation", orientation );
+	}
+
+	public override void OnSave()
+	{
+		var type = Project.Config.Type;
+		if ( (type == "game" || type == "library") && settings.Ident != Project.Config.Ident )
+		{
+			var sharesIdent = type == "library" && settings.Ident.ToLower() == Project.Current.Package.Ident.ToLower();
+			if ( !sharesIdent )
+				sharesIdent = LibrarySystem.All.Any( x => x.Project.Package.Ident.ToLower() == settings.Ident.ToLower() );
+
+			if ( sharesIdent )
+			{
+				Dialog.AskConfirm( () =>
+				{
+					settings.Ident = Project.Config.Ident;
+					settings.Apply( Project );
+					SaveBuild();
+					base.OnSave();
+				},
+				$"This Package cannot share it's Ident with another Package. Would you like to continue with the ident \"{Project.Config.Ident}\"?",
+				"Error changing Package Ident", "OK", "Cancel" );
+				return;
+			}
+		}
+
+		settings.Apply( Project );
+		SaveBuild();
+		base.OnSave();
+	}
+
+	//Draws the page again. The base's StateHasChanged marks the settings unsaved instead.
+	void Redraw() => ((Panel)this).StateHasChanged();
+
+	//Something was changed that the Save button has to know about.
+	void Changed()
+	{
+		StateHasChanged( null );
+		Redraw();
+	}
+
+	void PickImage()
+	{
+		//Written straight into the project, as the picture always has been: it is a file beside the project, not a setting that waits for Save.
+		ProjectThumb.Pick( Project, HostWindow );
+		Redraw();
+	}
+
+	void TogglePlatform( ExportPlatform platform )
+	{
+		if ( building ) return;
+
+		if ( !platforms.Add( platform.Id ) )
+			platforms.Remove( platform.Id );
+
+		Changed();
+	}
+
+	void ToggleZip()
+	{
+		createZip = !createZip;
+		Changed();
+	}
+
+	void NextOrientation()
+	{
+		orientation = Orientations[( Array.IndexOf( Orientations, orientation ) + 1 ) % Orientations.Length];
+		Changed();
+	}
+
+	void ToggleDebug()
+	{
+		exportDebug = !exportDebug;
+		Changed();
+	}
+
+	static string PlatformIcon( ExportPlatform platform )
+	{
+		if ( platform == ExportPlatform.Windows ) return "desktop_windows";
+		if ( platform == ExportPlatform.Linux ) return "computer";
+		if ( platform == ExportPlatform.LinuxArm64 ) return "vrpano";
+		if ( platform == ExportPlatform.MacOS ) return "laptop_mac";
+		if ( platform == ExportPlatform.Web ) return "public";
+		if ( platform == ExportPlatform.Android ) return "smartphone";
+		return "devices";
+	}
+
+	//Where one platform's build is written: the build folder, then one named after the project and the platform - my_game_linux64 rather than
+	//linuxsteamrt64 . A folder of builds then says what each one is, and two projects built into the same folder do not write over each other.
+	string TargetDir( ExportPlatform platform ) => Path.Combine( BuildFolder ?? "", BuildFolderName( Project, platform ) );
+
+	//One build's folder: the project, then the platform's short name. A project's ident is already a word for a folder, but it is typed by
+	//a person, so it is spelt out the way a clip's name is - see ModelDefinition.SafeClipName. Nothing to go on leaves the platform alone.
+	static string BuildFolderName( Project project, ExportPlatform platform )
+	{
+		var name = project?.Package?.Ident ?? project?.Config?.Ident ?? "";
+
+		foreach ( var c in Path.GetInvalidFileNameChars() ) name = name.Replace( c, '_' );
+
+		name = name.Replace( ' ', '_' ).Trim( '_' );
+
+		return string.IsNullOrWhiteSpace( name ) ? platform.Folder : $"{name}_{platform.Folder}";
+	}
+
+	//What the toolchain install is doing, on its button.
+	string installStep;
+
+	//What the platform's export still needs installed; null until the SDK has been looked for, off the main thread.
+	string ToolsMissing( ExportPlatform platform )
+	{
+		if ( !platform.IsWeb && !platform.IsAndroid ) return null;
+		if ( ExportToolchain.Checked ) return ExportToolchain.Missing( platform );
+
+		_ = CheckTools();
+		return null;
+	}
+
+	async Task CheckTools()
+	{
+		await ExportToolchain.Check();
+		Redraw();
+	}
+
+	//Reports like a build does: the step, what it is doing, how far the whole install is
+	async void InstallTools( ExportPlatform platform )
+	{
+		if ( ExportToolchain.Installing ) return;
+
+		var last = "";
+
+		var installed = await ExportToolchain.Install( platform, progress =>
+		{
+			var percent = ( progress.Fraction * 100f ).CeilToInt();
+			var detail = progress.Detail is null ? "" : $" - {System.Net.WebUtility.HtmlEncode( progress.Detail )}";
+
+			last = progress.Step;
+			installStep = $"Installing.. {percent}%";
+
+			Say( $"{platform.Title} tools: {progress.Step}{detail}, {percent}%" );
+		} );
+
+		installStep = null;
+
+		Say( installed ? $"{platform.Title} tools: installed." : $"{platform.Title} tools: {last}", !installed );
+		EditorUtility.PlayRawSound( installed ? "sounds/editor/published.wav" : "sounds/editor/fail.wav" );
+
+		await CheckTools();
+	}
+
+	void Say( string message, bool warning = false )
+	{
+		status = message;
+		statusIsWarning = warning;
+		Redraw();
+	}
+
+	void OpenFolder()
+	{
+		//The one platform's folder where only one is ticked, the folder of all of them otherwise.
+		var dir = BuildFolder;
+
+		if ( platforms.Count == 1 && ExportPlatform.FromId( platforms.First() ) is { } only && Directory.Exists( TargetDir( only ) ) )
+			dir = TargetDir( only );
+
+		if ( !Directory.Exists( dir ) )
+		{
+			Say( $"Nothing has been built into {dir} yet." );
+			return;
+		}
+
+		EditorUtility.OpenFolder( dir );
+	}
+
+	//Builds every ticked platform, one after another. One that fails does not stop the rest; what happened to each is said at the end.
+	async void Build()
+	{
+		if ( building ) return;
+
+		if ( Project is null )
+		{
+			Say( "There is no project open to build.", true );
+			return;
+		}
+
+		var targets = ExportPlatform.Offered.Where( x => platforms.Contains( x.Id ) ).ToList();
+
+		if ( targets.Count == 0 )
+		{
+			Say( "Tick at least one platform to build for.", true );
+			return;
+		}
+
+		if ( string.IsNullOrWhiteSpace( BuildFolder ) )
+		{
+			Say( "Say where the build should go.", true );
+			return;
+		}
+
+		if ( string.IsNullOrWhiteSpace( executableName ) )
+			executableName = Project.Package?.Ident ?? Project.Config.Ident ?? "game";
+
+		building = true;
+		Redraw();
+
+		var lines = new List<string>();
+		var failed = false;
+		var date = DateTime.Now;
+
+		try
+		{
+			for ( var i = 0; i < targets.Count; i++ )
+			{
+				var platform = targets[i];
+				var prefix = targets.Count > 1 ? $"[{i + 1}/{targets.Count}] {platform.Title}: " : $"{platform.Title}: ";
+
+				//What is missing is said here rather than found in the log afterwards.
+				var missing = WhatIsMissing( platform );
+
+				var config = new ExportConfig
+				{
+					Project = Project,
+					Platform = platform,
+					ExecutableName = executableName,
+					CreateZip = createZip,
+					ExportDebug = exportDebug,
+					TargetDir = TargetDir( platform ),
+					BuildDate = date,
+				};
+
+				try
+				{
+					Say( string.Join( "<br>", lines.Append( $"{prefix}building.." ) ) );
+
+					var exporter = await StandaloneExporter.FromConfig( config );
+
+					exporter.OnProgressChanged = progress => Say( string.Join( "<br>", lines.Append(
+						$"{prefix}{progress.CurrentOperation} - {progress.FilesDone} of {progress.FilesTotal} files, " +
+						$"{(progress.ProgressFraction * 100f).CeilToInt()}%" ) ) );
+
+					await exporter.Run();
+
+					//What was written - the folder, or the apk the Android build ends up as beside it - and what is wrong with it, where anything is. A build missing
+					//its native half or its package is written all the same, and saying "done" about one is how somebody finds out on the phone rather than here.
+					var where = exporter.Result ?? config.TargetDir;
+
+					if ( missing is not null )
+						lines.Add( $"{prefix}⚠ {missing}" );
+
+					if ( exporter.Problems.Count > 0 )
+					{
+						failed = true;
+						lines.Add( $"{prefix}written to {where}, but it will not run yet:" );
+						lines.AddRange( exporter.Problems.Select( x => $"&nbsp;&nbsp;⚠ {x}" ) );
+					}
+					else
+					{
+						lines.Add( $"{prefix}built to {where}" );
+					}
+				}
+				catch ( Exception e )
+				{
+					//The message rather than the stack: the log has the stack, and this is a line on a settings page.
+					failed = true;
+					lines.Add( $"{prefix}failed - {e.Message}" );
+					Log.Warning( e, $"{platform.Title} build failed" );
+				}
+			}
+		}
+		finally
+		{
+			building = false;
+		}
+
+		Say( string.Join( "<br>", lines ), failed );
+		EditorUtility.PlayRawSound( failed ? "sounds/editor/fail.wav" : "sounds/editor/published.wav" );
+	}
+
+	//Anything about this platform that will make its build incomplete, or nothing where it has all it needs.
+	static string WhatIsMissing( ExportPlatform platform )
+	{
+		var native = Path.Combine( Environment.CurrentDirectory, platform.BinFolder );
+
+		if ( !Directory.Exists( native ) || Directory.GetFiles( native ).Length == 0 )
+			return $"no {platform.Title} libraries in {platform.BinFolder} - build the core for it first";
+
+		if ( platform.IsWeb )
+		{
+			if ( !File.Exists( Path.Combine( native, "index.html" ) ) )
+				return $"{platform.BinFolder} has no web player - run engine/Core/build-web.sh";
+
+			//The .NET runtime is not here: the export compiles it into the module with the
+			//game (StandaloneExporter.WebModule). What it links against is the core's archive.
+			if ( !File.Exists( Path.Combine( native, "rintencore.a" ) ) )
+				return $"{platform.BinFolder} has no rintencore.a - run engine/Core/build-web.sh";
+		}
+
+		return null;
+	}
+}

@@ -1,0 +1,55 @@
+﻿//A column of tool buttons over the left edge of the viewport: a button, the gap beside
+//it, and a pixel of edge. The gaps let the mouse through to the scene; the buttons do not.
+.tool-strip
+{
+	flex-direction: column;
+	flex-shrink: 0;
+	padding: 1px;
+	row-gap: 4px;
+	pointer-events: none;
+
+	//A mode: the bigger button, on the outer column.
+	&.modes
+	{
+		width: 33px;
+	}
+
+	//One of the smaller things a mode can do, beside the modes.
+	&.options
+	{
+		width: 33px;
+
+		> .tool-strip-button
+		{
+			width: $row;
+			height: $row;
+
+			> .icon { font-size: $type-large; }
+			> .icon.picture { width: 16px; height: 16px; }
+		}
+
+		//What a mode can run: more of them than the move modes, so two to a row.
+		&.actions
+		{
+			width: 168px;
+			row-gap: 2px;
+			max-height: 100%;
+			overflow-y: scroll;
+
+			> .heading
+			{
+				margin: 6px 0px 0px 2px;
+				font-size: $type-micro;
+				font-weight: 700;
+				letter-spacing: $tracking;
+				color: $ink-off;
+				pointer-events: none;
+			}
+
+			> .tool-strip-button
+			{
+				width: 100%;
+			}
+		}
+	}
+}

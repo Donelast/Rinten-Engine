@@ -1,0 +1,95 @@
+@using Rinten.Tiles
+@using System
+@using Rinten
+@using Rinten.UI
+@namespace Editor.Tiles
+@inherits Panel
+
+@* A tile set's sheet, to pick tiles off: the picture itself, scaled to the
+   width there is, with its grid over it. What each cell is shows as a mark -
+   solid, one-way, animated - so the tile set's editor and the painting tool
+   are looking at the same thing. *@
+
+<root class="tile-palette">
+
+	@if ( TileSet?.Sheet is null || TileSet.Count == 0 )
+	{
+		<label class="empty">@( TileSet is null ? "No tile set" : "The tile set has no sheet" )</label>
+	}
+	else
+	{
+		<div class="sheet" style="@SheetStyle">
+			@for ( var tile = 1; tile <= TileSet.Count; tile++ )
+			{
+				var at = tile;
+				<div class="cell @CellClass( at )" style="@CellStyle( at )" onmousedown=@(() => Pick( at ))></div>
+			}
+		</div>
+	}
+
+</root>
+
+@code
+{
+	//The sheet to pick from.
+	public TileSet TileSet { get; set; }
+
+	//The tile outlined as chosen.
+	public int Selected { get; set; }
+
+	//Said when a tile is clicked.
+	public Action<int> OnPick { get; set; }
+
+	//Whether cells carry marks for what the tile set says about them.
+	public bool ShowMarks { get; set; } = true;
+
+	//As wide as there is room for, as tall as the sheet's shape says - and the cells placed as
+	//fractions of it, so the grid lands on the picture at any width the sidebar is dragged to.
+	string SheetStyle
+	{
+		get
+		{
+			var sheet = TileSet.Sheet;
+			var ratio = sheet.Width / (float)Math.Max( sheet.Height, 1 );
+
+			return $"aspect-ratio: {ratio.ToString( "0.####", System.Globalization.CultureInfo.InvariantCulture )}; background-image: url({sheet.ResourcePath});";
+		}
+	}
+
+	string CellStyle( int tile )
+	{
+		var sheet = TileSet.Sheet;
+		var region = TileSet.Region( tile );
+
+		float Of( int value, int whole ) => value * 100.0f / Math.Max( whole, 1 );
+
+		return string.Create( System.Globalization.CultureInfo.InvariantCulture,
+			$"left: {Of( region.Left, sheet.Width ):0.###}%; top: {Of( region.Top, sheet.Height ):0.###}%; width: {Of( region.Width, sheet.Width ):0.###}%; height: {Of( region.Height, sheet.Height ):0.###}%;" );
+	}
+
+	string CellClass( int tile )
+	{
+		var classes = tile == Selected ? "selected" : "";
+
+		if ( !ShowMarks ) return classes;
+
+		var info = TileSet.Info( tile );
+		if ( info is null ) return classes;
+
+		if ( info.Collision == TileCollision.Solid ) classes += " solid";
+		if ( info.Collision == TileCollision.OneWay ) classes += " oneway";
+		if ( info.Frames > 1 ) classes += " animated";
+
+		return classes;
+	}
+
+	void Pick( int tile )
+	{
+		Selected = tile;
+		OnPick?.Invoke( tile );
+		StateHasChanged();
+	}
+
+	protected override int BuildHash()
+		=> HashCode.Combine( TileSet, TileSet?.Revision, TileSet?.Sheet, Selected, ShowMarks );
+}

@@ -1,0 +1,1480 @@
+@namespace Editor
+@inherits Panel
+
+@* Launcher: projects as cards on the right, everything else as rows on the left
+   New project is three pages on the right side, the arrow goes back *@
+
+<root>
+	<div class="body">
+	<div class="side">
+		<div class="brand" tooltip="rinten @Version">
+			<img class="logo" @ref="Logo" />
+		</div>
+
+		@* Where the window is. Home is the list of projects, from wherever the
+		   making of one had got to; the row under it is that making. *@
+		<div class="nav tab @(Section == Part.Projects && Showing == Page.Projects ? "on" : "")"
+			onclick=@( () => Go( Part.Projects ) )>
+			<i>home</i>
+			<div class="caption">Home</div>
+		</div>
+
+		<div class="nav add @(Section == Part.Projects && Showing != Page.Projects ? "on" : "")" onclick=@StartCreate>
+			<i>create_new_folder</i>
+			<div class="caption">Create New Project</div>
+		</div>
+
+		<div class="nav tab @(Section == Part.Versions ? "on" : "")" onclick=@( () => Go( Part.Versions ) )>
+			<i>layers</i>
+			<div class="caption">Versions</div>
+		</div>
+
+		<div class="rule"></div>
+
+		@* Everything below opens something else, and says so at its end. *@
+		<div class="nav link" onclick=@OpenEngineFolder>
+			<i>folder_open</i>
+			<div class="caption">Engine Folder</div>
+			<i class="out">open_in_new</i>
+		</div>
+
+		<div class="nav link" onclick=@OpenLogs>
+			<i>description</i>
+			<div class="caption">Logs</div>
+			<i class="out">open_in_new</i>
+		</div>
+
+		@* Community links in the corner by the logo *@
+		<div class="corners">
+			<CommunityLinks />
+		</div>
+	</div>
+
+	<div class="main">
+		<div class="head">
+			@* The search, over the projects it searches. The other pages say what
+			   they are instead, and the ones inside the making of a project have
+			   the way back in front of that. *@
+			@if ( Section == Part.Projects && Showing == Page.Projects )
+			{
+				<TextField @ref="Search" class="search" />
+			}
+			else
+			{
+				@if ( Section == Part.Projects )
+				{
+					<div class="back square" onclick=@Back>
+						<i>arrow_back</i>
+					</div>
+				}
+
+				<div class="heading">
+					<div class="title">@Heading</div>
+					<div class="count">@Subheading</div>
+				</div>
+			}
+
+			<div class="fill"></div>
+
+			@if ( Section == Part.Versions )
+			{
+				<div class="button ghost @(Versions.Loading ? "off" : "")" onclick=@RefreshVersions>
+					<i>refresh</i>
+				</div>
+			}
+		</div>
+
+		@if ( Section == Part.Projects && Showing == Page.Projects )
+		{
+			<div class="projects page @Way">
+				@{ var index = 0; }
+
+				@* Two to a row, under their heading. Two columns rather than one list
+				   that wraps across two: a card in a wrapping list is a share of the
+				   line it lands on, worked out from sizes the layout is holding from
+				   the last time the window was a different width - so a row came out
+				   with a card and a half on it. A column is half of the row it is in,
+				   at every width.
+
+				   Down the left, then the right, alternating - so reading across a
+				   row is still the order the list is in. *@
+				@foreach ( var group in Groups )
+				{
+					<div class="section">
+						<i>@group.Icon</i>
+						<div class="caption">@group.Name</div>
+					</div>
+
+					<div class="pair">
+					@for ( var side = 0; side < 2; side++ )
+					{
+						<div class="column">
+						@for ( var at = side; at < group.Projects.Count; at += 2 )
+						{
+							@{ var project = group.Projects[at]; }
+
+							<div class="card @(project == Opening ? "opening" : "") @(IsPorting( project ) ? "porting" : "")"
+								style="animation-delay: @Stagger( index + at )"
+								onclick=@( () => Open( project ) )>
+
+								@if ( IsPorting( project ) || project == Opening )
+								{
+									@* Two passes of light over the card, at two speeds.
+									   Red while a porter writes into it, green while it
+									   opens: the same movement either way, because it
+									   means the same thing either way. *@
+									<div class="working">
+										<div class="sweep"></div>
+										<div class="sweep behind"></div>
+									</div>
+								}
+
+								<div class="thumb @(HasThumb( project ) ? "has-image" : "")">
+									@if ( HasThumb( project ) )
+									{
+										<Image class="pic" Texture=@Thumb( project ) />
+									}
+									else
+									{
+										<div class="letter">@Initial( project )</div>
+									}
+								</div>
+
+								<div class="text">
+									<div class="title">@( project.Config?.Title ?? "Untitled" )</div>
+
+									<div class="sub">
+										<i>folder</i>
+										<div class="caption path" tooltip="@project.ConfigFilePath">@Place( project )</div>
+										<div class="dot">•</div>
+										<i>schedule</i>
+										<div class="caption when">@( IsPorting( project ) ? "porting" : project == Opening ? OpeningStep : When( project ) )</div>
+
+										@if ( EngineVersions.GetProjectPin( project ) is { } pin )
+										{
+											<div class="dot">•</div>
+											<i>layers</i>
+											<div class="caption when">@pin</div>
+										}
+
+										@if ( project.Config?.CreatedWith is { } created )
+										{
+											<div class="dot">•</div>
+											<i>history</i>
+											<div class="caption when" tooltip="Created with this engine version">@created</div>
+										}
+									</div>
+								</div>
+
+								@* What a card can do, each a square of its own at the
+								   card's end. Not on one a porter is still writing into:
+								   there is nothing there yet to act on. *@
+								@if ( !IsPorting( project ) )
+								{
+									<div class="actions">
+										<div class="square" tooltip="Remove from the list"
+											onclick=@( ( PanelEvent e ) => Forget( e, project ) )>
+											<i>close</i>
+										</div>
+
+										<div class="square" tooltip="Copy path"
+											onclick=@( ( PanelEvent e ) => CopyPath( e, project ) )>
+											<i>content_copy</i>
+										</div>
+
+										<div class="square" tooltip="Show in folder"
+											onclick=@( ( PanelEvent e ) => ShowInFolder( e, project ) )>
+											<i>folder</i>
+										</div>
+
+										<div class="square @(ChoosingFor == project.ConfigFilePath ? "on" : "")" tooltip="Engine version"
+											onclick=@( ( PanelEvent e ) => ChooseEngine( e, project ) )>
+											<i>layers</i>
+										</div>
+
+										<div class="square @(project.Pinned ? "on" : "")"
+											tooltip="@( project.Pinned ? "Unpin" : "Keep at the top" )"
+											onclick=@( ( PanelEvent e ) => Pin( e, project ) )>
+											<i>push_pin</i>
+										</div>
+									</div>
+								}
+							</div>
+
+							@if ( ChoosingFor == project.ConfigFilePath )
+							{
+								<div class="channels engines">
+									<div class="channel @(EngineVersions.GetProjectPin( project ) is null ? "on" : "")"
+										onclick=@( () => SetEngine( project, null ) )>this editor</div>
+
+									@foreach ( var installed in Choices )
+									{
+										<div class="channel @(EngineVersions.GetProjectPin( project ) == installed.Version ? "on" : "")"
+											onclick=@( () => SetEngine( project, installed.Version ) )>@installed.Version</div>
+									}
+
+									@if ( !Choices.Any() )
+									{
+										<div class="channel" onclick=@( () => Go( Part.Versions ) )>install one</div>
+									}
+								</div>
+							}
+						}
+						</div>
+					}
+					</div>
+
+					@{ index += group.Projects.Count; }
+				}
+
+				@if ( !Shown.Any() )
+				{
+					<div class="empty">
+						<i>@( Searching ? "search_off" : "inbox" )</i>
+
+						<div class="caption">@( Searching ? "Nothing matches that" : "No projects yet" )</div>
+
+						<div class="hint">
+							@( Searching ? "Try a shorter word" : "Make one with Create New Project - anything already on this machine is found below" )
+						</div>
+					</div>
+				}
+
+				@* What is on the disk and not in the list, a heading for each of the
+				   two places projects live: the ones made here and the ones pulled
+				   down. Read while the window comes up - see ProjectScan - so a
+				   project somebody already has is a card rather than a folder
+				   dialog to go and find it in. *@
+				@{ var nearby = Nearby.ToList(); }
+
+				@foreach ( var column in Columns )
+				{
+					@{ var here = nearby.Where( x => x.Source == column ).ToList(); }
+
+					@if ( here.Count > 0 )
+					{
+						<div class="section">
+							<i>@ColumnIcon( column )</i>
+							<div class="caption">@ColumnName( column )</div>
+						</div>
+
+						<div class="pair">
+						@for ( var side = 0; side < 2; side++ )
+						{
+							<div class="column">
+							@for ( var at = side; at < here.Count; at += 2 )
+							{
+								@{ var entry = here[at]; }
+
+								<div class="card near @(entry.IsPort ? "port" : "")"
+									style="animation-delay: @Stagger( index + at )"
+									onclick=@( () => Take( entry ) )>
+
+									<div class="thumb">
+										<div class="letter">@Initial( entry.Title )</div>
+									</div>
+
+									<div class="text">
+										<div class="title">@entry.Title</div>
+
+										<div class="sub">
+											<i>folder</i>
+											<div class="caption path" tooltip="@entry.Path">@FolderAbove( entry.Folder )</div>
+										</div>
+									</div>
+
+									<div class="actions">
+										@if ( entry.IsPort )
+										{
+											@* Not ours, so there is nothing to add - pressing
+											   it goes to the porter with this already filled in. *@
+											<div class="tag">@PortTag</div>
+										}
+										else
+										{
+											<div class="square" tooltip="Add to the list"
+												onclick=@( ( PanelEvent e ) => Keep( e, entry ) )>
+												<i>add</i>
+											</div>
+										}
+									</div>
+								</div>
+							}
+							</div>
+						}
+						</div>
+
+						@{ index += here.Count; }
+					}
+				}
+			</div>
+		}
+
+		@* What kind of project. Tiles, because what is being chosen is a thing
+		   rather than a line in a list. *@
+		@if ( Section == Part.Projects && Showing == Page.Types )
+		{
+			<div class="types page @Way">
+				@{ var tile = 0; }
+
+				@* One that is already on the machine, which is not a kind of new
+				   project - so it stands a little apart from them. *@
+				<div class="type existing"
+					style="animation-delay: @Stagger( tile++ )"
+					onclick=@AddFromFolder>
+
+					<div class="glyph"><i>folder_open</i></div>
+
+					<div class="name">Existing project</div>
+					<div class="about">One that is already on this machine. Nothing is made; the launcher is pointed at it.</div>
+
+					<div class="fill"></div>
+
+					<div class="pick">
+						<div class="caption">Find it</div>
+						<i>arrow_forward</i>
+					</div>
+				</div>
+
+				@foreach ( var template in Templates )
+				{
+					<div class="type"
+						style="animation-delay: @Stagger( tile++ )"
+						onclick=@( () => Choose( template ) )>
+
+						<div class="glyph"><i>@template.Icon</i></div>
+
+						<div class="name">@template.Title</div>
+						<div class="about">@template.Description</div>
+
+						<div class="fill"></div>
+
+						<div class="pick">
+							<div class="caption">Use this</div>
+							<i>arrow_forward</i>
+						</div>
+					</div>
+				}
+			</div>
+		}
+
+		@* And the questions about the one being made. *@
+		@if ( Section == Part.Projects && Showing == Page.Setup && Creating is not null )
+		{
+			<div class="setup page @Way">
+				@{ var row = 0; }
+
+				@if ( Creating.IsPorting )
+				{
+					<div class="field" style="animation-delay: @Stagger( row++ )">
+						<div class="legend">@SourceLabel</div>
+						<div class="hint">@SourceHint</div>
+
+						<div class="source @(HasSource ? "chosen" : "")" onclick=@ChooseSource>
+							<i>@( HasSource ? "description" : "folder_open" )</i>
+							<div class="value">@( HasSource ? Creating.PortSource : SourcePlaceholder )</div>
+						</div>
+					</div>
+				}
+
+				@if ( !Creating.IsPorting )
+				{
+					<div class="field" style="animation-delay: @Stagger( row++ )">
+						<div class="legend">Title</div>
+						<TextField @ref="TitleField" class="input" />
+					</div>
+
+					<div class="field" style="animation-delay: @Stagger( row++ )">
+						<div class="legend">Ident</div>
+						<div class="hint">Lowercase, no spaces - what the folder and the project file are called</div>
+						<TextField @ref="IdentField" class="input" />
+					</div>
+				}
+
+				<div class="field" style="animation-delay: @Stagger( row++ )">
+					<div class="legend">Location</div>
+
+					<div class="line">
+						<TextField @ref="LocationField" class="input" />
+
+						<div class="button ghost" onclick=@ChooseLocation>
+							<i>folder_open</i>
+						</div>
+					</div>
+				</div>
+
+				<div class="field" style="animation-delay: @Stagger( row++ )">
+					<div class="legend">Other</div>
+
+					<div class="check @(Creating.GitIgnore ? "on" : "")" onclick=@ToggleGitIgnore>
+						<i>@( Creating.GitIgnore ? "check_box" : "check_box_outline_blank" )</i>
+						<div class="caption">Create .gitignore</div>
+					</div>
+
+					<div class="check @(Creating.MakeDefaultLocation ? "on" : "")" onclick=@ToggleDefaultLocation>
+						<i>@( Creating.MakeDefaultLocation ? "check_box" : "check_box_outline_blank" )</i>
+						<div class="caption">Make this the default location</div>
+					</div>
+				</div>
+
+				<div class="fill"></div>
+
+				@* A warning rather than a footnote, so it is said in the colour
+				   the page uses for something being wrong. *@
+				@if ( Creating.Note is not null )
+				{
+					<div class="note">
+						<i>warning</i>
+						<div class="caption">@Creating.Note</div>
+					</div>
+				}
+
+				<div class="foot">
+					<div class="where @(Trouble is not null ? "bad" : "")">
+						<i>@( Trouble is not null ? "error_outline" : "subdirectory_arrow_right" )</i>
+						<div class="caption">@( Trouble ?? Creating.FullPath )</div>
+					</div>
+
+					<div class="fill"></div>
+
+					<div class="button plain" onclick=@Back>
+						<div class="caption">Cancel</div>
+					</div>
+
+					<div class="button primary @(Creating.CanCreate ? "" : "off")" onclick=@Create>
+						<i>@( Creating.IsPorting ? "move_down" : "add_box" )</i>
+						<div class="caption">@( Creating.IsPorting ? "Create and port" : "Create" )</div>
+					</div>
+				</div>
+			</div>
+		}
+
+		@* What is released, and what is already unpacked beside the launcher. *@
+		@if ( Section == Part.Versions )
+		{
+			<div class="releases page @Way">
+				@{ var line = 0; }
+
+				@foreach ( var row in Versions.Rows )
+				{
+					<div class="release @(row.Installed ? "installed" : "") @(row.Working ? "working" : "")"
+						style="animation-delay: @Stagger( line++ )">
+
+						@if ( row.Working )
+						{
+							<div class="track">
+								<div class="done" style="width: @Percent( row.Progress )"></div>
+							</div>
+						}
+
+						<div class="mark"><i>@( row.Installed ? "check" : "layers" )</i></div>
+
+						<div class="text">
+							<div class="title">@row.Version</div>
+							<div class="about">@About( row )</div>
+						</div>
+
+						<div class="fill"></div>
+
+						@if ( row.Working )
+						{
+							<div class="state">@Percent( row.Progress )</div>
+						}
+						else if ( row.Installed )
+						{
+							<div class="button plain" tooltip="Start this version's editor" onclick=@( () => OpenVersion( row ) )>
+								<div class="caption">Open</div>
+							</div>
+
+							<div class="button plain" onclick=@( () => Remove( row ) )>
+								<div class="caption">Remove</div>
+							</div>
+						}
+						else if ( row.Available )
+						{
+							<div class="button primary" onclick=@( () => Install( row ) )>
+								<i>download</i>
+								<div class="caption">Install</div>
+							</div>
+						}
+						else
+						{
+							<div class="state off">no build for this machine</div>
+						}
+					</div>
+				}
+
+				@if ( !Versions.Rows.Any() )
+				{
+					<div class="empty">
+						<i>@( Versions.Loading ? "cloud_sync" : "layers_clear" )</i>
+
+						<div class="caption">@( Versions.Loading ? "Asking GitHub" : "Nothing released yet" )</div>
+
+						<div class="hint">
+							@( Versions.Loading
+								? "What it has for this machine, in a moment"
+								: "Whatever is already unpacked here would be in this list" )
+						</div>
+					</div>
+				}
+			</div>
+
+			<div class="status">@Versions.Status</div>
+		}
+	</div>
+
+	@* Darkens the window toward the bottom; clicks pass through *@
+	<div class="shade"></div>
+	</div>
+</root>
+
+@code
+{
+	//The mark, handed over rather than named in the stylesheet.
+	public Texture Mark { get; set; }
+
+	//Told which project was picked, for the editor this is over to load it.
+	public Action<Project> Chosen { get; set; }
+
+	//Which of the two halves of the launcher the window is on: Home, or the engines in the corner.
+	private enum Part
+	{
+		/// <summary>What there is to open, and how to get another.</summary>
+		Projects,
+
+		/// <summary>What there is to open it with.</summary>
+		Versions
+	}
+
+	//Which of the three pages the projects tab is showing.
+	private enum Page
+	{
+		/// <summary>What there is.</summary>
+		Projects,
+
+		/// <summary>What a new one could be.</summary>
+		Types,
+
+		/// <summary>What this one is called and where it goes.</summary>
+		Setup
+	}
+
+	private Image Logo { get; set; }
+
+	private TextField Search { get; set; }
+
+	private TextField TitleField { get; set; }
+
+	private TextField IdentField { get; set; }
+
+	private TextField LocationField { get; set; }
+
+	//The project whose engine picker is open, by its file.
+	private string ChoosingFor { get; set; }
+
+	//What the picker offers, read from the disk when it opens.
+	private List<EngineVersions.Installed> Choices { get; set; } = [];
+
+	//Moves when a project's engine is set, which the cards show.
+	private int PinRevision { get; set; }
+
+	private ProjectList Projects { get; } = new();
+
+	//What is on the disk that the list has never been told about.
+	private ProjectScan Scan { get; } = new();
+
+	//Whether the disk still says what the list says - see ProjectWatch.
+	private ProjectWatch Watch { get; } = new();
+
+	private string Filter { get; set; } = string.Empty;
+
+	//The one being opened, until this launcher is gone.
+	private Project Opening { get; set; }
+
+	//The project a porter is filling in, by its file, or nothing. By path rather than by the project itself: refreshing the list reads addons.json
+	//again and hands back other objects for the same projects, so a reference kept across one is a reference to a project that is no longer in the list.
+	private string PortingPath { get; set; }
+
+	//The porter itself, while there is one to watch.
+	private System.Diagnostics.Process Porter { get; set; }
+
+	//Since the port was started, for when there is no porter to ask.
+	private RealTimeSince PortStarted;
+
+	//How long a card stays marked where nothing can be asked whether the port is done. Only for a porter that never started. A real one is watched,
+	//because a port is minutes of reading and writing and any number here would be a guess that clears the mark while the work is still going on.
+	private const float PortWithoutAPorter = 15.0f;
+
+	private bool IsPorting( Project project ) => PortingPath is not null
+		&& string.Equals( project?.ConfigFilePath, PortingPath, StringComparison.OrdinalIgnoreCase );
+
+	private Page Showing { get; set; } = Page.Projects;
+
+	//Which tab, which is which page of the two.
+	private Part Section { get; set; } = Part.Projects;
+
+	//The engines, while the versions tab is the one being looked at.
+	private LauncherVersionList Versions { get; } = new();
+
+	//Whether the page being shown was gone into or come back out of, which is which side it arrives from.
+	private bool Forward { get; set; } = true;
+
+	//Whether anything has been gone into yet. The projects are what the window opens on, and a window whose contents slide in from
+	//somewhere reads as a window that was already showing something else. Nothing moves sideways until somebody has been somewhere.
+	private bool Moved { get; set; }
+
+	//The project being made, while one is.
+	private ProjectCreation Creating { get; set; }
+
+	//What went wrong while writing it out, where anything did.
+	private string Failure { get; set; }
+
+	private bool Searching => !string.IsNullOrWhiteSpace( Filter );
+
+	//What opening the project picked is doing, on its card while it does it.
+	private static string OpeningStep => StartupLoadProject.Message ?? "opening";
+
+	//The words with an ampersand in them, out of the markup. Razor reads its content as markup, and an ampersand there is the
+	//start of something it has to decide about. This is not worth finding out the answer to on a name that appears four times.
+	private const string SourceLabel = "s&box project";
+
+	private const string SourceHint = "Its models, materials and art are converted into the new project. The one it reads is not touched.";
+
+	private const string SourcePlaceholder = "Choose the .sbproj to convert from";
+
+	private bool HasSource => !string.IsNullOrEmpty( Creating?.PortSource );
+
+	//What a new project can be made out of.
+	private static IReadOnlyList<ProjectTemplate> Templates => ProjectTemplate.All();
+
+	//The engine this launcher is part of.
+	//The release's own version (.version, written by package-release); a build from source has none
+	private static string Version => System.Version.TryParse( Rinten.Application.Version, out _ ) ? Rinten.Application.Version : "dev";
+
+	//The projects to show: everything that is not built in, newest first, and pinned ones above the rest.
+	private IEnumerable<Project> Shown => Projects.GetAll()
+		.Where( x => !x.IsBuiltIn )
+		.Where( Matches )
+		.OrderByDescending( x => x.Pinned )
+		.ThenByDescending( x => x.LastOpened );
+
+	//A heading over some of the projects, and the ones under it.
+	private sealed record Group( string Name, string Icon, List<Project> Projects );
+
+	//The projects under their headings: the ones kept at the top, then the rest. A heading only where there is something
+	//under it. "Pinned" over nothing is a line saying that nothing has been pinned, which the pins on the cards already say.
+	private IEnumerable<Group> Groups
+	{
+		get
+		{
+			var shown = Shown.ToList();
+
+			var pinned = shown.Where( x => x.Pinned ).ToList();
+			var rest = shown.Where( x => !x.Pinned ).ToList();
+
+			if ( pinned.Count > 0 ) yield return new Group( "Pinned", "push_pin", pinned );
+			if ( rest.Count > 0 ) yield return new Group( "Local", "folder", rest );
+		}
+	}
+
+	//What the scan turned up that is not already in the list, ours first. The ones that can be opened before the ones that would have to be converted:
+	//one is a project this machine has and the other is a job that takes minutes, and they are only in the same list because they were found the same way.
+	private IEnumerable<ProjectScan.Found> Nearby
+	{
+		get
+		{
+			var listed = ListedFolders;
+
+			return Scan.Results
+				.Where( x => !listed.Contains( x.Folder ) )
+				.Where( NearbyMatches )
+				.Where( x => ProjectTemplate.PortOffered || !x.IsPort )
+				.OrderBy( x => x.IsPort )
+				.ThenBy( x => x.Title, StringComparer.OrdinalIgnoreCase );
+		}
+	}
+
+	//The folders the list already holds, in one spelling.
+	private HashSet<string> ListedFolders
+	{
+		get
+		{
+			var folders = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
+
+			foreach ( var project in Projects.GetAll() )
+			{
+				if ( string.IsNullOrWhiteSpace( project.ConfigFilePath ) ) continue;
+
+				try
+				{
+					var full = System.IO.Path.GetFullPath( project.ConfigFilePath );
+
+					if ( System.IO.Path.GetDirectoryName( full ) is { } folder ) folders.Add( folder );
+				}
+				catch ( Exception )
+				{
+					//A path that cannot be resolved is a project that is not in any folder this could match against.
+				}
+			}
+
+			return folders;
+		}
+	}
+
+	private bool NearbyMatches( ProjectScan.Found found )
+	{
+		if ( !Searching ) return true;
+
+		return ( found.Title ?? string.Empty ).Contains( Filter, StringComparison.OrdinalIgnoreCase )
+			|| ( found.Path ?? string.Empty ).Contains( Filter, StringComparison.OrdinalIgnoreCase );
+	}
+
+	//The two places the scan's results come from, in the order their headings go down the page.
+	private static readonly ProjectScan.FoundIn[] Columns =
+		[ProjectScan.FoundIn.Projects, ProjectScan.FoundIn.Github];
+
+	//What one of the two is called, over its cards.
+	private static string ColumnName( ProjectScan.FoundIn column ) =>
+		column == ProjectScan.FoundIn.Github ? "GitHub checkouts" : "Found on this machine";
+
+	//The glyph in front of that.
+	private static string ColumnIcon( ProjectScan.FoundIn column ) =>
+		column == ProjectScan.FoundIn.Github ? "code" : "search";
+
+	//The name of the thing being ported from, out of the markup. The same reason SourceLabel is a
+	//constant: an ampersand written in the markup is the start of something Razor has to decide about.
+	private const string PortTag = "s&box";
+
+	//What the page is called, where the search would otherwise be.
+	private string Heading => Section == Part.Versions ? "Engine versions" : Showing switch
+	{
+		Page.Types => "New project",
+		Page.Setup => Creating?.Template?.Title ?? "New project",
+		_ => "Projects"
+	};
+
+	//The small print beside it: how many, or what is being asked.
+	private string Subheading => Section == Part.Versions ? Installed : Showing switch
+	{
+		Page.Types => "What kind",
+		Page.Setup => Creating?.IsPorting == true ? "From s&box" : "Name and place",
+		_ => string.Empty
+	};
+
+	//How many engines are unpacked here.
+	private string Installed
+	{
+		get
+		{
+			var count = Versions.Rows.Count( x => x.Installed );
+
+			return count == 1 ? "1 installed" : $"{count} installed";
+		}
+	}
+
+	//Which way this page came in, as the stylesheet reads it.
+	private string Way => !Moved ? "" : ( Forward ? "ahead" : "behind" );
+
+	//What is stopping the project from being made: what went wrong writing it, or what has not been said about it yet.
+	private string Trouble => Failure ?? Creating?.Problem;
+
+	private bool Matches( Project project )
+	{
+		if ( !Searching ) return true;
+
+		var title = project.Config?.Title ?? string.Empty;
+
+		return title.Contains( Filter, StringComparison.OrdinalIgnoreCase )
+			|| ( project.ConfigFilePath ?? string.Empty ).Contains( Filter, StringComparison.OrdinalIgnoreCase );
+	}
+
+	//The letter on a project's tile - what it is called, in one character.
+	private static string Initial( Project project ) => Initial( project.Config?.Title );
+
+	private static string Initial( string title )
+	{
+		var text = ( title ?? "?" ).Trim();
+
+		return text.Length > 0 ? text[..1].ToUpperInvariant() : "?";
+	}
+
+	private static bool HasThumb( Project project ) => Thumb( project ) is not null;
+
+	private static Texture Thumb( Project project ) => ProjectThumbs.Get( project );
+
+	//When it was last opened, as somebody would say it.
+	private static string When( Project project )
+	{
+		if ( project.LastOpened == default ) return "never opened";
+
+		return project.LastOpened.LocalDateTime.ToRelativeTimeString();
+	}
+
+	//Where a project lives, the way it is written under its name - see FolderAbove.
+	private static string Place( Project project ) =>
+		FolderAbove( System.IO.Path.GetDirectoryName( project.ConfigFilePath ?? string.Empty ) );
+
+	//The name of the folder a project's folder sits in: "GitHub", "Rinten Projects". One word rather than a path. A path does not fit under
+	//a card's name, and what is read off it is which of the few places projects live this one is in; the whole path is the tooltip on it.
+	private static string FolderAbove( string folder )
+	{
+		if ( string.IsNullOrWhiteSpace( folder ) ) return string.Empty;
+
+		var above = System.IO.Path.GetDirectoryName(
+			folder.TrimEnd( System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar ) );
+
+		var name = System.IO.Path.GetFileName( above ?? string.Empty );
+
+		return string.IsNullOrEmpty( name ) ? folder : name;
+	}
+
+	//How long a card waits before it arrives, so the list comes in as a list rather than all at once. Written out with an invariant point: on a machine
+	//whose numbers use a comma this is a value the stylesheet cannot read, and the whole list would appear with no delay at all rather than say why.
+	private static string Stagger( int index ) => ( Math.Min( index, 12 ) * 0.035f )
+		.ToString( "0.###", System.Globalization.CultureInfo.InvariantCulture ) + "s";
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( Logo.IsValid() && Mark is not null ) Logo.Texture = Mark;
+
+		//Every time rather than only the first: the fields belong to a page, and a page is built again from nothing each time it is come back to.
+		Wire();
+
+		if ( !firstTime ) return;
+
+		Reread();
+
+		//Off on a thread of its own, and on the screen as it finds things - see ProjectScan. Nothing waits for it: the window is up either way.
+		Scan.Start();
+
+		//Recent projects are in the taskbar's list before anything is opened, which is where somebody looks for them next time.
+		TaskbarJumpList.Refresh();
+	}
+
+	//The window is going: let go of the watches. A watch is an operating system handle and there is a limit on how many of them there
+	//are - shared with everything else the machine is running, on Linux - so they are given back rather than left to a finaliser.
+	public override void OnDeleted()
+	{
+		base.OnDeleted();
+
+		Watch.Dispose();
+	}
+
+	//Reloads the project list and repoints the folder watches; every list change goes through here
+	private void Reread()
+	{
+		Projects.Refresh();
+
+		Watch.Follow( Watched() );
+	}
+
+	//Folders to watch: scan roots, plus each project's folder and its parent
+	private IEnumerable<string> Watched()
+	{
+		foreach ( var place in ProjectScan.Places() )
+		{
+			yield return place;
+		}
+
+		foreach ( var project in Projects.GetAll() )
+		{
+			if ( string.IsNullOrWhiteSpace( project.ConfigFilePath ) ) continue;
+
+			string folder;
+
+			try
+			{
+				folder = System.IO.Path.GetDirectoryName( System.IO.Path.GetFullPath( project.ConfigFilePath ) );
+			}
+			catch ( Exception )
+			{
+				//A path that will not resolve is not a folder anything can be told about.
+				continue;
+			}
+
+			if ( string.IsNullOrWhiteSpace( folder ) ) continue;
+
+			yield return folder;
+
+			if ( System.IO.Path.GetDirectoryName( folder ) is { Length: > 0 } above )
+			{
+				yield return above;
+			}
+		}
+	}
+
+	//Pushes values into the page's fields; fields ignore writes while being typed in
+	private void Wire()
+	{
+		if ( Search.IsValid() )
+		{
+			Search.Icon = "search";
+			Search.Placeholder = "Search projects";
+			Search.ValueChanged = OnFilterChanged;
+			Search.Value = Filter;
+		}
+
+		if ( Creating is null ) return;
+
+		if ( TitleField.IsValid() )
+		{
+			TitleField.Placeholder = "My Project";
+			TitleField.ValueChanged = OnTitleChanged;
+			TitleField.Value = Creating.Title;
+		}
+
+		if ( IdentField.IsValid() )
+		{
+			IdentField.Placeholder = "my_project";
+			IdentField.ValueChanged = OnIdentChanged;
+			IdentField.Value = Creating.Ident;
+		}
+
+		if ( LocationField.IsValid() )
+		{
+			LocationField.Placeholder = LauncherPreferences.DefaultProjectLocation;
+			LocationField.ValueChanged = OnLocationChanged;
+			LocationField.Value = Creating.Location;
+		}
+	}
+
+	private void OnFilterChanged( string value )
+	{
+		Filter = value ?? string.Empty;
+
+		StateHasChanged();
+	}
+
+	private void OnTitleChanged( string value )
+	{
+		//The page can go while a field on it still has the focus, and what it says on the way out is about a project nobody is making any more.
+		if ( Creating is null ) return;
+
+		Creating.Title = value;
+		Failure = null;
+
+		StateHasChanged();
+	}
+
+	private void OnIdentChanged( string value )
+	{
+		if ( Creating is null ) return;
+
+		Creating.Ident = value;
+		Failure = null;
+
+		StateHasChanged();
+	}
+
+	private void OnLocationChanged( string value )
+	{
+		if ( Creating is null ) return;
+
+		Creating.Location = value;
+		Failure = null;
+
+		StateHasChanged();
+	}
+
+	//The news from the disk, and from a porter that has finished.
+	public override void Tick()
+	{
+		base.Tick();
+
+		//Disk changed: reread list and rescan. Deferred while a project is opening, which holds old objects
+		if ( Watch.Ready && Opening is null )
+		{
+			Watch.Taken();
+
+			Reread();
+			Scan.Again();
+
+			TaskbarJumpList.Refresh();
+			StateHasChanged();
+		}
+
+		//A port that has finished leaves a folder full of content behind it, so the list is read again:
+		//the card is holding a title and a picture from a project that was empty when it was written down.
+		if ( PortingPath is not null && PortFinished() )
+		{
+			PortingPath = null;
+			Porter = null;
+
+			Reread();
+			StateHasChanged();
+		}
+	}
+
+	//Whether the porter is done, or there is no longer one to ask.
+	private bool PortFinished()
+	{
+		if ( Porter is null ) return PortStarted > PortWithoutAPorter;
+
+		try
+		{
+			return Porter.HasExited;
+		}
+		catch ( Exception )
+		{
+			//Gone, or never really there. Either way there is nothing left to wait for.
+			return true;
+		}
+	}
+
+	private void Open( Project project )
+	{
+		if ( project is null || Opening is not null ) return;
+
+		//A project being ported into is a folder with a project file and nothing else yet.
+		//Opening it now is opening an empty game, and the card says as much while the porter runs.
+		if ( IsPorting( project ) ) return;
+
+		//Folder deleted behind our back: refresh the list instead of starting an editor on nothing
+		if ( !System.IO.File.Exists( project.ConfigFilePath ) )
+		{
+			Projects.Remove( project );
+			Projects.SaveList();
+
+			TaskbarJumpList.Refresh();
+			StateHasChanged();
+			return;
+		}
+
+		Opening = project;
+
+		StateHasChanged();
+
+		project.LastOpened = DateTime.Now;
+
+		Projects.SaveList();
+		TaskbarJumpList.Refresh();
+
+		//Pinned to another engine version: that version's editor opens it, and this one - an empty window behind it - goes.
+		if ( EngineVersions.ResolveExeForProject( project ) is { } pinned
+			&& !string.Equals( pinned, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase ) )
+		{
+			LauncherLaunch.Start( project );
+			EditorUtility.Quit();
+			return;
+		}
+
+		Chosen?.Invoke( project );
+	}
+
+	//What a card can do: the squares at its end. Each is inside the card, and a press on one is not a press on the card it sits in. Nothing
+	//while a project is being opened: reading the list back hands out other objects for the same projects, and Opening is holding one of them.
+
+	//Keeps a project at the top of the list, under its own heading - or lets it go back among the rest.
+	private void Pin( PanelEvent e, Project project )
+	{
+		e.StopPropagation();
+
+		if ( project is null || Opening is not null ) return;
+
+		project.Pinned = !project.Pinned;
+
+		Projects.SaveList();
+		StateHasChanged();
+	}
+
+	private void ShowInFolder( PanelEvent e, Project project )
+	{
+		e.StopPropagation();
+
+		var folder = project?.ConfigFilePath is { Length: > 0 } path
+			? System.IO.Path.GetDirectoryName( path )
+			: null;
+
+		if ( !string.IsNullOrWhiteSpace( folder ) ) EditorUtility.OpenFolder( folder );
+	}
+
+	private void CopyPath( PanelEvent e, Project project )
+	{
+		e.StopPropagation();
+
+		if ( project is null ) return;
+
+		EditorUtility.Clipboard.Copy( project.ConfigFilePath ?? string.Empty );
+	}
+
+	//Out of the list. The folder is left exactly where it is - and the scan finds it again, so this is a card moving down the page rather than away.
+	private void Forget( PanelEvent e, Project project )
+	{
+		e.StopPropagation();
+
+		if ( project is null || Opening is not null ) return;
+
+		Projects.Remove( project );
+		Projects.SaveList();
+		Reread();
+
+		TaskbarJumpList.Refresh();
+		StateHasChanged();
+	}
+
+	//And the cards under them: what is on the disk and not in the list yet.
+
+	//Pressing a found card: opens ours, and offers to convert somebody else's.
+	private void Take( ProjectScan.Found found )
+	{
+		if ( found.IsPort )
+		{
+			StartPort( found );
+			return;
+		}
+
+		if ( Adopt( found ) is not { } project ) return;
+
+		Open( project );
+	}
+
+	//The plus: takes it into the list and leaves it there. The whole of what the launcher had
+	//to be pointed at a project for, in one press on a card that was already on the screen.
+	private void Keep( PanelEvent e, ProjectScan.Found found )
+	{
+		e.StopPropagation();
+
+		Adopt( found );
+
+		StateHasChanged();
+	}
+
+	//Puts a found project in the list and answers with it as the list holds it. Read back rather than kept: refreshing reads
+	//addons.json again and hands over other objects for the same projects, so the one that was just added is found again by its folder.
+	private Project Adopt( ProjectScan.Found found )
+	{
+		if ( Projects.TryAddFromFile( found.Path ) is null ) return null;
+
+		Projects.SaveList();
+		Reread();
+
+		TaskbarJumpList.Refresh();
+
+		return Projects.GetAll().FirstOrDefault( x => InFolder( x, found.Folder ) );
+	}
+
+	private static bool InFolder( Project project, string folder )
+	{
+		if ( string.IsNullOrWhiteSpace( project?.ConfigFilePath ) ) return false;
+
+		try
+		{
+			var full = System.IO.Path.GetFullPath( project.ConfigFilePath );
+
+			return string.Equals( System.IO.Path.GetDirectoryName( full ), folder,
+				StringComparison.OrdinalIgnoreCase );
+		}
+		catch ( Exception )
+		{
+			return false;
+		}
+	}
+
+	//Somebody else's project: the porter's page, with this already chosen. Which is the whole point of finding them. Porting one
+	//used to be the tiles page, the port tile, and then a file dialog pointed at wherever the legacy editor happens to keep its projects.
+	private void StartPort( ProjectScan.Found found )
+	{
+		if ( Templates.FirstOrDefault( x => x.IsPort ) is not { } template ) return;
+
+		Creating = new ProjectCreation( template ) { PortSource = found.Path };
+		Failure = null;
+
+		Showing = Page.Setup;
+		Forward = true;
+		Moved = true;
+
+		StateHasChanged();
+	}
+
+	private void ToggleGitIgnore()
+	{
+		Creating.GitIgnore = !Creating.GitIgnore;
+
+		StateHasChanged();
+	}
+
+	private void ToggleDefaultLocation()
+	{
+		Creating.MakeDefaultLocation = !Creating.MakeDefaultLocation;
+
+		StateHasChanged();
+	}
+
+	//Going in and coming back out. The page being left is not on the screen for
+	//any of it - what moves is the one arriving, from the side it is coming from.
+
+	//Create New Project: the kinds there are, from wherever the window was.
+	private void StartCreate()
+	{
+		if ( Section == Part.Projects && Showing == Page.Types ) return;
+
+		Section = Part.Projects;
+		Showing = Page.Types;
+
+		Creating = null;
+		Failure = null;
+
+		Forward = true;
+		Moved = true;
+
+		StateHasChanged();
+	}
+
+	private void Choose( ProjectTemplate template )
+	{
+		Creating = new ProjectCreation( template );
+		Failure = null;
+
+		Showing = Page.Setup;
+		Forward = true;
+		Moved = true;
+
+		StateHasChanged();
+	}
+
+	//The arrow, and Cancel, which is the same thing: one page back. What was typed goes with the page. Coming back to the kinds of
+	//project and choosing again is choosing again - keeping half of the last answer would only be a name from a template nobody picked.
+	private void Back()
+	{
+		if ( Showing == Page.Setup )
+		{
+			Creating = null;
+			Failure = null;
+
+			Showing = Page.Types;
+		}
+		else
+		{
+			Showing = Page.Projects;
+		}
+
+		Forward = false;
+		Moved = true;
+
+		StateHasChanged();
+	}
+
+	private void ChooseLocation()
+	{
+		var dialog = new FileDialog( null )
+		{
+			Title = "Where the project goes",
+		};
+
+		//Somewhere to start from. A file dialog that was never told where to look has no directory at all, and asking the filesystem about nothing throws.
+		dialog.Directory = string.IsNullOrWhiteSpace( Creating.Location )
+			? LauncherPreferences.DefaultProjectLocation
+			: Creating.Location;
+
+		if ( !string.IsNullOrWhiteSpace( dialog.Directory ) && !System.IO.Directory.Exists( dialog.Directory ) )
+			System.IO.Directory.CreateDirectory( dialog.Directory );
+
+		dialog.SetFindDirectory();
+
+		if ( !dialog.Execute() ) return;
+
+		Creating.Location = dialog.SelectedFile;
+		Failure = null;
+
+		StateHasChanged();
+	}
+
+	//Pick the legacy project to convert from.
+	private void ChooseSource()
+	{
+		var dialog = new FileDialog( null ) { Title = "Choose the s&box project to convert from" };
+
+		dialog.SetNameFilter( "*.sbproj" );
+
+		if ( !dialog.Execute() ) return;
+
+		//The name and the ident come with it - see ProjectCreation.
+		Creating.PortSource = dialog.SelectedFile;
+		Failure = null;
+
+		StateHasChanged();
+	}
+
+	//Writes the project, adds it to the list, saves, then rereads, so the new project isn't dropped
+	private void Create()
+	{
+		if ( Creating is null || !Creating.CanCreate ) return;
+
+		var source = Creating.IsPorting ? Creating.PortSource : null;
+		string path;
+
+		try
+		{
+			//Normalize like ConfigFilePath, or the ordinal compare fails on Windows and IsPorting stays false
+			path = System.IO.Path.GetFullPath( Creating.Create() );
+		}
+		catch ( Exception e )
+		{
+			//The folder could not be made, or could not be written to. Said on the page that asked for it, which is still in front of them.
+			Failure = e.Message;
+
+			StateHasChanged();
+			return;
+		}
+
+		Projects.TryAddFromFile( path );
+		Projects.SaveList();
+		Reread();
+
+		TaskbarJumpList.Refresh();
+
+		Creating = null;
+		Failure = null;
+
+		Showing = Page.Projects;
+		Forward = false;
+		Moved = true;
+
+		StateHasChanged();
+
+		if ( source is null ) return;
+
+		//Marked while it is filled in: what is on the disk under that name is a project file and nothing else until the porter is done with it.
+		PortingPath = path;
+		Porter = LauncherLaunch.StartPort( source, System.IO.Path.GetDirectoryName( path ) );
+		PortStarted = 0;
+
+		StateHasChanged();
+	}
+
+	private void AddFromFolder()
+	{
+		var dialog = new FileDialog( null )
+		{
+			Title = "Find project file",
+		};
+
+		//Somewhere to start from. A file dialog that was never told where to look has no directory at all, and asking the
+		//filesystem about nothing throws - which is this button doing nothing and saying nothing, which is how it behaved.
+		if ( string.IsNullOrWhiteSpace( dialog.Directory ) )
+		{
+			dialog.Directory = LauncherPreferences.DefaultProjectLocation;
+		}
+
+		if ( !string.IsNullOrWhiteSpace( dialog.Directory ) && !System.IO.Directory.Exists( dialog.Directory ) )
+			System.IO.Directory.CreateDirectory( dialog.Directory );
+
+		dialog.SetNameFilter( Project.ExtensionSearch );
+
+		if ( !dialog.Execute() ) return;
+
+		Projects.TryAddFromFile( dialog.SelectedFile );
+		Projects.SaveList();
+		Reread();
+
+		TaskbarJumpList.Refresh();
+
+		//The project is in the list now, so the list is where to be. Coming from the projects page this changes nothing.
+		Showing = Page.Projects;
+		Forward = false;
+		Moved = true;
+
+		StateHasChanged();
+	}
+
+	private static void OpenEngineFolder() => EditorUtility.OpenFolder( Environment.CurrentDirectory );
+
+	private static void OpenLogs() => EditorUtility.OpenFolder( $"{Environment.CurrentDirectory}/logs" );
+
+	//Home, the engines in the corner, and the engines under that.
+
+	//Switches tab. Home is the list of projects, from wherever the making of one had got to.
+	private void Go( Part part )
+	{
+		if ( Section == part && ( part == Part.Versions || Showing == Page.Projects ) ) return;
+
+		Section = part;
+
+		if ( part == Part.Projects )
+		{
+			Creating = null;
+			Failure = null;
+
+			Showing = Page.Projects;
+		}
+
+		//The engines are the page further in, which is the side a page arrives from.
+		Forward = part == Part.Versions;
+		Moved = true;
+
+		//Once, when somebody first looks; the refresh button asks again.
+		if ( part == Part.Versions && !Versions.Asked ) _ = Versions.Refresh();
+
+		StateHasChanged();
+	}
+
+	private void RefreshVersions() => _ = Versions.Refresh();
+
+	private void Install( LauncherVersionList.Row row ) => _ = Versions.Install( row );
+
+	private void OpenVersion( LauncherVersionList.Row row )
+	{
+		var installed = EngineVersions.ListInstalled().FirstOrDefault( x => x.Version == row.Version );
+
+		if ( installed is not null ) LauncherLaunch.StartEditor( installed.Exe );
+	}
+
+	//Opens or closes the engine picker under a card.
+	private void ChooseEngine( PanelEvent e, Project project )
+	{
+		e.StopPropagation();
+
+		if ( project is null || Opening is not null ) return;
+
+		ChoosingFor = ChoosingFor == project.ConfigFilePath ? null : project.ConfigFilePath;
+		Choices = ChoosingFor is null ? [] : EngineVersions.ListInstalled();
+
+		StateHasChanged();
+	}
+
+	//Null is this editor; a version is opened by its own editor from then on.
+	private void SetEngine( Project project, string version )
+	{
+		EngineVersions.SetProjectPin( project, version );
+
+		ChoosingFor = null;
+		PinRevision++;
+
+		StateHasChanged();
+	}
+
+	private void Remove( LauncherVersionList.Row row ) => _ = Versions.Uninstall( row );
+
+	//A fraction as the stylesheet reads it - invariant, like the animation delays.
+	private static string Percent( float fraction ) =>
+		( Math.Clamp( fraction, 0.0f, 1.0f ) * 100.0f )
+			.ToString( "0", System.Globalization.CultureInfo.InvariantCulture ) + "%";
+
+	//What is worth knowing about a version, on one line under it.
+	private static string About( LauncherVersionList.Row row )
+	{
+		var parts = new List<string>();
+
+		if ( row.Published != default ) parts.Add( row.Published.LocalDateTime.ToString( "yyyy-MM-dd" ) );
+		if ( !string.IsNullOrWhiteSpace( row.Notes ) ) parts.Add( row.Notes );
+
+		if ( row.Size > 0 ) parts.Add( $"{row.Size / ( 1024.0 * 1024.0 ):0} MB" );
+
+		return string.Join( " · ", parts );
+	}
+
+	protected override int BuildHash() => HashCode.Combine(
+		Filter, Opening, OpeningStep, Shown.Count(),
+		//Combined rather than summed: the ticks of a few dates added up pass what a long holds, and a checked sum throws - on every build of the page.
+		Shown.Aggregate( 0, ( hash, x ) => HashCode.Combine( hash, x.LastOpened.Ticks, x.Pinned ) ),
+		Showing, Forward, HashCode.Combine( SetupHash, PortingPath, Section, Versions.Revision,
+			Scan.Revision, HashCode.Combine( ChoosingFor, PinRevision ) ) );
+
+	//The project being made, as one number. Everything on that page is drawn from these, so a change to any of them is a page to build again.
+	private int SetupHash => Creating is null ? 0 : HashCode.Combine(
+		Creating.Title, Creating.Ident, Creating.Location, Creating.PortSource,
+		Creating.GitIgnore, Creating.MakeDefaultLocation, Failure );
+}

@@ -1,0 +1,49 @@
+//The animation half's document. A band across the top saying where you are, and everything under it is the graph.
+
+.graph-canvas
+{
+	flex-direction: column;
+
+	//Where you are, and the four ways out of it. The buttons of the trail are in BreadcrumbPanels.cs.scss - the workspace's own header wears them too.
+	> .breadcrumb
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		height: $row-height + 2px;
+
+		//The band is two taller than a row, and the extra is under the buttons rather than around them - what the widget's row margin did.
+		padding-bottom: 2px;
+		gap: 2px;
+		background-color: $surface-background;
+
+		//Between the arrows and the trail. A hairline with room either side, which is the five pixel box the widget painted one pixel of.
+		> .divider
+		{
+			width: 1px;
+			height: $row-height - 12px;
+			flex-shrink: 0;
+			margin: 0 2px;
+			background-color: rgba( $text-light, 0.2 );
+		}
+
+		//Takes the room the arrows and the buttons leave, so the buttons sit against the right edge and the trail stays against the left.
+		> .crumbs
+		{
+			flex-direction: row;
+			align-items: center;
+			flex-grow: 1;
+			min-width: 0;
+			gap: 4px;
+
+			> .chevron
+			{
+				flex-shrink: 0;
+				color: rgba( $text-control, 0.5 );
+			}
+		}
+
+		//Search and fit stand on the band rather than on a bar of their own.
+		> .panel-toolbar { background-color: transparent; }
+	}
+}

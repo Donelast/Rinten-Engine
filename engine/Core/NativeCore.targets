@@ -1,0 +1,35 @@
+﻿<Project>
+
+	<!-- Builds rintencore.dll along with whatever managed project imports this, so that pressing F5 runs the core the sources describe. The managed side is compiled every time and the native side was not, so the two drifted apart silently and the editor said so only at startup, with the window already gone: "ABI 78, expected 79" after one merge, and "no entry point named b3GetVersion" after the next. Both times the fix was to run build-win64.cmd by hand, and both times the person hitting it had no reason to know that. Incremental by file time: the target is skipped outright unless something under engine/Core is newer than the installed
+	     DLL, so an ordinary build pays nothing for it. There are about a hundred and thirty files to look at, which is cheap enough to watch all of them rather than guess at which ones matter - the last break came out of extern, not out of src. A failure is a warning rather than an error. Two ordinary situations end here with a non-zero exit: a machine without the C++ workload, where somebody is only working on the C# side, and an editor that is already running and holding the DLL open. Neither is a reason to fail the managed build, and the engine names the problem plainly on the next start. Set BuildNativeCore=false to turn it off. -->
+
+	<PropertyGroup>
+		<BuildNativeCore Condition="'$(BuildNativeCore)' == '' and '$(OS)' == 'Windows_NT'">true</BuildNativeCore>
+		<BuildNativeCore Condition="'$(BuildNativeCore)' == ''">false</BuildNativeCore>
+
+		<NativeCoreDir>$(MSBuildThisFileDirectory)</NativeCoreDir>
+		<NativeCoreDll>$(NativeCoreDir)..\..\game\bin\win64\rintencore.dll</NativeCoreDll>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(BuildNativeCore)' == 'true'">
+		<NativeCoreInput Include="$(NativeCoreDir)CMakeLists.txt" />
+		<NativeCoreInput Include="$(NativeCoreDir)build-win64.cmd" />
+		<NativeCoreInput Include="$(NativeCoreDir)src\**\*" />
+		<NativeCoreInput Include="$(NativeCoreDir)extern\**\*" />
+	</ItemGroup>
+
+	<Target Name="BuildNativeCore"
+			BeforeTargets="BeforeBuild"
+			Condition="'$(BuildNativeCore)' == 'true'"
+			Inputs="@(NativeCoreInput)"
+			Outputs="$(NativeCoreDll)">
+
+		<Message Importance="high" Text="rintencore: the core is older than its sources - building" />
+
+		<Exec Command="&quot;$(NativeCoreDir)build-win64.cmd&quot;"
+			  WorkingDirectory="$(NativeCoreDir)"
+			  ContinueOnError="WarnAndContinue" />
+
+	</Target>
+
+</Project>

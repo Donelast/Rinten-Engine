@@ -1,0 +1,62 @@
+ControlSheetGroup,
+.controlgroup
+{
+	position: relative;
+	flex-direction: column;
+	flex-shrink: 0;
+	//Room above a group's header, so it reads as the start of something rather than one more row.
+	margin: $gap-section 0px 0px 0px;
+
+	&.hidden { display: none; }
+
+	> .group-connector
+	{
+		position: absolute;
+		background-color: $window-ground;
+		pointer-events: none;
+	}
+
+	//Height is not here: AlignConnector measures it against the group every layout, because an absolute child left
+	//to stretch is a frame behind and a group that just opened would keep the short line it had while closed.
+	> .group-connector.vertical
+	{
+		left: 14px;
+		top: 14px;
+		width: 3px;
+	}
+
+	//Foot of the group line turning right; rounded only on the far end, short of the rows' text
+	> .group-connector.foot
+	{
+		width: 6px;
+		height: 3px;
+		border-top-right-radius: 5px;
+		border-bottom-right-radius: 5px;
+	}
+
+	> .group-connector.hidden
+	{
+		display: none;
+	}
+
+	> .body
+	{
+		flex-direction: column;
+		align-items: stretch;
+		flex-shrink: 0;
+		gap: $gap-row;
+		padding-top: $gap-row;
+
+		//Nested group indent: 12px reads as nesting and keeps one left edge across the sheet
+		padding-left: 12px;
+
+		&.hidden { display: none; }
+	}
+
+	//A group with no name is only the properties that were not put in one: there is no header for its rows
+	//to be nested under, so they are not stepped in - they start at the same left edge as a Transform's.
+	&:not( .has-header ) > .body
+	{
+		padding-left: 0px;
+	}
+}

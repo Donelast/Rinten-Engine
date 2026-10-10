@@ -1,0 +1,54 @@
+﻿<Project>
+
+	<!--
+		Razor for an engine project.
+
+		A game's razor is compiled by the editor at runtime; the engine's own
+		assemblies are built by the compiler like any other C# project and had no
+		way to use it. Importing this gives a project the same markup its games
+		have: put a .razor beside your code and it is compiled with the rest.
+
+		The generated C# lands in obj/.razor and is included below - it is build
+		output, not something to edit or check in.
+	-->
+
+	<!--
+		Beside this file rather than beside the project: the projects that import
+		it sit at different depths, and a path relative to one of them is wrong
+		for the rest.
+	-->
+	<PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+		<RazorGenExe Condition="'$(RazorGenExe)' == ''">$(MSBuildThisFileDirectory)Tools\RazorGen\bin\RazorGen.exe</RazorGenExe>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+		<RazorGenExe Condition="'$(RazorGenExe)' == ''">$(MSBuildThisFileDirectory)Tools/RazorGen/bin/RazorGen</RazorGenExe>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="$(MSBuildThisFileDirectory)Tools/RazorGen/RazorGen.csproj"
+			OutputItemType="RazorGenTool" ReferenceOutputAssembly="false" Private="false" />
+	</ItemGroup>
+
+	<!-- The markup itself is not compiled, only watched: a change to it rebuilds. -->
+	<ItemGroup>
+		<None Include="**/*.razor" Exclude="obj/**;bin/**" />
+		<UpToDateCheckInput Include="**/*.razor" Exclude="obj/**;bin/**" />
+	</ItemGroup>
+
+	<Target Name="RazorGenFiles" BeforeTargets="CoreCompile" Condition="'$(DesignTimeBuild)' != 'true'">
+
+		<Exec Command="&quot;$(RazorGenExe)&quot; &quot;$(MSBuildProjectDirectory)&quot; &quot;$(RootNamespace)&quot;" />
+
+		<ItemGroup>
+			<RazorGenerated Include="obj/.razor/**/*.g.cs" />
+			<Compile Include="@(RazorGenerated)" />
+		</ItemGroup>
+
+	</Target>
+
+	<Target Name="CleanRazorGen" AfterTargets="Clean">
+		<RemoveDir Directories="obj/.razor" />
+	</Target>
+
+</Project>

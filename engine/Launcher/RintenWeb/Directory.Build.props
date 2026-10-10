@@ -1,0 +1,9 @@
+<Project>
+	<!-- Its own obj beside it: the Launcher props put it under a solution this project is not in. -->
+	<PropertyGroup>
+		<Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+		<BaseIntermediateOutputPath>$(MSBuildProjectDirectory)/obj/</BaseIntermediateOutputPath>
+		<IntermediateOutputPath>$(MSBuildProjectDirectory)/obj/</IntermediateOutputPath>
+		<MSBuildProjectExtensionsPath>$(MSBuildProjectDirectory)/obj/</MSBuildProjectExtensionsPath>
+	</PropertyGroup>
+</Project>

@@ -1,0 +1,72 @@
+//Position, rotation and scale - three rows stacked.
+TransformComponentPanel
+{
+	flex-direction: column;
+
+	> .body
+	{
+		flex-direction: column;
+	}
+}
+
+//The strip that says who is moving this bone, and the numbers it governs. Pink while the animation owns the bone, green once it has been let go - the
+//two colours the scene tree already paints its bone icons in, so the tree and the inspector agree at a glance about which bones are being posed by hand.
+.bone-banner
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 8px;
+	margin: 1px 8px 4px 8px;
+	padding: 0px 8px;
+	min-height: $row;
+	border-radius: $radius-2;
+	border: 1px solid rgba( $pink, 0.4 );
+	background-color: rgba( $pink, 0.1 );
+	color: $pink;
+	cursor: pointer;
+	pointer-events: all;
+
+	&.hidden { display: none; }
+
+	> .icon
+	{
+		flex-shrink: 0;
+		font-size: $type-body;
+		color: inherit;
+	}
+
+	> .text
+	{
+		flex-grow: 1;
+		min-width: 0;
+		font-size: $type-small;
+		color: inherit;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&:hover
+	{
+		background-color: rgba( $pink, 0.18 );
+	}
+
+	//Let go of: the bone is yours now.
+	&.loose
+	{
+		border-color: rgba( $green, 0.4 );
+		background-color: rgba( $green, 0.1 );
+		color: $green;
+
+		&:hover { background-color: rgba( $green, 0.18 ); }
+	}
+}
+
+//The numbers while the animation still owns them: readable, not reachable. Typing into them
+//would be overwritten on the next frame, so the field says so by not taking the pointer at all.
+TransformComponentPanel > .body.locked
+{
+	opacity: 0.45;
+	pointer-events: none;
+}

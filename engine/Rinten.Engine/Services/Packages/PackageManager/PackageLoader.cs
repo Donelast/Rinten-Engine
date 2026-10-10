@@ -1,0 +1,722 @@
+﻿using Rinten.Audio;
+using Rinten.Engine;
+using Rinten.Internal;
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+
+namespace Rinten;
+
+//Handles the loading of package assemblies into a loadcontext.
+internal sealed partial class PackageLoader : IDisposable
+{
+	bool FastHotloadEnabled => HotloadManager.hotload_fast;
+
+	private List<LoadedAssembly> Loaded { get; set; } = new();
+	private LoadContext LoadContext { get; set; }
+	private IFastHotload ILHotload { get; set; }
+	private HotloadManager HotloadManager { get; set; }
+	private List<LoadedAssembly> IncomingThisHotload { get; } = new();
+
+	/// <summary>In tools mode we don't register events unless they're from a tools project</summary>
+	public bool ToolsMode { get; set; }
+
+	Logger log { get; } = new Logger( "PackageLoader" );
+	HashSet<PackageManager.ActivePackage> loadedPackages = new();
+	HashSet<(PackageManager.ActivePackage ap, string filename)> changedPackageDlls = new();
+
+	/// <summary>Called on Game Loop Init</summary>
+	public PackageLoader( string name, Assembly parentAssembly )
+	{
+		log = new Logger( $"PackageLoader/{name}" );
+		LoadContext = new LoadContext( parentAssembly );
+		LoadContext.OnDemandResolver = ResolveAssemblyOnDemand;
+		//ILHotload only makes sense for the editor - which has the compiler it lives with.
+		if ( Application.IsEditor || Application.IsUnitTest )
+		{
+			ILHotload = ProjectCompiling.Current?.NewFastHotload( name );
+		}
+		HotloadManager = new HotloadManager( name );
+		HotloadManager.OnSuccess += OnFullHotloadSuccess;
+		HotloadManager.AssemblyResolver = PackageManager.AssemblyResolver;
+
+		loadedPackages.Clear();
+		changedPackageDlls.Clear();
+	}
+
+	public void Dispose()
+	{
+		foreach ( var dllWatcher in dllWatchers )
+		{
+			dllWatcher.Dispose();
+		}
+		dllWatchers.Clear();
+
+		OnAfterHotload = null;
+
+		Loaded.Clear();
+		Loaded = null;
+
+		LoadContext.Unload();
+		LoadContext = null;
+
+		ILHotload?.Dispose();
+		ILHotload = null;
+
+		HotloadManager.Dispose();
+		HotloadManager = null;
+	}
+
+
+	private void LoadPendingChanges()
+	{
+		log.Trace( "Loading Pending Changes" );
+
+		var allChangedDlls = this.changedPackageDlls.ToArray();
+		this.changedPackageDlls.Clear();
+
+		if ( !allChangedDlls.Any() )
+			return;
+
+		//Entries without a package come from a stream (e.g. assemblies sent by a server) and were already swapped in by AddAssembly when they arrived.
+		var changedPackageDlls = allChangedDlls
+										.Where( x => x.ap is not null )
+										.ToArray();
+
+		var changedPackages = changedPackageDlls
+									.Select( x => x.ap )
+									.Distinct()
+									.ToArray();
+
+		//We need to force-reload any package assemblies that depend on a changed package.
+
+		var hotloadedPackages = new HashSet<PackageManager.ActivePackage>();
+
+		//Resolve stream-swapped assemblies back to their loaded package, so packages that
+		//depend on them (e.g. targeted addons referencing their parent game) reload below.
+		foreach ( var e in allChangedDlls.Where( x => x.ap is null ) )
+		{
+			//only full swaps matter - a fast hotload keeps the same assembly instance
+			if ( !IncomingThisHotload.Any( x => e.filename.Equals( x.Name, StringComparison.OrdinalIgnoreCase ) ) )
+				continue;
+
+			var owner = FindLoadedPackageForAssembly( e.filename );
+			if ( owner is not null )
+			{
+				hotloadedPackages.Add( owner );
+			}
+		}
+
+		foreach ( var e in Package.SortByReferences( changedPackageDlls, x => x.ap.Package ) )
+		{
+			//don't load editor dlls here unless we're in tools mode
+			if ( e.filename.EndsWith( ".editor.dll", StringComparison.OrdinalIgnoreCase ) && !ToolsMode )
+				continue;
+
+			var result = LoadAssemblyFromPackage( e.ap, e.filename );
+
+			if ( result is not null && !result.FastHotload )
+			{
+				hotloadedPackages.Add( e.ap );
+			}
+
+			//A first-version assembly isn't a swap, so register it with the TypeLibrary here ourselves
+			if ( result is { IsFirstVersion: true, Assembly: not null } )
+			{
+				TriggerRegisterEvent( result );
+				arrived = true;
+			}
+		}
+
+		var baseHotloaded = hotloadedPackages.Any( x => x.Package.IsNamed( "local.base" ) );
+		var toolBaseHotloaded = hotloadedPackages.Any( x => x.Package.IsNamed( "local.toolbase" ) );
+
+		bool ReferencesHotloadedPackage( Package package )
+		{
+			switch ( package.TypeName )
+			{
+				case "tool":
+					if ( toolBaseHotloaded ) return true;
+					break;
+
+				case "game":
+				case "addon":
+					if ( baseHotloaded ) return true;
+					break;
+
+				default:
+					//addon code can exist with a resource package
+					if ( baseHotloaded && !string.IsNullOrWhiteSpace( package.Info.ParentPackage ) ) return true;
+					break;
+			}
+
+			return package.EnumeratePackageReferences()
+				.Any( x => hotloadedPackages
+					.Any( y => y.Package.IsNamed( x ) ) );
+		}
+
+		var dependentPackages = loadedPackages
+			.Where( x => !changedPackages.Contains( x ) && !hotloadedPackages.Contains( x ) )
+			.Where( x => ReferencesHotloadedPackage( x.Package ) )
+			.ToArray();
+
+		foreach ( var package in Package.SortByReferences( dependentPackages, x => x.Package ) )
+		{
+			LoadAllAssembliesFromPackage( package );
+		}
+	}
+
+	//Find the loaded package an assembly belongs to, given its name (without extension).
+	//Used for assemblies that arrived without a package, e.g. streamed from a server.
+	private PackageManager.ActivePackage FindLoadedPackageForAssembly( string assemblyName )
+	{
+		var owner = loadedPackages.FirstOrDefault( x => x.AssemblyFileSystem?.FileExists( $"{assemblyName}.dll" ) == true );
+		if ( owner is not null )
+			return owner;
+
+		//Package assemblies are named "package.{org}.{ident}" - fall back to matching by ident,
+		//for packages whose assemblies don't exist on disk (e.g. compiled from a code archive).
+		if ( assemblyName.StartsWith( "package.", StringComparison.OrdinalIgnoreCase ) )
+		{
+			var ident = assemblyName["package.".Length..];
+			return loadedPackages.FirstOrDefault( x => x.Package.IsNamed( ident ) );
+		}
+
+		return null;
+	}
+
+	private bool LoadAssemblyFromStream( string assmName, Stream stream, out LoadedAssembly assembly )
+	{
+		assembly = AddAssembly( null, assmName, stream, null );
+		changedPackageDlls.Add( (null, assmName) );
+
+		return assembly is not null;
+	}
+
+	private LoadedAssembly LoadAssemblyFromPackage( PackageManager.ActivePackage ap, string filename, byte[] bytes = null )
+	{
+		log.Trace( $"Loading \"{filename}\" from {ap.Package.Title}" );
+
+		//is this a compiler created from the Editor folder in a game addon?
+		bool isEditorAssembly = filename.EndsWith( ".editor.dll", StringComparison.OrdinalIgnoreCase ) && !ap.Package.IsRemote;
+		bool isToolAssembly = ap.Package.TypeName == "tool" || isEditorAssembly;
+		var assmName = System.IO.Path.GetFileNameWithoutExtension( filename );
+
+		//if this is an editor dll, it shouldn't have loaded anywhere but the tools!
+		Assert.False( isToolAssembly && !ToolsMode );
+		Assert.True( ap.AssemblyFileSystem.FileExists( filename ), "File doesn't exist? Maybe a case sensitivity issue??" );
+
+		bytes ??= ap.AssemblyFileSystem.ReadAllBytes( filename ).ToArray();
+		var dll_stream = new System.IO.MemoryStream( bytes );
+
+		//Hotload reads this one against whatever replaces it, and a package has no file on disk to be read from - so its definition is kept here.
+		PackageManager.AssemblyResolver.Register( bytes );
+
+		//Read the codearchive - so we can send this to the client
+		var codearchivefilename = System.IO.Path.ChangeExtension( filename, ".cll" );
+		byte[] codeArchive = null;
+		if ( ap.AssemblyFileSystem.FileExists( codearchivefilename ) )
+		{
+			codeArchive = ap.AssemblyFileSystem.ReadAllBytes( codearchivefilename ).ToArray();
+		}
+
+		var result = AddAssembly( ap.Package, assmName, dll_stream, codeArchive );
+
+		if ( result.FastHotload && ap.Package is LocalPackage lp )
+			NotifyFastHotload( lp, result );
+
+		return result;
+	}
+
+	//Tells a local package's compiler that a fast hotload has occurred for this compiled version, so it rolls its MetadataReference back to the last
+	//version that wasn't fast hotloaded - other compilers that reference this package's compiler should reference non-fast-hotloaded versions only.
+	private static void NotifyFastHotload( LocalPackage local, LoadedAssembly result )
+	{
+		Assert.NotNull( result.Version );
+
+		local.Project.code?.NotifyFastHotload( result.IsEditorAssembly, result.Version );
+	}
+
+	private List<FileWatch> dllWatchers = new();
+
+	private bool LoadPackage( string ident, bool exactName = false )
+	{
+		log.Trace( $"LoadPackage( {ident} )" );
+		var sw = Stopwatch.StartNew();
+
+		var ap = PackageManager.Find( ident, true, exactName );
+		if ( ap == null )
+		{
+			var packages = string.Join( " - \n", PackageManager.ActivePackages.Select( x => x.Package.FullIdent ) );
+
+			throw new System.Exception( $"LoadPackage: Couldn't find active package '{ident}' ({exactName}:exactName)\n{packages}" );
+		}
+
+		if ( loadedPackages.Contains( ap ) )
+			return true;
+
+		loadedPackages.Add( ap );
+
+		//if this is a local package, we can watch for dll changes
+		if ( ap.Package is LocalPackage packageLocal )
+		{
+			var fw = ap.AssemblyFileSystem.Watch( "*.dll" );
+			fw.OnChangedFile += dllName =>
+			{
+				changedPackageDlls.Add( (ap, dllName) );
+			};
+			dllWatchers.Add( fw );
+
+			//Hack Sadface: If this is a local game then include the base as a dependency
+			{
+				bool needsToolsPackage = packageLocal.TypeName == "tool";
+
+				if ( packageLocal.NeedsLocalBasePackage() )
+				{
+					LoadPackage( "local.base#local" );
+
+					//if we're loading a local game, then load the tools package first, because we are assuming that there is an editor folder, which will require it.
+					needsToolsPackage = packageLocal.TypeName == "game" && ToolsMode;
+				}
+
+				if ( needsToolsPackage )
+				{
+					LoadPackage( "local.toolbase#local" );
+				}
+			}
+		}
+
+		//Load any referenced packages first
+		foreach ( var child in ap.Package.EnumeratePackageReferences() )
+		{
+			if ( PackageManager.Find( child, true, false ) == null )
+			{
+				log.Warning( $"LoadPackage: skipping missing dependency '{child}'" );
+				continue;
+			}
+
+			LoadPackage( child );
+		}
+
+		try
+		{
+			using var gr = new HeavyGarbageRegion();
+			LoadAllAssembliesFromPackage( ap );
+
+			//Make sure we load the loose content as well
+			FileSystem.Mounted.Mount( ap.FileSystem );
+		}
+		catch
+		{
+			//Failed to load assemblies, remove as a loaded package If Hack Sadface gets resolved this could be removed and loadedPackages.Add be moved here instead
+			loadedPackages.Remove( ap );
+			throw;
+		}
+
+		log.Trace( $"LoadPackage {ident} took {sw.Elapsed.TotalSeconds:0.00}s" );
+		return true;
+	}
+
+	private void LoadAllAssembliesFromPackage( PackageManager.ActivePackage package )
+	{
+		ArgumentNullException.ThrowIfNull( package );
+
+		var assemblyList = package.AssemblyFileSystem.FindFile( "", "*.dll", true ).ToArray();
+
+		foreach ( var assemblyName in assemblyList )
+		{
+			if ( assemblyName.EndsWith( ".editor.dll", StringComparison.OrdinalIgnoreCase ) && !ToolsMode )
+				continue;
+
+			var result = LoadAssemblyFromPackage( package, assemblyName );
+
+			if ( result?.Assembly == null )
+				throw new System.Exception( $"Error loading {assemblyName}" );
+		}
+	}
+
+	//Called by LoadContext when a dependency assembly can't be resolved through normal means. Searches all active packages'
+	//assembly filesystems so imports are satisfied on demand rather than requiring every dep to be pre-loaded upfront.
+	private Assembly ResolveAssemblyOnDemand( string assemblyName )
+	{
+		foreach ( var ap in PackageManager.ActivePackages )
+		{
+			var filename = $"{assemblyName}.dll";
+			if ( ap.AssemblyFileSystem?.FileExists( filename ) != true ) continue;
+
+			var result = LoadAssemblyFromPackage( ap, filename );
+			return result?.Assembly;
+		}
+
+		return null;
+	}
+
+	LoadedAssembly AddAssembly( Package package, string assemblyName, Stream dllStream, byte[] codeArchive )
+	{
+		LoadedAssembly loaded = new LoadedAssembly();
+		loaded.Name = assemblyName;
+		loaded.Package = package;
+		loaded.CodeArchiveBytes = codeArchive;
+
+		//read the compiled binary to a byte array
+		{
+			using var ms = new MemoryStream();
+			dllStream.CopyTo( ms );
+			loaded.CompiledAssemblyBytes = ms.ToArray();
+		}
+
+		if ( dllStream is not null )
+		{
+			loaded.Assembly = LoadContext.LoadWithEmbeds( loaded.CompiledAssemblyBytes, false );
+			loaded.Version = loaded.Assembly?.GetName().Version;
+			loaded.Name = loaded.Assembly?.GetName().Name;
+		}
+
+		return AddAssembly( loaded );
+	}
+
+	internal LoadedAssembly AddAssembly( LoadedAssembly incoming )
+	{
+		var outgoing = Loaded.FirstOrDefault( x => incoming.Name == x.Name );
+
+		log.Trace( $"AddAssembly {incoming.Assembly} [{incoming.Name}] (outgoing:{outgoing?.Assembly})" );
+
+		//foreach( var l in Loaded )
+		//{
+		//log.Trace( $" - '{l.Name}'" );
+		//}
+
+		//Skip if it's already loaded
+		if ( incoming.Assembly == outgoing?.Assembly )
+		{
+			log.Trace( $" - Unchanged Assembly - skipping" );
+			return outgoing;
+		}
+
+		if ( TryFastHotload( incoming, outgoing ) )
+		{
+			log.Trace( $" - Fast Hotloaded" );
+			LoadContext?.UnloadChild( incoming!.Assembly );
+			EmitFastHotloadEvent( incoming );
+			return outgoing;
+		}
+
+		log.Trace( $" - Full Hotloaded" );
+
+		if ( outgoing is not null )
+		{
+			Loaded.Remove( outgoing );
+			log.Trace( $"	Unloading {outgoing}" );
+			LoadContext?.UnloadChild( outgoing.Assembly );
+		}
+
+		Loaded.Add( incoming );
+
+		if ( incoming.Assembly is not null )
+		{
+			//We haven't added the incoming assembly to TypeLibrary yet, so we don't let static constructors use it when calling RunAllStaticConstructors below.
+
+			using var disableTypeLibrary = GlobalContext.Current.DisableTypelibraryScope( "Disabled during static constructors." );
+
+			if ( !ToolsMode )
+			{
+				_ = ReflectionUtility.PreJITAsync( incoming.Assembly );
+			}
+
+			//We can't let user code run during hotload, so run static constructors now.
+
+			try
+			{
+				ReflectionUtility.RunAllStaticConstructors( incoming.Assembly );
+			}
+			catch ( Exception ex )
+			{
+				Log.Warning( ex, $"{ex.GetType().Name} thrown while running static constructors for {incoming.Name}" );
+				Log.Warning( ex );
+			}
+		}
+
+		//Replace( old, new ) will gracefully handle null for either old or new. We need to call it in any case to tell
+		//hotload to check static fields in the new assembly during hotloads, or stop checking fields in the old one.
+
+		HotloadManager.Replace( outgoing?.Assembly, incoming.Assembly );
+
+		//The switch event is only called when switching an assembly. Not when adding.
+		//Or removing. This should be handled by the code that is adding or removing.
+		if ( incoming.Assembly is not null && outgoing?.Assembly is not null )
+		{
+			incoming.FullHotload = true;
+			TriggerUnregisterEvent( outgoing );
+			IncomingThisHotload.Add( incoming );
+		}
+
+		return incoming;
+	}
+
+	//If successful, will change outgoing in place and return true
+	private bool TryFastHotload( LoadedAssembly incoming, LoadedAssembly outgoing )
+	{
+		if ( ILHotload is null ) return false;
+		if ( incoming is null || outgoing is null ) return false;
+		if ( !FastHotloadEnabled ) return false;
+		if ( HasOldReferencedAssemblyUnloaded( incoming?.Assembly, outgoing?.Assembly ) ) return false;
+
+		var sw = Stopwatch.StartNew();
+
+		if ( !ILHotload.Replace( outgoing?.Assembly, outgoing?.ModifiedAssembly ?? outgoing?.Assembly, incoming?.Assembly ) )
+			return false;
+
+		sw.Stop();
+
+		log.Trace( $"Fast hotloaded {outgoing.Assembly} with methods from {incoming.Assembly} in {sw.ElapsedMilliseconds}ms" );
+
+		//callbacks
+		OnHotloadSuccess();
+
+		//TODO: work out which assembly changed and what needs to be stored for it
+
+		outgoing.FastHotload = true;
+		outgoing.ModifiedAssembly = incoming?.Assembly;
+		outgoing.CodeArchiveBytes = incoming.CodeArchiveBytes;
+		outgoing.Version = incoming.Assembly.GetName().Version;
+		return true;
+	}
+
+	//Return true if, between incoming and outgoing, package references are added or removed, or a package reference changes version and wasn't
+	//fast-hotloaded itself. If either is the case, the incoming assembly can't be fast-hotloaded because the types it references have changed.
+	private bool HasOldReferencedAssemblyUnloaded( Assembly incoming, Assembly outgoing )
+	{
+		foreach ( var asmRefName in incoming?.GetReferencedAssemblies() ?? Array.Empty<AssemblyName>() )
+		{
+			if ( !(asmRefName.Name?.StartsWith( "package.", StringComparison.OrdinalIgnoreCase ) ?? false) )
+			{
+				//Only care about package references
+				continue;
+			}
+
+			var oldRefName = outgoing?.GetReferencedAssemblies()
+				.FirstOrDefault( x => asmRefName.Name.Equals( x.Name, StringComparison.OrdinalIgnoreCase ) );
+
+			if ( oldRefName == null )
+			{
+				//New reference
+				return true;
+			}
+
+			if ( asmRefName.Version == null || oldRefName.Version == null )
+			{
+				log.Warning( "Unable to determine version of referenced package assembly" );
+				return true;
+			}
+
+			if ( oldRefName.Version.CompareTo( asmRefName.Version ) == 0 )
+			{
+				//Referenced version hasn't changed
+				continue;
+			}
+
+			var hotloadedAssembly = Loaded.FirstOrDefault( x => x.Name == asmRefName.Name && x.FastHotload );
+
+			if ( hotloadedAssembly is not null && asmRefName.Version.Equals( hotloadedAssembly.Version ) )
+			{
+				//Referenced version was fast hotloaded, so old referenced version is still loaded, so we can safely fast hotload
+				continue;
+			}
+
+			log.Trace( $"Can't fast hotload, referenced assembly {asmRefName} has changed" );
+			return true;
+		}
+
+		return false;
+	}
+
+	//Trigger a switch event
+	private void EmitFastHotloadEvent( LoadedAssembly incoming )
+	{
+		foreach ( var enroller in Enrollers.ToArray() )
+		{
+			try
+			{
+				enroller.OnHotloadEvent( incoming );
+			}
+			catch ( System.Exception e )
+			{
+				Log.Warning( e, $"Error when running Enrollers fast hotload event for {enroller.Name}" );
+			}
+		}
+	}
+
+	//Trigger a switch event
+	private void TriggerRegisterEvent( LoadedAssembly incoming )
+	{
+		foreach ( var enroller in Enrollers.ToArray() )
+		{
+			try
+			{
+				enroller.OnRegisterEvent( incoming );
+			}
+			catch ( System.Exception e )
+			{
+				Log.Warning( e, $"Error when running Enrollers register event for {enroller.Name}" );
+			}
+		}
+	}
+
+	//Trigger a switch event
+	private void TriggerUnregisterEvent( LoadedAssembly outgoing )
+	{
+		foreach ( var enroller in Enrollers.ToArray() )
+		{
+			try
+			{
+				enroller.OnUnregisterEvent( outgoing );
+			}
+			catch ( System.Exception e )
+			{
+				Log.Warning( e, $"Error when running Enrollers Unregister event for {enroller.Name}" );
+			}
+		}
+	}
+
+	/// <summary>Called by Enroller to get the assemblies associated with a package. If deep is true then this should return all assemblies needed by this package and its dependencies.</summary>
+	public LoadedAssembly[] GetLoadedAssemblies( string packageIdent, bool deep, bool allowEditor )
+	{
+		var package = PackageManager.Find( packageIdent, true );
+		if ( package is null ) return Array.Empty<LoadedAssembly>();
+
+		var assemblyList = package.AssemblyFileSystem.FindFile( "", "*.dll", true ).ToArray();
+
+		HashSet<LoadedAssembly> foundList = new();
+
+		if ( deep )
+		{
+			if ( package.Package is LocalPackage pl && pl.NeedsLocalBasePackage() )
+			{
+				var children = GetLoadedAssemblies( "local.base#local", deep, allowEditor );
+
+				foreach ( var c in children )
+					foundList.Add( c );
+			}
+
+			foreach ( var child in package.Package.EnumeratePackageReferences() )
+			{
+				var children = GetLoadedAssemblies( child, deep, allowEditor );
+				if ( children.Length == 0 ) continue;
+
+				foreach ( var c in children )
+					foundList.Add( c );
+			}
+		}
+
+		foreach ( var assemblyName in assemblyList.OrderBy( x => x.Length ) )
+		{
+			//don't load editor dlls here unless we're in tools mode
+			if ( assemblyName.EndsWith( ".editor.dll", StringComparison.OrdinalIgnoreCase ) && !allowEditor )
+				continue;
+
+			var withoutExtension = System.IO.Path.GetFileNameWithoutExtension( assemblyName );
+			var found = Loaded.FirstOrDefault( x => x.Name == withoutExtension );
+			if ( found is not null )
+			{
+				foundList.Add( found );
+			}
+		}
+
+		return foundList.ToArray();
+	}
+
+	//Every assembly this loader holds, one per name - the version that is live. Each carries
+	//the bytes it was loaded from, so code can be compiled against exactly what is running.
+	internal IReadOnlyList<LoadedAssembly> LoadedAssemblies => Loaded;
+
+	//Load an assembly beside the packages, so it resolves against them, without enrolling it anywhere - no type library, no events, no
+	//hotload. For code that is compiled to run once, like an agent's execute_code snippet. Give it back to UnloadTransient when it has run.
+	internal Assembly LoadTransient( byte[] assemblyData )
+	{
+		return LoadContext.LoadWithEmbeds( assemblyData, unloadOldVersions: false );
+	}
+
+	internal void UnloadTransient( Assembly assembly )
+	{
+		if ( assembly is null ) return;
+		LoadContext?.UnloadChild( assembly );
+	}
+
+	public void HotloadWatch( Assembly assembly )
+	{
+		if ( assembly is null ) return;
+		HotloadManager.Watch( assembly );
+	}
+
+	public void HotloadIgnore( Assembly assembly )
+	{
+		if ( assembly is null ) return;
+		HotloadManager.Ignore( assembly );
+	}
+
+	//An assembly arrived this tick that had nothing to replace.
+	private bool arrived;
+
+	public void Tick()
+	{
+		if ( !changedPackageDlls.Any() && IncomingThisHotload.Count == 0 )
+		{
+			return;
+		}
+
+		arrived = false;
+
+		LoadPendingChanges();
+
+		//What this swap is made of. An enroller's register event can load another package while the swap is running (OnFullHotloadSuccess),
+		//and that one is the next hotload's - it was not in this swap, so it keeps its place in the list and has its own register event then.
+		swapping.Clear();
+		swapping.AddRange( IncomingThisHotload );
+
+		try
+		{
+			//We want to lock the mixing thread, so things don't get modified while it's using them
+			lock ( MixingThread.LockObject )
+			{
+				HotloadManager.DoSwap();
+			}
+		}
+		finally
+		{
+			var swapped = swapping.Count > 0;
+
+			foreach ( var done in swapping ) IncomingThisHotload.Remove( done );
+			swapping.Clear();
+
+			//First arrival fires no hotload success, so fire it ourselves so editors and scenes refresh
+			if ( arrived && !swapped )
+			{
+				OnHotloadSuccess();
+			}
+
+			arrived = false;
+		}
+	}
+
+	//The assemblies the running swap is made of - see Tick.
+	private readonly List<LoadedAssembly> swapping = new();
+
+	void OnFullHotloadSuccess()
+	{
+		//Out of the swap's own list, not IncomingThisHotload: a register event that loads another package adds to that one while this walks it, and
+		//the walk used to die of it ("Collection was modified") - leaving the rest unregistered and the editor never told the hotload had succeeded.
+		foreach ( var loadedAssembly in swapping )
+		{
+			TriggerRegisterEvent( loadedAssembly );
+		}
+
+		OnHotloadSuccess();
+	}
+
+	void OnHotloadSuccess()
+	{
+		OnAfterHotload?.Invoke();
+	}
+
+	public Action OnAfterHotload { get; set; }
+}

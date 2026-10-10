@@ -1,0 +1,40 @@
+PickerFooterPanel,
+.picker-footer {
+	flex-direction: row;
+	align-items: center;
+	justify-content: flex-end;
+	flex-shrink: 0;
+	gap: 10px;
+	padding: 10px;
+
+	> .btn {
+		min-width: 88px;
+		pointer-events: all;
+	}
+
+	//A button that paints its own background paints over the shared slab states, so the confirm one has to say what hovered, pressed and dead look like.
+	> .btn.primary {
+		background-color: $accent;
+		border-color: $accent;
+		color: $ink;
+
+		&:hover {
+			background-color: lighten( $accent, 0.15 );
+			border-color: lighten( $accent, 0.25 );
+			color: $ink;
+		}
+
+		&:active {
+			background-color: darken( $accent, 0.2 );
+			border-color: darken( $accent, 0.2 );
+		}
+	}
+
+	> .btn.is-disabled {
+		background-color: $slab;
+		border-color: $edge-soft;
+		color: $ink-off;
+		cursor: default;
+		pointer-events: none;
+	}
+}

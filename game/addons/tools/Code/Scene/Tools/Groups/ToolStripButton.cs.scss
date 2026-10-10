@@ -1,0 +1,108 @@
+﻿//One button of a tool strip. A mode is 28 wide, an option a row; which it is comes from the strip it is in - see ToolStripPanel.cs.scss. The
+//plate is the window's ground so that over the viewport it reads as a button rather than as a hole in the picture; lit, it is the accent.
+.tool-strip-button
+{
+	position: relative;
+	width: 28px;
+	height: 28px;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	border: 1px solid $edge;
+	background-color: $window-ground;
+	color: $ink;
+	cursor: pointer;
+	pointer-events: all;
+	transition: background-color $fast $ease;
+
+	//The icon font has to be named: an IconPanel made from code is not an <i> element, so the editor sheet's rule for
+	//those does not reach it, and the glyph's name is drawn as words instead - see .toolbarbutton, which says the same.
+	> .icon
+	{
+		font-family: Material Icons;
+		font-size: 18px;
+		color: inherit;
+		pointer-events: none;
+	}
+
+	//The small second glyph, over the top right corner of the icon.
+	> .badge
+	{
+		position: absolute;
+		top: 1px;
+		right: 2px;
+		font-family: Material Icons;
+		font-size: 12px;
+		color: inherit;
+		pointer-events: none;
+	}
+
+	//The key this is on: a small pill in the bottom right corner, readable against both the plate and the picture behind the strip.
+	> .key
+	{
+		position: absolute;
+		right: 2px;
+		bottom: 2px;
+		padding: 0px 3px;
+		border-radius: 3px;
+		background-color: $veil;
+		font-size: $type-micro;
+		font-weight: 700;
+		letter-spacing: $tracking;
+		color: $ink;
+		pointer-events: none;
+	}
+
+	//With a key in the corner, the icon and the badge move up and left so the two are not on top of each other.
+	&.keyed
+	{
+		> .icon { margin: 0px 5px 5px 0px; }
+		> .badge { top: 0px; right: 6px; }
+	}
+
+	//Named in words: the icon, then the name, and the key at the end.
+	&.labelled
+	{
+		flex-direction: row;
+		justify-content: flex-start;
+		padding: 0px 6px;
+
+		> .icon { margin: 0px; flex-shrink: 0; }
+
+		> .text
+		{
+			margin-left: 8px;
+			font-size: $type-small;
+			color: inherit;
+			white-space: nowrap;
+			pointer-events: none;
+		}
+
+		> .key { right: 6px; bottom: auto; top: 6px; }
+	}
+
+	&:hover
+	{
+		background-color: $tile-hover;
+	}
+
+	//Active: accent background with the glyph kept white like all other icons
+	&.active
+	{
+		background-color: $accent;
+		color: $ink;
+
+		> .key
+		{
+			background-color: $solid;
+			color: $ink;
+		}
+	}
+
+	&.disabled
+	{
+		color: $ink-off;
+		cursor: default;
+	}
+}

@@ -1,0 +1,371 @@
+using NativeEngine;
+
+namespace Rinten.Engine;
+
+internal static partial class InputRouter
+{
+	static RealTimeSince timeSinceWindowActive;
+
+	internal static void OnMouseButton( ButtonCode button, bool down, int ikeymods )
+	{
+		SetButtonState( button, down );
+
+		var mouse = Contexts.FirstOrDefault( x => x.MouseState != InputContext.InputState.Ignore );
+
+		//if this was likely the click that made the window active - and we're not in UI mode then
+		//ignore it.. because we don't want people shooting guns every time they re-activate the window
+		if ( down && timeSinceWindowActive < 0.1f )
+		{
+			if ( mouse is null || mouse.MouseState != InputContext.InputState.UI )
+				return;
+		}
+
+		var modifiers = GetCurrentModifiers();
+
+		if ( mouse is not null )
+		{
+			mouse.IN_Button( down, button, button, false, modifiers );
+		}
+
+		//When a button is released, we send it to each context. These contexts may have
+		//the button as pressed. The release should be sent to them so they can clear it.
+		if ( !down )
+		{
+			foreach ( var context in Contexts )
+			{
+				if ( context == mouse ) continue;
+
+				context.IN_ButtonReleased( button, button, modifiers );
+			}
+		}
+	}
+
+	internal static void OnWindowActive( bool active )
+	{
+		if ( active )
+		{
+			timeSinceWindowActive = 0;
+		}
+		else
+		{
+			//Reset state and do button release events
+			PressedButtons.Clear();
+
+			foreach ( var context in Contexts )
+			{
+				context.ReleaseAllButtons();
+			}
+		}
+	}
+
+	//Cursor is hidden and restricted to window (game mode) but the mouse has been moved
+	internal static void OnMouseMotion( float dx, float dy )
+	{
+		var delta = new Vector2( dx, dy );
+
+		MouseCursorDelta += delta;
+		MouseCursorPosition += delta;
+
+		//game or mouse capture
+		var mouse = Contexts.FirstOrDefault( x => x.MouseState != InputContext.InputState.Ignore );
+		if ( mouse is not null )
+		{
+			mouse.In_MousePosition( MouseCursorPosition, delta );
+			return;
+		}
+	}
+
+	//Cursor is visible and mouse is being moved
+	internal static void OnMousePositionChange( float x, float y, float dx, float dy )
+	{
+		//On the game's screen, which is not the window where the game is a view in one.
+		MouseCursorPosition = new Vector2( x, y ) - ( ScreenOrigin ?? default );
+
+		if ( EngineInput.GetRelativeMouseMode() )
+		{
+			dx = dy = 0;
+		}
+
+		//If this is set, we're in capture mode - so just update the position cache we restore when capture
+		//ends. This intentionally records the latest absolute position without moving the OS cursor.
+		if ( mouseCapturePosition is not null )
+		{
+			mouseCapturePosition = MouseCursorPosition;
+			return;
+		}
+
+		MouseCursorDelta += new Vector2( dx, dy );
+
+		var mouse = Contexts.FirstOrDefault( x => x.MouseState != InputContext.InputState.Ignore );
+		mouse?.In_MousePosition( MouseCursorPosition, new Vector2( dx, dy ) );
+	}
+
+	internal static void OnGameControllerButton( int deviceId, GameControllerCode button, bool down )
+	{
+		if ( button == GameControllerCode.Start )
+		{
+			OnEscapePressed( down );
+			return;
+		}
+
+		OnGamepadCode( deviceId, button.ToGamepadCode(), down );
+	}
+
+	//The escape, or start button has been pressed
+	private static void OnEscapePressed( bool down )
+	{
+		EscapeIsDown = down;
+
+		if ( down )
+		{
+			EscapeWasPressed = true;
+			TimeSinceEscapePressed = 0;
+
+			//Any focused UI? Let that swallow the escape button. This is for things like escaping from text areas
+			var escapeTarget = Contexts.FirstOrDefault( x => x.KeyboardState != InputContext.InputState.Ignore && x.KeyboardFocusPanel is not null );
+			if ( escapeTarget is not null && escapeTarget.In_Escape() )
+			{
+				return;
+			}
+
+			//Let the game input get first dibs. A scene played with no package - a phone, a page - is a game as much as one that came as a package.
+			var game = IGameInstance.Current is not null || ( !Application.IsEditor && Game.IsPlaying );
+			if ( game && IGameInstanceDll.Current?.InputContext?.In_Escape() == true )
+			{
+				return;
+			}
+		}
+	}
+
+	private static void OnGamepadCode( int deviceId, GamepadCode code, bool down )
+	{
+		var controller = Controller.All.FirstOrDefault( x => x.DeviceId == deviceId );
+		Log.Trace( $"OnGameControllerButton {controller} - {code}, {down}" );
+
+		Rinten.Input.UsingController = true;
+
+		SetButtonState( code, down );
+
+		foreach ( var action in Rinten.Input.InputActions.Where( x => x.GamepadCode != GamepadCode.None && x.GamepadCode == code ) )
+		{
+			var i = Rinten.Input.GetActionIndex( action );
+
+			if ( controller?.InputContext is not { } controllerContext )
+				continue;
+
+			if ( down )
+			{
+				controllerContext.PressAction( i );
+			}
+			else
+			{
+				controllerContext.ReleaseAction( i );
+			}
+		}
+	}
+
+	internal static void OnGameControllerAxis( int deviceId, GameControllerAxis axis, int value )
+	{
+		var controller = Controller.All.FirstOrDefault( x => x.DeviceId == deviceId );
+		Log.Trace( $"OnGameControllerButton {controller} - {axis}, {value}" );
+
+		if ( controller is null )
+			return;
+
+		controller.SetAxis( axis, value );
+
+		//We're going to check our triggers and convert them into a virtual button, for ease of use (and backwards compatibility with SteamInput)
+
+		//We don't care about non triggers
+		if ( axis < GameControllerAxis.TriggerLeft )
+			return;
+
+		const float triggerDeadzone = 0.75f;
+
+		//I hate this but okay
+		GamepadCode code = axis switch
+		{
+			GameControllerAxis.TriggerLeft => GamepadCode.LeftTrigger,
+			GameControllerAxis.TriggerRight => GamepadCode.RightTrigger,
+			_ => GamepadCode.None,
+		};
+
+		//Normalize raw SDL axis value to 0-1 range before comparing against the normalized deadzone.
+		OnGamepadCode( deviceId, code, ((float)value).Remap( 0, Controller.AXIS_RANGE.y, 0, 1 ) >= triggerDeadzone );
+	}
+
+	internal static void OnGameControllerConnected( int joystickId, int deviceId )
+	{
+		var controller = new Controller( joystickId, deviceId );
+		Log.Info( $"New {controller} controller detected" );
+
+		Controller.All.Add( controller );
+	}
+
+	internal static void OnGameControllerDisconnected( int joystickId )
+	{
+		var controller = Controller.All.FirstOrDefault( x => x.SDLHandle == joystickId );
+		if ( controller is not null )
+		{
+			Log.Info( $"{controller} controller removed" );
+			Controller.All.Remove( controller );
+		}
+		else
+		{
+			Log.Warning( $"Couldn't find Controller instance with {joystickId}" );
+		}
+	}
+
+	internal static void OnKey( ButtonCode scanButtonCode, ButtonCode keyButtonCode, bool down, bool repeat, int ikeymods )
+	{
+		if ( !repeat )
+		{
+			SetButtonState( scanButtonCode, down );
+		}
+
+		var modifiers = GetCurrentModifiers();
+
+		if ( scanButtonCode == ButtonCode.KEY_ESCAPE )
+		{
+			if ( repeat )
+				return;
+
+			OnEscapePressed( down );
+			return;
+		}
+
+		//Function keys
+		if ( scanButtonCode >= ButtonCode.KEY_F1 && scanButtonCode <= ButtonCode.KEY_F12 )
+		{
+			if ( !down || repeat ) return;
+
+			IToolsDll.Current?.OnFunctionKey( scanButtonCode, modifiers );
+
+			var bind = EngineInput.GetBinding( scanButtonCode );
+			if ( string.IsNullOrEmpty( bind ) ) return;
+
+			ConVarSystem.Run( bind );
+			return;
+		}
+
+		//Console
+		if ( scanButtonCode == ButtonCode.KEY_BACKQUOTE || scanButtonCode == ButtonCode.KEY_TILDE )
+		{
+			if ( !down || repeat ) return;
+
+			if ( Engine.IToolsDll.Current?.ConsoleFocus() ?? false )
+				return;
+
+			ConVarSystem.Run( "con_toggle" );
+			return;
+		}
+
+		var keyboard = Contexts.FirstOrDefault( x => x.KeyboardState != InputContext.InputState.Ignore );
+		if ( keyboard is not null )
+		{
+			keyboard.IN_Button( down, scanButtonCode, keyButtonCode, repeat, modifiers );
+		}
+
+		//When a button is released, we send it to each context. These contexts may have
+		//the button as pressed. The release should be sent to them so they can clear it.
+		if ( !down )
+		{
+			foreach ( var context in Contexts )
+			{
+				if ( context == keyboard ) continue;
+
+				context.IN_ButtonReleased( scanButtonCode, keyButtonCode, modifiers );
+			}
+		}
+	}
+
+	internal static void OnText( uint key )
+	{
+		var keyboard = Contexts.FirstOrDefault( x => x.KeyboardState == InputContext.InputState.UI );
+		if ( keyboard is not null )
+		{
+			keyboard.IN_Text( (char)key );
+		}
+	}
+
+	internal static void OnMouseWheel( float x, float y, int ikeymods )
+	{
+		var value = new Vector2( x, y );
+		var mouse = Contexts.FirstOrDefault( x => x.MouseState != InputContext.InputState.Ignore );
+		var modifiers = GetCurrentModifiers();
+
+		if ( mouse is not null )
+		{
+			if ( y < 0 )
+			{
+				mouse.IN_Button( true, ButtonCode.MouseWheelDown, ButtonCode.MouseWheelDown, false, default );
+				mouse.IN_Button( false, ButtonCode.MouseWheelDown, ButtonCode.MouseWheelDown, false, default );
+			}
+			else
+			{
+				mouse.IN_Button( true, ButtonCode.MouseWheelUp, ButtonCode.MouseWheelUp, false, default );
+				mouse.IN_Button( false, ButtonCode.MouseWheelUp, ButtonCode.MouseWheelUp, false, default );
+			}
+
+			mouse.IN_MouseWheel( value, modifiers );
+		}
+	}
+
+	internal static void OnImeStart()
+	{
+		var keyboard = Contexts.FirstOrDefault( x => x.KeyboardState != InputContext.InputState.Ignore );
+		if ( keyboard is not null )
+		{
+			keyboard.IN_ImeStart();
+		}
+	}
+
+	internal static void OnImeComposition( string text, bool final )
+	{
+		var keyboard = Contexts.FirstOrDefault( x => x.KeyboardState != InputContext.InputState.Ignore );
+		if ( keyboard is not null )
+		{
+			keyboard.IN_ImeComposition( text, final );
+		}
+	}
+
+	internal static void OnImeEnd()
+	{
+		var keyboard = Contexts.FirstOrDefault( x => x.KeyboardState != InputContext.InputState.Ignore );
+		if ( keyboard is not null )
+		{
+			keyboard.IN_ImeEnd();
+		}
+	}
+
+	//Convert engine (IE_ShiftPressed etc) to our KeyboardModifiers enum
+	static KeyboardModifiers EngineToModifier( int engine )
+	{
+		KeyboardModifiers m = KeyboardModifiers.None;
+
+		if ( (engine & 1) == 1 ) m |= KeyboardModifiers.Shift;
+		if ( (engine & 2) == 2 ) m |= KeyboardModifiers.Ctrl;
+		if ( (engine & 4) == 4 ) m |= KeyboardModifiers.Alt;
+		//if ( (m_nData2 & 8) == 8 ) m |= KeyboardModifiers.Windows;
+		//if ( (m_nData2 & 16) == 8 ) m |= KeyboardModifiers.Finger;
+
+		return m;
+	}
+
+	//Get the current modifier key state by checking the actual button state directly.
+	static KeyboardModifiers GetCurrentModifiers()
+	{
+		KeyboardModifiers m = KeyboardModifiers.None;
+
+		if ( IsButtonDown( ButtonCode.KEY_LSHIFT ) || IsButtonDown( ButtonCode.KEY_RSHIFT ) )
+			m |= KeyboardModifiers.Shift;
+
+		if ( IsButtonDown( ButtonCode.KEY_LCONTROL ) || IsButtonDown( ButtonCode.KEY_RCONTROL ) )
+			m |= KeyboardModifiers.Ctrl;
+
+		if ( IsButtonDown( ButtonCode.KEY_LALT ) || IsButtonDown( ButtonCode.KEY_RALT ) )
+			m |= KeyboardModifiers.Alt;
+
+		return m;
+	}
+}

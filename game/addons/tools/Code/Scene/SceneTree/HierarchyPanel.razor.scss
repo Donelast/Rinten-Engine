@@ -1,0 +1,15 @@
+//The scene's hierarchy: the bar the dock's tab opens into, and the tree in a frame under it -
+//design.scss's .tree-dock, .dock-bar and .tree-frame. The rows are the editor's one tree row.
+HierarchyPanel
+{
+	pointer-events: all;
+}
+
+HierarchyPanel > .tree-host
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-height: 0;
+	min-width: 0;
+	pointer-events: all;
+}

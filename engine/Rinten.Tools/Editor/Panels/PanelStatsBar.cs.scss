@@ -1,0 +1,45 @@
+//The line of numbers along the bottom of a diagnostic dock: a name, then what it is reading, over and over across the bar.
+
+.panel-stats-bar
+{
+	flex-direction: row;
+	align-items: center;
+	flex-shrink: 0;
+
+	height: 22px;
+	padding: 0px 8px;
+	gap: 18px;
+
+	background-color: $sidebar-background;
+}
+
+.panel-stat
+{
+	flex-direction: row;
+	align-items: baseline;
+	flex-shrink: 0;
+	gap: 4px;
+
+	font-family: $font;
+	font-size: $type-small;
+
+	//Digits that do not shift the words beside them as they change.
+	font-variant-numeric: tabular-nums;
+
+	> .name
+	{
+		color: $ink-off;
+	}
+
+	> .value
+	{
+		font-weight: 600;
+		color: $ink-dim;
+	}
+
+	&.warn > .value { color: $reading-warn; }
+	&.alarm > .value { color: $reading-alarm; }
+	&.good > .value { color: $reading-good; }
+
+	&.hidden { display: none; }
+}

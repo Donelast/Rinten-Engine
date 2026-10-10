@@ -1,0 +1,45 @@
+KeyBindControl.control.keybind
+{
+	flex-grow: 1;
+	min-width: 0;
+	min-height: $control-row-height;
+	align-items: center;
+	justify-content: center;
+	background-color: $control-background;
+	border: $control-border;
+	border-radius: $control-radius;
+	cursor: pointer;
+
+	&:hover
+	{
+		background-color: $control-background-light;
+	}
+
+	&.trapping
+	{
+		border-color: $primary;
+	}
+
+	&.readonly
+	{
+		cursor: default;
+	}
+
+	> .value
+	{
+		font-size: $control-text-size;
+		color: $text-control;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		pointer-events: none;
+
+		&.unbound { color: $text-disabled; }
+		&.multiple { color: $multiple-values; }
+	}
+
+	&.trapping > .value
+	{
+		color: $ink;
+	}
+}

@@ -1,0 +1,253 @@
+name: core
+
+# Builds rintencore for every platform the engine runs on, and keeps the results as artifacts. The point of doing it here rather than on a developer's machine: a game exported for Linux is that platform's own bin folder copied next to the assets, and nothing else about the export is platform-specific. So somebody making games needs no Linux machine, no NDK and no Mac - they need these files to exist. This is where they come from. What is built is not the engine. rintencore is the third-party C the managed engine calls - Box3D,
+# meshoptimizer, ufbx, miniaudio, lz4, stb, Yoga - and two shims over the ones whose structs are not worth binding by hand. The engine itself is C# and is built by the managed workflow. engine/Core is still a private repo checked out inside this one and ignored by it (see .gitignore), so every job below has to fetch it separately. Point the repository variable CORE_REPO at it and give the secret CORE_TOKEN a token that can read it; without those the jobs say so and stop rather than building nothing and calling it a success.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    paths: [ '.github/workflows/core.yml' ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: 'Also build for macOS (uses paid runner minutes on a private repo)'
+        type: boolean
+        default: false
+
+# Windows, Linux (x64 and arm64), Android and WebGPU build on every push. macOS is the one that still asks, because
+# macos-14 is a paid runner on a private repository and the other four are not - not because it is any less supported.
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the core
+        id: core
+        uses: ./.github/actions/checkout-core
+        with:
+          repository: ${{ vars.CORE_REPO }}
+          token: ${{ secrets.CORE_TOKEN }}
+
+      - name: Set up MSVC
+        if: steps.core.outputs.present == 'true'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # CMake straight rather than build-win64.cmd: that script looks for Visual Studio
+      # where a person installs it, and a runner has it somewhere else under another edition.
+      - name: Build
+        if: steps.core.outputs.present == 'true'
+        run: |
+          cmake -S engine/Core -B engine/Core/build/win64 -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build engine/Core/build/win64
+
+      - uses: actions/upload-artifact@v4
+        if: steps.core.outputs.present == 'true'
+        with:
+          name: rintencore-win64
+          path: |
+            engine/Core/build/win64/bin/rintencore.dll
+            engine/Core/build/win64/bin/rintencore.pdb
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the core
+        id: core
+        uses: ./.github/actions/checkout-core
+        with:
+          repository: ${{ vars.CORE_REPO }}
+          token: ${{ secrets.CORE_TOKEN }}
+
+      # Both window systems: a build with neither compiles and cannot open a window, which CMake warns about and nothing else notices. Both window systems: a build with neither
+      # compiles and cannot open a window, which CMake warns about and nothing else notices. The rest is what SDL needs to build - see build-sdl.sh, which this build runs.
+      - name: Install what it builds against
+        if: steps.core.outputs.present == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang libx11-dev libxext-dev \
+            libwayland-dev libxkbcommon-dev libdbus-1-dev libasound2-dev libpulse-dev
+
+      # The script, not the commands, for the same reason the Android job calls
+      # its own: this one also builds SDL, which the step below then checks for.
+      - name: Build
+        if: steps.core.outputs.present == 'true'
+        run: ./engine/Core/build-linux.sh
+
+      # A native that is not there is not a build error, not a link error, and nothing at all until
+      # somebody runs the program and it cannot open a window. This is where that gets caught instead.
+      - name: Check the natives are all there
+        if: steps.core.outputs.present == 'true'
+        run: |
+          dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- fetch-natives --platform linuxsteamrt64
+          dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- verify-natives --platform linuxsteamrt64
+
+      - uses: actions/upload-artifact@v4
+        if: steps.core.outputs.present == 'true'
+        with:
+          name: rintencore-linuxsteamrt64
+          path: engine/Core/build/linuxsteamrt64/bin/rintencore.so
+
+  # SteamOS on arm64 - a Steam Frame. Built on an arm64 runner rather than cross-compiled: SDL wants the arm64 X11 and Wayland development packages, and a runner of the right architecture is where those simply install. What comes out is the whole bin/linuxsteamrtarm64 folder - rintencore, SDL, the OpenXR loader and FFmpeg. Nothing else about a
+  # Steam Frame build needs this machine: the editor exports for it from x64, publishing the launcher and the .NET runtime for linux-arm64 itself (see ExportPlatform.LinuxArm64). Unpack the artifact into game/bin/linuxsteamrtarm64 and the platform is there to tick. On a release it is also attached to the release, so it can be taken from there.
+  linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the core
+        id: core
+        uses: ./.github/actions/checkout-core
+        with:
+          repository: ${{ vars.CORE_REPO }}
+          token: ${{ secrets.CORE_TOKEN }}
+
+      - name: Install what it builds against
+        if: steps.core.outputs.present == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang python3 libx11-dev libxext-dev \
+            libwayland-dev libxkbcommon-dev libdbus-1-dev libasound2-dev libpulse-dev
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.core.outputs.present == 'true'
+        with:
+          dotnet-version: '10.0.x'
+
+      # build-linux.sh reads the architecture and installs into
+      # game/bin/linuxsteamrtarm64, SDL and the OpenXR loader with it.
+      - name: Build
+        if: steps.core.outputs.present == 'true'
+        run: ./engine/Core/build-linux.sh
+
+      - name: Check the natives are all there
+        if: steps.core.outputs.present == 'true'
+        run: |
+          dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- fetch-natives --platform linuxsteamrtarm64
+          dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- verify-natives --platform linuxsteamrtarm64
+          file game/bin/linuxsteamrtarm64/rintencore.so | grep -q aarch64
+
+      # Links are followed rather than kept by the artifact, so the soname and the bare name
+      # arrive as two copies of the library - which is what the loader needs to find either.
+      - uses: actions/upload-artifact@v4
+        if: steps.core.outputs.present == 'true'
+        with:
+          name: bin-linuxsteamrtarm64
+          path: game/bin/linuxsteamrtarm64/
+
+      - name: Attach to the release
+        if: steps.core.outputs.present == 'true' && github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tar -czhf bin-linuxsteamrtarm64.tar.gz -C game/bin linuxsteamrtarm64
+          gh release upload "${{ github.event.release.tag_name }}" bin-linuxsteamrtarm64.tar.gz --clobber
+
+  # Off by default. A macOS runner costs ten times a Linux one on a private repository, and the Mac build is the one nobody is waiting on yet - so it is asked for by hand until it
+  # is. Everything it needs is here and working: the APPLE branch in CMakeLists defines VK_USE_PLATFORM_METAL_EXT, and the surface comes from the CAMetalLayer SDL already hands over.
+  macos:
+    runs-on: macos-14
+    if: inputs.macos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the core
+        id: core
+        uses: ./.github/actions/checkout-core
+        with:
+          repository: ${{ vars.CORE_REPO }}
+          token: ${{ secrets.CORE_TOKEN }}
+
+      - name: Install what it builds against
+        if: steps.core.outputs.present == 'true'
+        run: brew install cmake ninja
+
+      - name: Build
+        if: steps.core.outputs.present == 'true'
+        run: |
+          cmake -S engine/Core -B engine/Core/build/osxarm64 -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+          cmake --build engine/Core/build/osxarm64
+
+      - uses: actions/upload-artifact@v4
+        if: steps.core.outputs.present == 'true'
+        with:
+          name: rintencore-osxarm64
+          path: engine/Core/build/osxarm64/bin/rintencore.dylib
+
+  # The native half only: the managed half needs the net10.0-android workload. This used to be off unless somebody asked for it, which meant
+  # it was built about twice a year and broke quietly in between. It costs an ubuntu runner like the Linux job does, so it runs every time.
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the core
+        id: core
+        uses: ./.github/actions/checkout-core
+        with:
+          repository: ${{ vars.CORE_REPO }}
+          token: ${{ secrets.CORE_TOKEN }}
+
+      - uses: nttld/setup-ndk@v1
+        if: steps.core.outputs.present == 'true'
+        id: ndk
+        with:
+          ndk-version: r27
+
+      # arm64 only. A 32-bit phone will not run this engine, and every device Vulkan is worth having on has been arm64 for years.
+      # The script, not the commands: they lived here and in build-android.cmd, and a person on Linux or a Mac could run neither.
+      - name: Build
+        if: steps.core.outputs.present == 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+          ./engine/Core/build-android.sh
+
+      - uses: actions/upload-artifact@v4
+        if: steps.core.outputs.present == 'true'
+        with:
+          name: rintencore-android-arm64
+          path: engine/Core/build/android-arm64/bin/rintencore.so
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the core
+        id: core
+        uses: ./.github/actions/checkout-core
+        with:
+          repository: ${{ vars.CORE_REPO }}
+          token: ${{ secrets.CORE_TOKEN }}
+
+      - name: Emscripten
+        if: steps.core.outputs.present == 'true'
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Build
+        if: steps.core.outputs.present == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+          emcmake cmake -S engine/Core -B engine/Core/build/wasm32 -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build engine/Core/build/wasm32
+
+      - uses: actions/upload-artifact@v4
+        if: steps.core.outputs.present == 'true'
+        with:
+          name: rintencore-wasm32
+          path: engine/Core/build/wasm32/bin/rintencore.a

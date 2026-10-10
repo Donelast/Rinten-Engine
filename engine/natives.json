@@ -1,0 +1,227 @@
+// Third-party native libraries the engine opens at runtime, pinned to the
+// release they come out of. `rintenbuild fetch-natives` downloads each archive,
+// checks it against the hash here and unpacks the named files into
+// game/bin/<platform>. The build runs it before anything else.
+//
+// What belongs here: somebody else's binaries that nothing in this repository
+// builds and no NuGet package carries. Skia, HarfBuzz and anything else with a
+// package of its own is not in here - restore brings those, and the managed
+// build copies them out of runtimes/<rid>/native.
+//
+// The path on the left is where the file is inside the archive, matched on its
+// tail so an archive that unpacks into a folder named after its own version
+// needs no special case; the name on the right is what it is called in the bin
+// folder. A path that is not in the archive fails the step rather than being
+// skipped: a missing Slang is a build that runs and cannot compile a shader,
+// which is worth stopping for.
+{
+	"win64": [
+		{
+			"name": "SDL3",
+			"version": "3.4.14",
+			"url": "https://github.com/libsdl-org/SDL/releases/download/release-3.4.14/SDL3-3.4.14-win32-x64.zip",
+			"sha256": "69a4e55645651af85e6ccfe40981b5a0bc2c594d0004fe7844db680e23cfbdaf",
+			"files": {
+				"SDL3.dll": "SDL3.dll"
+			}
+		},
+		{
+			"name": "slang",
+			"version": "2026.14",
+			"url": "https://github.com/shader-slang/slang/releases/download/v2026.14/slang-2026.14-windows-x86_64.zip",
+			"sha256": "36029c50ef0c82f2616ffb02e0ed27d642cb44a2a297d531cc2ad333b85b85b6",
+			"files": {
+				"bin/slang.dll": "slang.dll",
+				"bin/slang-rt.dll": "slang-rt.dll",
+				"bin/slang-compiler.dll": "slang-compiler.dll",
+				"bin/slang-glsl-module.dll": "slang-glsl-module.dll",
+				"bin/slang-glslang.dll": "slang-glslang.dll",
+				"bin/gfx.dll": "gfx.dll"
+			}
+		},
+		{
+			// The loader every OpenXR app links to, which finds whichever runtime
+			// the machine has - SteamVR, Meta's, WMR, Monado. See CoreXr.
+			"name": "openxr_loader",
+			"version": "1.1.63",
+			"url": "https://github.com/KhronosGroup/OpenXR-SDK-Source/releases/download/release-1.1.63/openxr_loader_windows-1.1.63.zip",
+			"sha256": "01c631aeabbfe0879540f77ef833416c532a20746285b494630160c23588b771",
+			"files": {
+				"x64/bin/openxr_loader.dll": "openxr_loader.dll"
+			}
+		},
+		{
+			// FFmpeg, behind VideoPlayer and VideoWriter: BtbN's automated builds
+			// (https://github.com/BtbN/FFmpeg-Builds), the "lgpl-shared" flavour -
+			// LGPL 3, nothing GPL linked in, so a game may ship it. Its encoders are
+			// the royalty-free ones: SVT-AV1, libaom, rav1e, libvpx, libwebp, Opus.
+			// Five of its libraries, into ffmpeg/ where the engine looks for them,
+			// and the licence beside them, which has to travel with them.
+			//
+			// The engine reads FFmpeg's structures at offsets taken from this
+			// release's headers and refuses any other major version - bumping it is
+			// this entry, the one below, and FFmpeg.cs's versions and offsets.
+			//
+			// BtbN prunes old automated releases, so the pinned address will not
+			// answer for ever: the archive in engine/Natives is what keeps a build
+			// working, and a mirror of it is what a bump should put here.
+			//
+			// Optional: a game without video has no use for eighty megabytes of
+			// codecs, and a player without them plays nothing and says why. An
+			// export carries it only for a game that uses video.
+			"name": "ffmpeg",
+			"version": "n9.0.2",
+			"url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-19-13-11/ffmpeg-n9.0.2-win64-lgpl-shared-9.0.zip",
+			"sha256": "74e35908a759dbebca48c1f382ea0366f3d9d270e4bf4660503803052896b807",
+			"optional": true,
+			"files": {
+				"bin/avutil-61.dll": "ffmpeg/avutil-61.dll",
+				"bin/swresample-7.dll": "ffmpeg/swresample-7.dll",
+				"bin/swscale-10.dll": "ffmpeg/swscale-10.dll",
+				"bin/avcodec-63.dll": "ffmpeg/avcodec-63.dll",
+				"bin/avformat-63.dll": "ffmpeg/avformat-63.dll",
+				"LICENSE.txt": "ffmpeg/LICENSE.txt"
+			}
+		}
+	],
+
+	// No SDL here: there is no Linux binary release and no distribution package
+	// worth pinning, so libSDL3.so is built from the SDL source release by hand -
+	// Bootstrap.sh says which development packages that needs.
+	//
+	// glibc 2.28 rather than the plain build: the plain one is linked against
+	// whatever the runner had, and steamrt is older than that.
+	"linuxsteamrt64": [
+		{
+			"name": "slang",
+			"version": "2026.14",
+			"url": "https://github.com/shader-slang/slang/releases/download/v2026.14/slang-2026.14-linux-x86_64-glibc-2.28.tar.gz",
+			"sha256": "21cfb4f2aaa756f448172798734e232d9f1485c29044fcb0af4dc925792e1217",
+			"files": {
+				// libslang.so is a link to the compiler, and it is the name the
+				// core opens. The checkout that carried these by hand had every
+				// versioned file and not this one, so Linux found no compiler.
+				"lib/libslang.so": "libslang.so",
+				"lib/libslang-compiler.so.0.2026.14": "libslang-compiler.so.0.2026.14",
+				"lib/libslang-rt.so": "libslang-rt.so",
+				"lib/libslang-rt.so.0.2026.14": "libslang-rt.so.0.2026.14",
+				"lib/libslang-glsl-module-2026.14.so": "libslang-glsl-module-2026.14.so",
+				"lib/libslang-glslang-2026.14.so": "libslang-glslang-2026.14.so",
+				"lib/libgfx.so": "libgfx.so",
+				"lib/libgfx.so.0.2026.14": "libgfx.so.0.2026.14"
+			},
+			"folders": {
+				"slang-standard-module-2026.14": "slang-standard-module-2026.14"
+			}
+		},
+		{
+			// FFmpeg - see the win64 entry. This build is linked against glibc 2.28
+			// like Slang's (the newest symbol version any of the five asks for is
+			// GLIBC_2.28), and needs nothing but glibc and libgcc_s beside it. Each
+			// library is installed under the name the others ask for it by, so no
+			// links are needed.
+			"name": "ffmpeg",
+			"version": "n9.0.2",
+			"url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-19-13-11/ffmpeg-n9.0.2-linux64-lgpl-shared-9.0.tar.xz",
+			"sha256": "b4ce4c66160f89d1fdb16f24b81da4351f681c166e3a216dd294b454a639291a",
+			"optional": true,
+			"files": {
+				"lib/libavutil.so.61.1.102": "ffmpeg/libavutil.so.61",
+				"lib/libswresample.so.7.1.102": "ffmpeg/libswresample.so.7",
+				"lib/libswscale.so.10.1.102": "ffmpeg/libswscale.so.10",
+				"lib/libavcodec.so.63.1.102": "ffmpeg/libavcodec.so.63",
+				"lib/libavformat.so.63.1.102": "ffmpeg/libavformat.so.63",
+				"LICENSE.txt": "ffmpeg/LICENSE.txt"
+			}
+		}
+	],
+
+	// SteamOS on arm64 - a Steam Frame. Nothing is fetched but FFmpeg: rintencore,
+	// SDL and the OpenXR loader are built from source on an arm64 runner (the
+	// linux-arm64 job in .github/workflows/core.yml) and the bin folder is filled
+	// from its artifact. No Slang either - no editor runs here, and a game ships
+	// its stages baked.
+	"linuxsteamrtarm64": [
+		{
+			// The same release as linuxsteamrt64's, BtbN's arm64 build of it.
+			"name": "ffmpeg",
+			"version": "n9.0.2",
+			"url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-19-13-11/ffmpeg-n9.0.2-linuxarm64-lgpl-shared-9.0.tar.xz",
+			"sha256": "cde90bebb4dbfed89e0ba611f6f4195fc2f9f84fdbec64553e3ded41df940ecf",
+			"optional": true,
+			"files": {
+				"lib/libavutil.so.61.1.102": "ffmpeg/libavutil.so.61",
+				"lib/libswresample.so.7.1.102": "ffmpeg/libswresample.so.7",
+				"lib/libswscale.so.10.1.102": "ffmpeg/libswscale.so.10",
+				"lib/libavcodec.so.63.1.102": "ffmpeg/libavcodec.so.63",
+				"lib/libavformat.so.63.1.102": "ffmpeg/libavformat.so.63",
+				"LICENSE.txt": "ffmpeg/LICENSE.txt"
+			}
+		}
+	],
+
+	// No SDL here either, and for a different reason: the only macOS asset SDL
+	// publishes is a .dmg, and this step reads .zip and .tar.gz. So the Mac
+	// builds it from the same pinned source Linux does - see build-sdl.sh.
+	//
+	// Nor a Vulkan loader. Vulkan on a Mac is somebody's implementation over
+	// Metal, MoltenVK or Mesa's KosmicKrisp, and which one a machine has is its
+	// own business rather than a file we pin - see the APPLE branch in
+	// CMakeLists.txt.
+	"osxarm64": [
+		{
+			"name": "slang",
+			"version": "2026.14",
+			// The zip and not the tar.gz, which is otherwise the same build. Slang's
+			// macOS tarball carries the code signature as PAX extended records, and
+			// .NET's TarReader refuses the file outright: "The extended header
+			// contains invalid records". A zip has nowhere to put them.
+			"url": "https://github.com/shader-slang/slang/releases/download/v2026.14/slang-2026.14-macos-aarch64.zip",
+			"sha256": "b8e2e277abd5cbe4591168ab4350ee46bd5631f705410208cb505c795fbab4b9",
+			"files": {
+				// The same set Linux takes, under the names a Mach-O carries -
+				// libslang.dylib is the one the core opens and the rest are what
+				// it in turn needs.
+				"lib/libslang.dylib": "libslang.dylib",
+				"lib/libslang-compiler.dylib": "libslang-compiler.dylib",
+				"lib/libslang-compiler.0.2026.14.dylib": "libslang-compiler.0.2026.14.dylib",
+				"lib/libslang-rt.dylib": "libslang-rt.dylib",
+				"lib/libslang-rt.0.2026.14.dylib": "libslang-rt.0.2026.14.dylib",
+				"lib/libslang-glsl-module-2026.14.dylib": "libslang-glsl-module-2026.14.dylib",
+				"lib/libslang-glslang-2026.14.dylib": "libslang-glslang-2026.14.dylib",
+				"lib/libgfx.dylib": "libgfx.dylib",
+				"lib/libgfx.0.2026.14.dylib": "libgfx.0.2026.14.dylib"
+			},
+			"folders": {
+				"slang-standard-module-2026.14": "slang-standard-module-2026.14"
+			}
+		}
+	],
+
+	// The OpenXR loader, and nothing else, for a headset that is a phone - a Quest,
+	// a Pico, a Vive Focus. Khronos publishes it as an .aar, which is a zip; the
+	// package copies it in beside the core - see Rinten-Android.csproj. It is
+	// the standard loader, and each headset's own runtime is what it finds.
+	"android-arm64": [
+		{
+			"name": "openxr_loader",
+			"version": "1.1.63",
+			"url": "https://repo1.maven.org/maven2/org/khronos/openxr/openxr_loader_for_android/1.1.63/openxr_loader_for_android-1.1.63.aar",
+			"sha256": "622419d2f6741c3443a3beb4779af0764318edd01830de967f24c741ebcded73",
+			"files": {
+				"jni/arm64-v8a/libopenxr_loader.so": "libopenxr_loader.so"
+			}
+		}
+	]
+
+	// wasm32 has no section, and Android no Slang or SDL; neither is an oversight.
+	//
+	// Slang has no Android build - there are 34 assets on its release and not one
+	// of them is a phone - so a device cannot compile a shader at runtime and has
+	// to run pre-baked .shader_c, which is what the web already does. SDL for
+	// Android arrives as an .aar, native library and Java activity together, and
+	// that belongs to the package rather than to a bin folder: see
+	// Rinten-Android.csproj.
+	//
+	// wasm32 links rintencore into the wasm statically and loads nothing at all.
+}

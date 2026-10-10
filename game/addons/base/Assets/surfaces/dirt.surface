@@ -1,0 +1,35 @@
+{
+  "BaseSurface": "surfaces/default.surface",
+  "AudioSurface": "Soil",
+  "Description": "",
+  "Friction": 0.8,
+  "Elasticity": 0.01,
+  "Density": 1600,
+  "Thickness": -1,
+  "RollingResistance": 0,
+  "BounceThreshold": 0,
+  "Dampening": 0,
+  "PrefabCollection": {
+    "BulletImpact": {
+      "_type": "gameobject",
+      "prefab": "prefabs/surface/dirt-bullet.prefab"
+    },
+    "BulletImpactDecal": null,
+    "BluntImpact": null
+  },
+  "SoundCollection": {
+    "FootLeft": null,
+    "FootRight": null,
+    "FootLaunch": null,
+    "FootLand": null,
+    "Bullet": null,
+    "ImpactHard": null,
+    "ImpactSoft": null,
+    "ScrapeRough": null,
+    "ScrapeSmooth": null,
+    "Break": null
+  },
+  "Tags": null,
+  "__references": [],
+  "__version": 0
+}

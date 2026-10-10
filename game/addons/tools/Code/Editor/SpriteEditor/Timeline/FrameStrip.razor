@@ -1,0 +1,323 @@
+@namespace Editor.SpriteEditor
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Rinten.UI
+@attribute [StyleSheet( "FrameStrip.razor.scss" )]
+@inherits Panel
+
+@* The frames of the selected animation in a row, and a button to add one. The strip
+   owns everything that is about more than one frame: which are picked, the drag
+   that reorders them, and the drag that moves the loop's ends. A cell reports what
+   happened to it and is told what it looks like. *@
+
+<root class="frame-strip well" onmousedown="@OnStripDown">
+	@for ( var i = 0; i < Count; i++ )
+	{
+		var index = i;
+		<FrameCell Strip="@this" Index="@index" Frame="@Animation.Frames[index]"
+			Look="@FrameLook.Of( Animation, index, Selection )" Current="@( index == _current )" Size="@_cellSize" />
+	}
+
+	<ToolbarButton class="add-frame" Icon="add" ToolTip="Add a frame" OnPressed="@( () => Timeline?.OpenAddMenu() )" />
+</root>
+
+@code
+{
+	//The band the frame number sits in, above the picture.
+	internal const float HeaderHeight = 16f;
+
+	//Room the strip keeps around the cells, so the largest zoom still fits.
+	const float Inset = 8f;
+
+	const float MinCellSize = 24f;
+
+	public const float MinZoom = 0.15f;
+	public const float MaxZoom = 1f;
+
+	public TimelinePanel Timeline { get; set; }
+	public IAnimationSelection AnimationSelection { get; set; }
+	public ISpritePlayback Playback { get; set; }
+	public FrameCommands Frames { get; set; }
+
+	//Which frames are picked.
+	public FrameSelection Selection { get; } = new();
+
+	float _zoom = 1f;
+	float _cellSize = 96f;
+	int _current = -1;
+	int _version;
+
+	FrameCell _pressed;
+	Vector2 _pressAt;
+	bool _carrying;
+
+	//Which end of the loop is being dragged, while one is.
+	bool? _loopDragStart;
+
+	Sprite.Animation Animation => AnimationSelection?.Selected;
+
+	int Count => Animation?.Frames?.Count ?? 0;
+
+	//How big a cell is against the strip's height, 0.15 to 1.
+	public float Zoom
+	{
+		get => _zoom;
+		set
+		{
+			var clamped = Math.Clamp( value, MinZoom, MaxZoom );
+			if ( clamped == _zoom ) return;
+
+			_zoom = clamped;
+			_cellSize = -1f;
+		}
+	}
+
+	protected override int BuildHash() => HashCode.Combine( _version, _current, _cellSize, Animation, Count );
+
+	//Keeping the cells over the frames
+
+	//The animation changed: nothing that was picked means anything now.
+	public void Rebuild()
+	{
+		Selection.Clear();
+		Sync();
+	}
+
+	//The frames changed: a cell over each, as they are now.
+	public void Sync()
+	{
+		Selection.ClampTo( Count );
+		ReadLook();
+	}
+
+	//Re-reads what is picked and where the loop is.
+	void ReadLook()
+	{
+		_version++;
+		StateHasChanged();
+	}
+
+	//Marks the frame the preview is on. Once a frame, from the timeline.
+	public void RefreshCurrent()
+	{
+		var current = Playback?.CurrentFrame ?? -1;
+		if ( current == _current ) return;
+
+		_current = current;
+		StateHasChanged();
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		SizeCells();
+		TrackPress();
+		TrackLoopDrag();
+	}
+
+	//Cells are as tall as the strip lets them be, scaled by the zoom.
+	void SizeCells()
+	{
+		var height = Box.Rect.Height * ScaleFromScreen;
+		if ( height <= 0 ) return;
+
+		var size = MathF.Round( MathF.Max( MinCellSize, ( height - HeaderHeight - Inset ) * _zoom ) );
+		if ( MathF.Abs( size - _cellSize ) < 0.5f ) return;
+
+		_cellSize = size;
+		StateHasChanged();
+	}
+
+	IEnumerable<FrameCell> Cells => Children.OfType<FrameCell>();
+
+	//Pressing a cell
+
+	internal void CellPressed( FrameCell cell, MouseButtons button )
+	{
+		Timeline?.Focus();
+
+		if ( button == MouseButtons.Left )
+		{
+			var modifiers = Application.KeyboardModifiers;
+
+			Playback.CurrentFrame = cell.Index;
+			Selection.Click( cell.Index, modifiers.HasFlag( KeyboardModifiers.Shift ), modifiers.HasFlag( KeyboardModifiers.Ctrl ) );
+			ReadLook();
+
+			_pressed = cell;
+			_pressAt = Application.CursorPosition;
+			_carrying = false;
+
+			return;
+		}
+
+		if ( button == MouseButtons.Right )
+		{
+			//A right click on a frame that is not picked is about that frame alone.
+			if ( !Selection.Contains( cell.Index ) )
+			{
+				Selection.Click( cell.Index, shift: false, control: false );
+				ReadLook();
+			}
+
+			OpenCellMenu( cell );
+		}
+	}
+
+	internal void CellReleased() => _pressed = null;
+
+	//A press that travels is a drag of the picked frames.
+	void TrackPress()
+	{
+		if ( _pressed is null || _carrying ) return;
+
+		if ( ( Application.MouseButtons & MouseButtons.Left ) == 0 )
+		{
+			_pressed = null;
+			return;
+		}
+
+		if ( Application.CursorPosition.Distance( _pressAt ) <= 10.0f ) return;
+
+		_carrying = true;
+
+		var indices = Selection.Contains( _pressed.Index ) ? Selection.Indices.OrderBy( i => i ).ToList() : new List<int> { _pressed.Index };
+		var text = indices.Count == 1 ? $"Frame {_pressed.Index}" : $"{indices.Count} frames";
+
+		EditorDrag.Begin( _pressed, new DragData { Text = text, Object = new FrameDragData( indices, _pressed.Index ) }, null );
+	}
+
+	//Dropping frames on a cell
+
+	//Where carried frames would land on a cell: after it, before it, or nowhere.
+	internal bool? DropSide( FrameCell cell, Widget.DragEvent ev )
+	{
+		if ( ev.Data?.Object is not FrameDragData data || data.Indices.Contains( cell.Index ) ) return null;
+
+		return LandsAfter( data, cell );
+	}
+
+	internal void Drop( FrameCell cell, Widget.DragEvent ev )
+	{
+		if ( ev.Data?.Object is not FrameDragData data || data.Indices.Contains( cell.Index ) ) return;
+
+		var placed = Frames.Move( data.Indices, cell.Index, LandsAfter( data, cell ) );
+
+		Selection.Set( placed );
+		ReadLook();
+	}
+
+	//Frames carried from the left land after the cell; from the right, before it.
+	static bool LandsAfter( FrameDragData data, FrameCell cell ) => data.From < cell.Index;
+
+	//The loop's ends
+
+	internal void BeginLoopDrag( bool start )
+	{
+		if ( Animation is null ) return;
+
+		_loopDragStart = start;
+		_pressed = null;
+
+		Timeline?.SetCursor( CursorShape.SizeH );
+	}
+
+	void TrackLoopDrag()
+	{
+		if ( _loopDragStart is not { } start ) return;
+
+		if ( ( Application.MouseButtons & MouseButtons.Left ) == 0 )
+		{
+			_loopDragStart = null;
+			Timeline?.SetCursor( CursorShape.None );
+			Frames.CommitLoopRange( start );
+			return;
+		}
+
+		if ( IndexNearest( Application.CursorPosition.x ) is not { } index ) return;
+
+		if ( start ) Frames.SetLoopStart( index );
+		else Frames.SetLoopEnd( index );
+
+		ReadLook();
+	}
+
+	//The frame whose middle is nearest a point on the desktop, or null where there are no frames.
+	int? IndexNearest( float screenX )
+	{
+		int? best = null;
+		var bestDistance = float.MaxValue;
+
+		foreach ( var cell in Cells )
+		{
+			var local = cell.ScreenPositionToPanelPosition( new Vector2( screenX, 0 ) );
+			var width = cell.Box.Rect.Width * cell.ScaleFromScreen;
+			var distance = MathF.Abs( local.x - width * 0.5f );
+
+			if ( distance >= bestDistance ) continue;
+
+			bestDistance = distance;
+			best = cell.Index;
+		}
+
+		return best;
+	}
+
+	//Menus and the editor
+
+	void OpenCellMenu( FrameCell cell )
+	{
+		var indices = IndicesFor( cell );
+		var menu = new Menu();
+
+		menu.AddOption( "Edit Frame", "edit", () => OpenEditor( cell ) );
+
+		//The picture by hand: another cell of the same sheet, or another image.
+		var index = cell.Index;
+		var frame = Frames.At( index );
+		menu.AddOption( "Pick Cell on Sheet...", "grid_on",
+				() => FrameSources.PickCell( frame, Rinten.Rendering.FilterMode.Point, region => Frames.SetRegion( index, region ) ) )
+			.Enabled = FrameSources.ImagePath( frame?.Texture ) is not null;
+		menu.AddOption( "Change Picture...", "image",
+			() => FrameSources.PickImage( Timeline?.HostWidget, $"Picture for frame {index}", texture => Frames.SetPicture( index, texture ) ) );
+		menu.AddOption( "Duplicate", "content_copy", () => Frames.Duplicate( indices ) );
+		menu.AddOption( "Delete", "delete", () => Frames.Delete( indices ) );
+
+		menu.OpenAtCursor();
+	}
+
+	internal void OpenEditor( FrameCell cell ) => Timeline?.EditFrames( IndicesFor( cell ) );
+
+	//The picked frames where the cell is one of them, and the cell alone otherwise.
+	IReadOnlyCollection<int> IndicesFor( FrameCell cell )
+		=> Selection.Contains( cell.Index ) ? Selection.Indices.OrderBy( i => i ).ToList() : new[] { cell.Index };
+
+	//The strip itself
+
+	void OnStripDown( PanelEvent e )
+	{
+		Timeline?.Focus();
+
+		if ( e is MousePanelEvent { MouseButton: MouseButtons.Right } )
+		{
+			Timeline?.OpenAddMenu();
+			e.StopPropagation();
+		}
+	}
+
+	//The wheel scrolls along the strip; with control held it zooms.
+	public override void OnMouseWheel( Vector2 value )
+	{
+		if ( Application.KeyboardModifiers.HasFlag( KeyboardModifiers.Ctrl ) )
+		{
+			Timeline?.SetZoom( Zoom - value.y * 0.06f );
+			return;
+		}
+
+		if ( TryScroll( new Vector2( value.y, 0 ) ) ) return;
+
+		base.OnMouseWheel( value );
+	}
+}

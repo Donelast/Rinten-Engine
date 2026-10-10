@@ -1,0 +1,39 @@
+.movie-section
+{
+	flex-direction: column;
+	overflow: hidden;
+
+	&.hidden
+	{
+		display: none;
+	}
+
+	> .body
+	{
+		flex-grow: 1;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.movie-toolbar-label.title
+	{
+		flex-grow: 1;
+		justify-content: center;
+		text-align: center;
+	}
+}
+
+.tracklist-section
+{
+	background-color: $control-background;
+}
+
+.history-section
+{
+	background-color: $control-background;
+}
+
+.timeline-section
+{
+	background-color: $panel-background;
+}

@@ -1,0 +1,284 @@
+@namespace Editor
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using Rinten.UI
+
+@inherits Panel
+
+@* Something stopped the editor, held over the whole window until it is dealt with.
+
+   A failed build or a failed open used to go to the console - which, while the
+   editor starts, is behind the launcher's blur and cannot be read. This is the
+   card that says it instead: what went wrong as a list that can be copied or
+   opened in the code editor a line at a time, and the buttons that get past it
+   (restart, recompile, back to the launcher). It sits on a ModalSheet, so the
+   editor behind it is the same blur the launcher wears. *@
+
+<root class="problem-sheet">
+	<div class="head">
+		<div class="badge"><i>@Icon</i></div>
+		<div class="titles">
+			<div class="title">@Title</div>
+			<div class="count">@CountText</div>
+		</div>
+	</div>
+
+	@if ( !string.IsNullOrWhiteSpace( Message ) )
+	{
+		<div class="message">@Message</div>
+	}
+
+	@if ( Problems.Count > 0 )
+	{
+		<div class="list">
+			@foreach ( var problem in Problems.Take( MaxRows ) )
+			{
+				<div class="row @( CanOpen( problem ) ? "can-open" : null )" onclick="@( () => Open( problem ) )">
+					<i class="severity @( problem.IsError ? "is-error" : "is-warning" )">@( problem.IsError ? "error" : "warning" )</i>
+					<div class="text">
+						<div class="what">@problem.Message</div>
+						<div class="where">@Where( problem )</div>
+					</div>
+				</div>
+			}
+
+			@if ( Problems.Count > MaxRows )
+			{
+				<div class="more">and @( Problems.Count - MaxRows ) more - Copy takes all of them</div>
+			}
+		</div>
+	}
+
+	@if ( !string.IsNullOrWhiteSpace( Details ) )
+	{
+		<div class="details">@Details</div>
+	}
+
+	<div class="actions">
+		<div class="btn" onclick="@Copy">@( copied ? "Copied" : "Copy" )</div>
+
+		@if ( Problems.Any( CanOpen ) )
+		{
+			<div class="btn" onclick="@( () => Open( Problems.First( CanOpen ) ) )">Open in IDE</div>
+		}
+
+		<div class="spacer"></div>
+
+		@foreach ( var choice in Choices )
+		{
+			<div class="btn @( choice.Primary ? "good" : null ) @( Busy is not null ? "is-disabled" : null )"
+				onclick="@( () => Pick( choice ) )">@choice.Text</div>
+		}
+	</div>
+</root>
+
+@code
+{
+	//One thing that went wrong, and where.
+	public sealed record Problem( string Message, string Code = null, string Owner = null,
+		string File = null, int Line = 0, int Column = 0, bool IsError = true );
+
+	//A way past the problem, and what pressing it does.
+	public sealed record Choice( string Text, Action Run, bool Primary = false, bool KeepOpen = false );
+
+	//More than this is a wall nobody reads; the copy has the rest.
+	const int MaxRows = 200;
+
+	//A material icon beside the title.
+	public string Icon { get; set; } = "error";
+
+	public string Title { get; set; } = "";
+
+	//What it means, and what the buttons will do about it.
+	public string Message { get; set; } = "";
+
+	//What went wrong, a line each.
+	public List<Problem> Problems { get; private set; } = new();
+
+	//Anything that is not a list of problems - an exception, in the editor's monospace.
+	public string Details { get; set; }
+
+	//The buttons at the right, the primary one last.
+	public List<Choice> Choices { get; } = new();
+
+	//What it is doing right now - "Compiling" - while the buttons wait. Null when idle.
+	public string Busy { get; private set; }
+
+	//The sheet under the card: the blur, and the window's input held.
+	ModalSheet sheet;
+
+	bool copied;
+	int version;
+
+	public ProblemSheet()
+	{
+		EditorStyles.Apply( this, "ProblemSheet.razor.scss" );
+	}
+
+	//Holds the card over the editor's window until it is closed.
+	public static ProblemSheet Show( ProblemSheet card )
+	{
+		card.sheet = ModalSheet.Open( EditorMainWindow.Current, card );
+
+		if ( card.sheet is null )
+		{
+			Log.Warning( $"{card.Title}: no window to show it in." );
+			return null;
+		}
+
+		return card;
+	}
+
+	//Whether it is still up.
+	public bool IsOpen => sheet.IsValid();
+
+	public void Close()
+	{
+		if ( sheet.IsValid() ) sheet.Close();
+
+		sheet = null;
+	}
+
+	//Puts a new list in, keeping the card where it is.
+	public void SetProblems( IEnumerable<Problem> problems )
+	{
+		Problems = problems?.ToList() ?? new();
+		copied = false;
+		Changed();
+	}
+
+	//Says what it is doing and holds the buttons, or - with null - lets them go.
+	public void SetBusy( string busy )
+	{
+		Busy = busy;
+		Changed();
+	}
+
+	//A new title and message, for a card whose problem has moved on.
+	public void Say( string title, string message, string icon = null )
+	{
+		Title = title;
+		Message = message;
+		if ( icon is not null ) Icon = icon;
+		Changed();
+	}
+
+	void Changed()
+	{
+		version++;
+		StateHasChanged();
+	}
+
+	string CountText
+	{
+		get
+		{
+			if ( Busy is not null ) return Busy;
+
+			var errors = Problems.Count( x => x.IsError );
+			var warnings = Problems.Count - errors;
+
+			if ( Problems.Count == 0 ) return "";
+
+			return warnings == 0 ? $"{errors} error(s)" : $"{errors} error(s), {warnings} warning(s)";
+		}
+	}
+
+	static string Where( Problem problem )
+	{
+		var parts = new List<string>( 3 );
+
+		if ( !string.IsNullOrWhiteSpace( problem.Code ) ) parts.Add( problem.Code );
+		if ( !string.IsNullOrWhiteSpace( problem.Owner ) ) parts.Add( problem.Owner );
+
+		if ( !string.IsNullOrWhiteSpace( problem.File ) )
+			parts.Add( problem.Line > 0 ? $"{System.IO.Path.GetFileName( problem.File )}:{problem.Line}" : System.IO.Path.GetFileName( problem.File ) );
+
+		return string.Join( "  ·  ", parts );
+	}
+
+	static bool CanOpen( Problem problem ) => !string.IsNullOrWhiteSpace( problem.File );
+
+	void Open( Problem problem )
+	{
+		if ( !CanOpen( problem ) ) return;
+
+		OpenInIde( problem.File, problem.Line, problem.Column );
+	}
+
+	//Opens a file at a line in the code editor. When there is none - the code editors are the tools addon's, and it may be the
+	//thing that did not build - the usual ones are tried by name, and failing those the file is opened the way the desktop opens it.
+	public static void OpenInIde( string file, int line, int column = 0 )
+	{
+		if ( CodeEditor.Current is not null )
+		{
+			CodeEditor.OpenFile( file, line > 0 ? line : null, column > 0 ? column : null );
+			return;
+		}
+
+		var at = line > 0 ? $"{file}:{line}:{Math.Max( column, 1 )}" : file;
+
+		if ( Launch( "code", "--goto", at ) ) return;
+		if ( line > 0 ? Launch( "rider", "--line", line.ToString(), file ) : Launch( "rider", file ) ) return;
+
+		EditorUtility.OpenFile( file );
+	}
+
+	static bool Launch( string executable, params string[] arguments )
+	{
+		try
+		{
+			var info = new System.Diagnostics.ProcessStartInfo( executable ) { UseShellExecute = false };
+			foreach ( var argument in arguments ) info.ArgumentList.Add( argument );
+
+			return System.Diagnostics.Process.Start( info ) is not null;
+		}
+		catch ( Exception )
+		{
+			//Not installed, or not on the path.
+			return false;
+		}
+	}
+
+	//Everything on the card as text: the lines in the form IDEs and build logs read.
+	public string AsText()
+	{
+		var text = new System.Text.StringBuilder();
+
+		text.AppendLine( Title );
+
+		foreach ( var problem in Problems )
+		{
+			var where = string.IsNullOrWhiteSpace( problem.File ) ? ""
+				: problem.Line > 0 ? $"{problem.File}({problem.Line},{Math.Max( problem.Column, 1 )}): " : $"{problem.File}: ";
+
+			var code = string.IsNullOrWhiteSpace( problem.Code ) ? "" : $" {problem.Code}";
+			var owner = string.IsNullOrWhiteSpace( problem.Owner ) ? "" : $" [{problem.Owner}]";
+
+			text.AppendLine( $"{where}{( problem.IsError ? "error" : "warning" )}{code}: {problem.Message}{owner}" );
+		}
+
+		if ( !string.IsNullOrWhiteSpace( Details ) ) text.AppendLine( Details );
+
+		return text.ToString();
+	}
+
+	void Copy()
+	{
+		EditorUtility.Clipboard.Copy( AsText() );
+		copied = true;
+		Changed();
+	}
+
+	void Pick( Choice choice )
+	{
+		if ( Busy is not null ) return;
+
+		if ( !choice.KeepOpen ) Close();
+
+		choice.Run?.Invoke();
+	}
+
+	protected override int BuildHash() => HashCode.Combine( version, Busy, copied );
+}

@@ -1,0 +1,39 @@
+//Effect tree: toolbar over the shared tree; only effect-specific styles here
+
+.effect-tree
+{
+	width: 100%;
+	height: 100%;
+
+	> .effect-rows
+	{
+		flex-grow: 1;
+		min-height: 0;
+	}
+
+	//In the inspector, in the asset's first card under the effect's numbers: the bar lies flat on the card, and the tree is as tall as its rows up
+	//to about twelve of them (22px and a pixel apart), then it scrolls, so the card of what is picked stays in reach of the row that was clicked.
+	&.compact
+	{
+		height: auto;
+		gap: 0px;
+
+		> .effect-rows
+		{
+			max-height: 280px;
+		}
+
+		> .dock-bar
+		{
+			margin-right: 0px;
+			background-color: transparent;
+			border-width: 0px;
+			border-bottom: 1px solid $sunken;
+		}
+	}
+}
+
+.effect-rows .tree-row.muted
+{
+	opacity: 0.45;
+}

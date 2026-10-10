@@ -1,0 +1,39 @@
+name: PR Triage
+on:
+  pull_request_target:
+    types: [ labeled ]
+
+jobs:
+  pr-triaged:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'triaged'
+    steps:
+      - name: Ensure PR checks passed
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const requiredChecks = ['format', 'tests'];
+
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              throw new Error('No pull request found in event payload.');
+            }
+
+            const { data } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: pr.head.sha,
+              per_page: 100
+            });
+
+            const checkRuns = data.check_runs ?? [];
+            for (const requiredCheck of requiredChecks) {
+              const match = checkRuns.find(run => (run.name ?? '') === requiredCheck);
+
+              if (!match || match.conclusion !== 'success') {
+                const status = match ? (match.conclusion ?? match.status ?? 'unknown') : 'missing';
+                core.warning(`Required check '${requiredCheck}' did not pass (${status}).`);
+                throw new Error('Cannot triage until required checks succeed. Remove and re-add the triaged label to retry.');
+              }
+            }

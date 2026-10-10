@@ -1,0 +1,30 @@
+# Auto detect text files
+* text=auto
+
+# Shell scripts are run by a shell that will not have a carriage return in its shebang line
+# - a build script checked out with CRLF is one that says "bad interpreter" and nothing else.
+*.sh text eol=lf
+
+# Anything under game (content) force crlf for consistent content hashes
+game/** text=auto eol=crlf
+# Except c# files, auto that
+game/**/*.cs text=auto
+# ...and shell scripts, which the rule above would check out with carriage returns that
+# Linux refuses to run. Rinten-Server.sh already says as much in its own first comment.
+game/**/*.sh text eol=lf
+
+#
+# GitHub linguist overrides (https://github.com/github-linguist/linguist/blob/main/docs/overrides.md)
+# Lets GitHub know the proper languages, what code is generated, third party, etc. for better stats/diffs
+#
+*.h linguist-language=C++
+*.shader linguist-language=HLSL
+*.fxc linguist-language=HLSL
+src/thirdparty/* linguist-vendored
+engine/Core/extern/** linguist-vendored
+
+# Icons and images are binary, said out loud. "* text=auto" above is a guess, and it has been wrong: brand/rotor-512.png went into the repository
+# with the CR taken out of its PNG signature and has been an unreadable file ever since. A mangled binary is not something a diff shows you.
+*.png binary
+*.ico binary
+*.icns binary

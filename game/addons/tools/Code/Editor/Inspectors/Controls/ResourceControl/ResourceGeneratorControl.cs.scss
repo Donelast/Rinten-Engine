@@ -1,0 +1,17 @@
+//A resource generator's settings: one property sheet across the row.
+ResourceGeneratorControl.control.no-background.multiple-rows
+{
+	flex-direction: column;
+
+	> .controlsheet
+	{
+		flex-grow: 1;
+		min-width: 0;
+	}
+
+	//While the property is read-only the sheet inside is not touched either.
+	&.readonly > .controlsheet
+	{
+		pointer-events: none;
+	}
+}

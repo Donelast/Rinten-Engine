@@ -1,0 +1,88 @@
+﻿@using Rinten;
+@using Rinten.UI;
+@using System.Globalization
+@namespace Rinten.UI
+@inherits Panel
+
+<root class=@BuildClass() @onrightclick=@OnCardRightClicked onclick=@OnCardClicked>
+    @* No fallback image: the one that was here lived on the other engine's site
+       and never shipped with the engine, so it drew nothing anyway. A package
+       without a thumbnail gets the panel's own background instead. *@
+    <div class="image" style="@(string.IsNullOrEmpty( Image() ) ? null : $"background-image: url({Image()})")">
+        @if ( Package != null && Package.Flair.IsEmpty == false)
+        {
+            <PackageFlairBar Flair="@Package.Flair" />
+        }
+
+        @if (Package?.Usage.UsersNow > 0)
+        {
+            <div class="online package-users" title="Playing Now">@Package.Usage.UsersNow</div>
+        }
+    </div>
+
+    <column>
+        <label class="medium package-title">
+            @(Package?.Title ?? "Invalid Package")
+        </label>
+
+        @if (Package == null)
+        {
+            <row>
+                <label class="eyebrow">
+                    We couldn't find that package.
+                </label>
+            </row>
+        }
+        else
+        {
+            <row>
+                <icon class="eyebrow">thumb_up</icon>
+                <label class="eyebrow">@VotePercentage()</label>
+                <div class="grow" />
+            </row>
+        }
+    </column>
+</root>
+
+@code {
+    public enum SizeType
+    {
+        Default,
+        Small,
+        Wide,
+        Tall,
+        List
+    }
+
+    [Parameter] public Package Package { get; set; }
+    [Parameter] public SizeType Size { get; set; }
+
+    //Called when the card is clicked
+    [Parameter] public Action Clicked { get; set; }
+
+    //Called when the card is right clicked
+    [Parameter] public Action RightClicked { get; set; }
+    
+    void OnCardClicked() => Clicked?.Invoke();
+    void OnCardRightClicked() => RightClicked?.Invoke();
+
+    string BuildClass() => $"package-card {Size.ToString().ToLower()}";
+
+    string VotePercentage()
+    {
+        if (Package == null) return "Unrated";
+        if (Package.VotesUp == 0 && Package.VotesDown == 0) return "Unrated";
+        return $"{(int)(Package.VotesUp * 100f / (Package.VotesUp + Package.VotesDown))}%";
+    }
+
+    string Image() => Size switch
+    {
+        SizeType.Tall => Package?.ThumbTall,
+        SizeType.Wide => Package?.ThumbWide,
+        SizeType.Small => Package?.Thumb,
+        SizeType.List => Package?.Thumb,
+        _ => Package?.ThumbWide
+    };
+
+    protected override int BuildHash() => System.HashCode.Combine(Package?.FullIdent, Package?.Usage.UsersNow, Package?.Flair.Length);
+}

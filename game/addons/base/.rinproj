@@ -1,0 +1,21 @@
+{
+  "Title": "Base Library",
+  "Type": "addon",
+  "Org": "local",
+  "Ident": "base",
+  "Schema": 1,
+  "IncludeSourceFiles": false,
+  "Resources": null,
+  "PackageReferences": [],
+  "EditorReferences": null,
+  "Mounts": null,
+  "Metadata": {
+    "CsProjName": "Base Library",
+    "Compiler": {
+      "RootNamespace": "Rinten",
+      "DefineConstants": "SANDBOX;ADDON;DEBUG",
+      "NoWarn": "1701;1702;1591;",
+      "TreatWarningsAsErrors": true
+    }
+  }
+}

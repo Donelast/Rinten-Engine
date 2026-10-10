@@ -1,0 +1,1587 @@
+﻿using Silk.NET.Vulkan;
+using VkBuffer = Silk.NET.Vulkan.Buffer;
+using VkImage = Silk.NET.Vulkan.Image;
+using VkSemaphore = Silk.NET.Vulkan.Semaphore;
+
+namespace Rinten;
+
+//A frame: what one recording owns, what it may bind without saying so twice, and the passes it opens and closes.
+internal static unsafe partial class VkFrame
+{
+	//What one in-flight frame needs to itself.
+	internal sealed class Frame
+	{
+		//How many distinct buffer sets one frame is expected to bind - see ObjectKeys.
+		private const int ObjectSetsKept = 16;
+
+		public CommandPool Pool;
+		public CommandBuffer Commands;
+
+		/// <summary>Signalled when the image this frame drew into is free.</summary>
+		public VkSemaphore ImageAvailable;
+
+		/// <summary>Signalled when the GPU has finished the frame, so the CPU knows when this frame's command buffer may be recorded over.</summary>
+		public Fence Finished;
+
+		/// <summary>Whether a submit is actually pending on that fence. Without this, a failed submit leaves the fence forever unsignalled and the next frame on this slot waits on it forever - a hang, on an error path, which is the worst place to keep one.</summary>
+		public bool Submitted;
+
+		/// <summary>Per-source readback buffer kept on the frame, safe to read once the slot's fence has been waited</summary>
+		public sealed class Readback
+		{
+			public VkBuffer Staging;
+			public DeviceMemory Memory;
+			public byte* Mapped;
+			public ulong Size;
+
+			/// <summary>Whether a copy was recorded into it, so a first frame reads nothing rather than reading whatever the allocation happened to contain.</summary>
+			public bool Filled;
+		}
+
+		public readonly Dictionary<ulong, Readback> Readbacks = new();
+
+		/// <summary>Set 1 needs rewriting before next record; can't rewrite while the frame may be in flight</summary>
+		public bool FrameSetStale;
+
+		/// <summary>This frame's scratch vertex space, for geometry handed over at draw time - grids, gizmo lines. Persistently mapped host-visible memory, reset each time the frame comes round; grown when a frame wants more, which is safe exactly because the frame's fence was waited first.</summary>
+		public VkBuffer Scratch;
+		public DeviceMemory ScratchMemory;
+		public byte* ScratchMapped;
+		public ulong ScratchCapacity;
+		public ulong ScratchUsed;
+
+		/// <summary>The most scratch any frame has wanted so far, so the next one can be given it up front - see <see cref="EnsureScratch"/>.</summary>
+		public ulong ScratchPeak;
+
+		/// <summary>Points at whichever scratch buffer this frame currently has, so a skinned draw only has to supply the offset. Rewritten when the buffer grows, which is safe: nothing already recorded reads through the set, only through the command buffer's bound copy of it.</summary>
+		public DescriptorSet BoneSet;
+
+		/// <summary>Where this frame's camera and lights sit in the scratch, and where a draw with no bones of its own points binding 0. Both are reserved at the start of the frame so every draw has something legal to bind.</summary>
+		public ulong FrameBlock;
+		public ulong NullBones;
+
+		/// <summary>Scratch buffers outgrown mid-frame. They cannot die where they are replaced - draws already recorded this frame still name them - so they wait here until the frame's fence next proves the GPU is done.</summary>
+		public readonly List<(VkBuffer Buffer, DeviceMemory Memory)> RetiredScratch = new();
+
+		/// <summary>Which submission this frame's last outing went to the queue as, for telling the graveyard when its fence has proved that work finished.</summary>
+		public ulong Ticket;
+
+		//-- profiler: per-frame timestamp pool, two for the frame and two per zone, read after the fence
+
+		/// <summary>The pool, or null when the queue cannot timestamp at all.</summary>
+		public QueryPool Queries;
+
+		/// <summary>One pipeline statistics query per frame for RINTEN_ZONE_STATS's zone; such queries can't nest</summary>
+		public QueryPool Stats;
+
+		/// <summary>Whether this frame's one statistics query has been taken, and at what zone depth it was opened.</summary>
+		public bool StatsTaken;
+		public bool StatsRunning;
+		public int StatsDepth;
+
+		/// <summary>Object sets reused within this frame by the buffers they name; cleared by BeginFrame</summary>
+		public readonly ulong[] ObjectKeys = new ulong[ObjectSetsKept * (int)VkDevice.ObjectBindings];
+		public readonly DescriptorSet[] ObjectSets = new DescriptorSet[ObjectSetsKept];
+		public int ObjectSetCount;
+
+		/// <summary>The next free timestamp slot. 0 and 1 are the frame's own pair; zones take two each from 2 up.</summary>
+		public uint QueryNext;
+
+		/// <summary>One named span of the frame, as recorded.</summary>
+		public struct ZoneRecord
+		{
+			public fixed byte Name[VkDevice.ProfileNameSize];
+			public uint Begin;
+			public uint End;
+			public int Depth;
+			public long CpuBegin;
+			public long CpuEnd;
+		}
+
+		public readonly ZoneRecord[] Zones = new ZoneRecord[VkDevice.ProfileMaxZones];
+		public uint ZoneCount;
+
+		/// <summary>The zones open right now, as indices, nested at most this deep.</summary>
+		public readonly int[] ZoneOpen = new int[8];
+		public int ZoneDepth;
+
+		/// <summary>Begins refused for want of a slot, so their ends know to do nothing - and the profile can say the count rather than lying by omission.</summary>
+		public uint DroppedOpen;
+		public uint ZonesDropped;
+
+		/// <summary>When the recording began and ended on the CPU, in nanoseconds.</summary>
+		public long CpuBegin;
+		public long CpuEnd;
+
+		/// <summary>Whether the last submission carried profiling data that has not been read back yet.</summary>
+		public bool ProfilePending;
+
+		//What the frame did, counted as it happens.
+		public uint StatDraws;
+		public uint StatDynamic;
+		public uint StatSkinned;
+
+		/// <summary>How many copies were drawn by the instanced draws, which is the number worth seeing beside the draw count: five hundred instances out of four draws is the whole point of instancing, and four draws on its own says nothing about whether it happened.</summary>
+		public uint StatInstances;
+		public ulong StatTriangles;
+		public uint StatSkippedBinds;
+
+		/// <summary>How many compute passes this frame ran.</summary>
+		public uint StatDispatches;
+
+		/// <summary>And how many draws took their arguments from a buffer.</summary>
+		public uint StatIndirect;
+
+		//-- bound state cache, reset once per recording, to skip redundant binds
+
+		public Pipeline LastPipeline;
+		public ulong LastTexture;
+		public ulong LastBoneOffset;
+		public ulong LastMorphOffset;
+		public bool FrameSetBound;
+		public Viewport LastViewport;
+		public bool ViewportSet;
+
+		/// <summary>What the geometry bindings hold, at offset zero. The meshes of one model share a pair of buffers, so consecutive draws mostly rebind what is already there. A dynamic draw binds scratch at an offset and nulls this out.</summary>
+		public VkBuffer LastVertexBuffer;
+		public VkBuffer LastSkinBuffer;
+		public VkBuffer LastIndexBuffer;
+	}
+
+	//The last finished frame of a viewport, measured: what the profiler hands out. Filled when a
+	//fence proves the frame done, so what it says is always a frame or two old and never a stall.
+	internal sealed class Profile
+	{
+		public bool Valid;
+
+		public float GpuMs;
+		public float CpuMs;
+
+		public uint Draws;
+		public uint DynamicDraws;
+		public uint SkinnedDraws;
+
+		/// <summary>How many copies the instanced draws drew between them.</summary>
+		public uint Instances;
+		public ulong Triangles;
+		public ulong ScratchUsed;
+		public uint SkippedBinds;
+
+		/// <summary>How many compute passes the frame ran.</summary>
+		public uint Dispatches;
+
+		/// <summary>And how many of its draws were argued for by a buffer.</summary>
+		public uint Indirect;
+		public uint ZonesDropped;
+
+		public struct Zone
+		{
+			public fixed byte Name[VkDevice.ProfileNameSize];
+			public float GpuMs;
+			public float CpuMs;
+			public int Depth;
+		}
+
+		public readonly Zone[] Zones = new Zone[VkDevice.ProfileMaxZones];
+		public uint ZoneCount;
+	}
+
+	private static VkSwapchain.Swapchain Current => VkSwapchain.Current;
+
+	private static VkSwapchain.Pictures Pics => VkSwapchain.Pics;
+
+	internal static Frame CurrentFrame => VkSwapchain.CurrentFrame;
+
+	//-- descriptor writing -------------------------------------------------
+
+	//Points one set 1 at its bones and at whichever scratch the frame has. Binding 1 - the camera and the lights - is always the frame's
+	//own scratch. Binding 0 is usually that as well, and is the buffer of matrices instead for the sets an indirect draw of instances binds.
+	private static void WriteFrameSet( Frame frame, DescriptorSet set, VkBuffer bones, ulong boneRange )
+	{
+		var vk = VkDevice.vk;
+		var device = VkDevice.device;
+
+		var buffers = stackalloc DescriptorBufferInfo[3];
+		var writes = stackalloc WriteDescriptorSet[3];
+
+		//A block wide for a pose or a run the processor filled, and the whole buffer for one an indirect draw indexes by where its argument said its
+		//instances start - there the offset is nought and the index does the work. Then one object's worth of blend shape weights, out of the same scratch.
+		var ranges = stackalloc ulong[3];
+		ranges[0] = boneRange;
+		ranges[1] = VkDevice.FrameBlockReach;
+		ranges[2] = VkDevice.MorphBlockSize;
+
+		var slots = stackalloc uint[3];
+		slots[0] = 0;
+		slots[1] = 1;
+		slots[2] = 6;
+
+		for ( var i = 0u; i < 3; ++i )
+		{
+			buffers[i].Buffer = i == 0 ? bones : frame.Scratch;
+			buffers[i].Offset = 0;
+			buffers[i].Range = ranges[i];
+
+			writes[i].SType = StructureType.WriteDescriptorSet;
+			writes[i].DstSet = set;
+			writes[i].DstBinding = slots[i];
+			writes[i].DescriptorCount = 1;
+			writes[i].DescriptorType = DescriptorType.StorageBufferDynamic;
+			writes[i].PBufferInfo = &buffers[i];
+		}
+
+		//And the lights. Always bound, the frame's own scratch where nothing made a buffer
+		//yet: an empty descriptor is a fault on this driver the moment anything reads it.
+		var lights = new DescriptorBufferInfo
+		{
+			Buffer = VkDevice.lightBuffer.Handle != 0 ? VkDevice.lightBuffer : frame.Scratch,
+			Offset = 0,
+			Range = Vk.WholeSize,
+		};
+
+		var lightWrite = new WriteDescriptorSet
+		{
+			SType = StructureType.WriteDescriptorSet,
+			DstSet = set,
+			DstBinding = 7,
+			DescriptorCount = 1,
+			DescriptorType = DescriptorType.StorageBuffer,
+			PBufferInfo = &lights,
+		};
+
+		vk.UpdateDescriptorSets( device, 1, &lightWrite, 0, null );
+
+		vk.UpdateDescriptorSets( device, 3, writes, 0, null );
+
+		if ( VkDevice.Tier == RenderTier.Portable ) WritePortableSun( set );
+	}
+
+	//The portable frame's sun map into a frame set - see VkDevice.portableSunMap. Made the first time a set is written, which is before anything draws.
+	private static void WritePortableSun( DescriptorSet set )
+	{
+		if ( VkDevice.portableSunMap == 0 )
+			VkDevice.portableSunMap = VkTextures.ShadowMapCreate( VkDevice.PortableSunSide, 1, false );
+
+		if ( VkTextures.ShadowMapOf( VkDevice.portableSunMap ) is not { Layers.Length: > 0 } map ) return;
+
+		var image = new DescriptorImageInfo
+		{
+			Sampler = VkDevice.portableShadowSampler,
+			ImageView = map.Layers[0],
+			ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+		};
+
+		var write = new WriteDescriptorSet
+		{
+			SType = StructureType.WriteDescriptorSet,
+			DstSet = set,
+			DstBinding = 2,
+			DescriptorCount = 1,
+			DescriptorType = DescriptorType.CombinedImageSampler,
+			PImageInfo = &image,
+		};
+
+		VkDevice.vk.UpdateDescriptorSets( VkDevice.device, 1, &write, 0, null );
+
+		WritePortableSkyTable( set );
+	}
+
+	//Binds the sky table into a portable frame set; zero alpha tells the shader to use the sky colours
+	private static void WritePortableSkyTable( DescriptorSet set )
+	{
+		if ( !VkTextures.PortableSkyTableView( out var view ) ) return;
+
+		var image = new DescriptorImageInfo
+		{
+			Sampler = VkDevice.clampSampler,
+			ImageView = view,
+			ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+		};
+
+		var write = new WriteDescriptorSet
+		{
+			SType = StructureType.WriteDescriptorSet,
+			DstSet = set,
+			DstBinding = 5,
+			DescriptorCount = 1,
+			DescriptorType = DescriptorType.CombinedImageSampler,
+			PImageInfo = &image,
+		};
+
+		VkDevice.vk.UpdateDescriptorSets( VkDevice.device, 1, &write, 0, null );
+	}
+
+	//This frame's set 1.
+	internal static void WriteFrameSet( Frame frame )
+	{
+		if ( frame.BoneSet.Handle != 0 ) WriteFrameSet( frame, frame.BoneSet, frame.Scratch, VkDevice.BoneBlockSize );
+	}
+
+	//-- layouts and barriers -----------------------------------------------
+
+	//Move an image from one layout to another. synchronisation2's barriers, which name the stages on both sides rather than one stage and a guess.
+	internal static void Transition( CommandBuffer commands, VkImage image,
+		ImageLayout from, ImageLayout to,
+		PipelineStageFlags2 sourceStage, AccessFlags2 sourceAccess,
+		PipelineStageFlags2 destinationStage, AccessFlags2 destinationAccess,
+		ImageAspectFlags aspect = ImageAspectFlags.ColorBit,
+		uint baseLevel = 0, uint levelCount = 1, uint layerCount = 1, uint baseLayer = 0 )
+	{
+		var barrier = new ImageMemoryBarrier2
+		{
+			SType = StructureType.ImageMemoryBarrier2,
+			SrcStageMask = sourceStage,
+			SrcAccessMask = sourceAccess,
+			DstStageMask = destinationStage,
+			DstAccessMask = destinationAccess,
+			OldLayout = from,
+			NewLayout = to,
+			SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+			DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+			Image = image,
+			SubresourceRange = new ImageSubresourceRange( aspect, baseLevel, levelCount, baseLayer, layerCount ),
+		};
+
+		var dependency = new DependencyInfo
+		{
+			SType = StructureType.DependencyInfo,
+			ImageMemoryBarrierCount = 1,
+			PImageMemoryBarriers = &barrier,
+		};
+
+		VkDevice.dialect.Barrier( commands, &dependency );
+	}
+
+	//Moves a frame picture (all layers) to a layout, tracking it; uses blunt stages on purpose
+	internal static void MoveTo( CommandBuffer commands, VkImage image, ref ImageLayout tracked,
+		ImageLayout wanted, ImageAspectFlags aspect = ImageAspectFlags.ColorBit, uint levels = 1 )
+	{
+		if ( image.Handle == 0 || tracked == wanted ) return;
+
+		Transition( commands, image, tracked, wanted,
+			PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryWriteBit,
+			PipelineStageFlags2.AllCommandsBit,
+			AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit,
+			aspect, 0, levels, Vk.RemainingArrayLayers );
+
+		tracked = wanted;
+	}
+
+	//What has to have finished before an image in this layout may be written. Only the three the shadow atlases are ever in. UNDEFINED
+	//means the contents are being thrown away, and nothing has to have finished for that - which is why the cheap path stays cheap.
+	private static void WhatUses( ImageLayout layout, out PipelineStageFlags2 stage, out AccessFlags2 access )
+	{
+		switch ( layout )
+		{
+			case ImageLayout.DepthAttachmentOptimal:
+				stage = PipelineStageFlags2.EarlyFragmentTestsBit | PipelineStageFlags2.LateFragmentTestsBit;
+				access = AccessFlags2.DepthStencilAttachmentWriteBit;
+				return;
+
+			case ImageLayout.ShaderReadOnlyOptimal:
+				stage = PipelineStageFlags2.FragmentShaderBit;
+				access = AccessFlags2.ShaderSampledReadBit;
+				return;
+
+			case ImageLayout.TransferSrcOptimal:
+				stage = PipelineStageFlags2.CopyBit;
+				access = AccessFlags2.TransferReadBit;
+				return;
+
+			case ImageLayout.TransferDstOptimal:
+				stage = PipelineStageFlags2.CopyBit;
+				access = AccessFlags2.TransferWriteBit;
+				return;
+
+			default:
+				stage = PipelineStageFlags2.TopOfPipeBit;
+				access = 0;
+				return;
+		}
+	}
+
+	//Everything a viewport's pictures forget between frames. Nothing the world is drawn into carries over, so wherever
+	//those were left is not worth preserving - and saying so lets the transitions into them discard rather than keep.
+	internal static void ResetPictures( VkSwapchain.Pictures p )
+	{
+		p.SceneDrawn = false;
+		p.ScreenDepthFilled = false;
+		p.DepthFilled = false;
+		p.SceneLayout = ImageLayout.Undefined;
+		p.NormalLayout = ImageLayout.Undefined;
+		p.VelocityLayout = ImageLayout.Undefined;
+		p.VelocityReady = false;
+
+		//Not the other picture. What a lightmap bake gathers into is filled over several frames and read by the last of them, and a layout reset
+		//to undefined is a promise that the contents may be thrown away - which the next transition duly does. p.PostLayout is deliberately kept.
+		p.DepthLayout = ImageLayout.Undefined;
+		p.ScreenDepthLayout = ImageLayout.Undefined;
+	}
+
+	//Puts our own frame picture into SHADER_READ_ONLY before a pass samples it; foreign textures skip
+	private static void ReadyPictureForRead( Frame frame, ulong texture )
+	{
+		if ( texture == 0 ) return;
+
+		//A depth pyramid nothing has built yet: out of UNDEFINED into the layout its set names, once - see VkTextures.PyramidUnready.
+		if ( VkTextures.PyramidUnready( texture, out var pyramidImage, out var pyramidMips ) )
+		{
+			Transition( frame.Commands, pyramidImage, ImageLayout.Undefined, ImageLayout.General,
+				PipelineStageFlags2.AllCommandsBit, 0,
+				PipelineStageFlags2.AllCommandsBit, AccessFlags2.ShaderSampledReadBit | AccessFlags2.ShaderStorageReadBit,
+				ImageAspectFlags.ColorBit, 0, pyramidMips );
+
+			VkTextures.PyramidReady( texture );
+			return;
+		}
+
+		var p = Pics;
+
+		if ( texture == p.DepthHandle )
+		{
+			MoveTo( frame.Commands, p.DepthImage, ref p.DepthLayout,
+				ImageLayout.ShaderReadOnlyOptimal, ImageAspectFlags.DepthBit );
+			return;
+		}
+
+		if ( texture == p.SceneHandle )
+		{
+			MoveTo( frame.Commands, p.SceneImage, ref p.SceneLayout, ImageLayout.ShaderReadOnlyOptimal );
+			ReadyMips( frame, p.SceneImage, p.SceneLevels, ref p.SceneMipsReady );
+			return;
+		}
+
+		if ( texture == p.NormalHandle )
+		{
+			MoveTo( frame.Commands, p.NormalImage, ref p.NormalLayout, ImageLayout.ShaderReadOnlyOptimal );
+			return;
+		}
+
+		if ( texture == p.VelocityHandle )
+		{
+			MoveTo( frame.Commands, p.VelocityImage, ref p.VelocityLayout, ImageLayout.ShaderReadOnlyOptimal );
+			return;
+		}
+
+		if ( texture == p.PostHandle && p.PostImage.Handle != 0 )
+		{
+			MoveTo( frame.Commands, p.PostImage, ref p.PostLayout, ImageLayout.ShaderReadOnlyOptimal );
+			ReadyMips( frame, p.PostImage, p.PostLevels, ref p.PostMipsReady );
+			return;
+		}
+
+		for ( var which = 0; which < 2; ++which )
+		{
+			if ( texture != p.DisplayHandle[which] || p.DisplayImage[which].Handle == 0 ) continue;
+
+			MoveTo( frame.Commands, p.DisplayImage[which], ref p.DisplayLayout[which], ImageLayout.ShaderReadOnlyOptimal );
+			ReadyMips( frame, p.DisplayImage[which], p.DisplayLevels, ref p.DisplayMipsReady[which] );
+			return;
+		}
+	}
+
+	//Moves a picture's lower mips to the descriptor's layout once, since validation checks every level
+	private static void ReadyMips( Frame frame, VkImage image, uint levels, ref bool ready )
+	{
+		if ( ready || levels <= 1 || image.Handle == 0 ) return;
+
+		Transition( frame.Commands, image,
+			ImageLayout.Undefined, ImageLayout.ShaderReadOnlyOptimal,
+			PipelineStageFlags2.AllCommandsBit, 0,
+			PipelineStageFlags2.FragmentShaderBit, AccessFlags2.ShaderSampledReadBit,
+			ImageAspectFlags.ColorBit, 1, levels - 1 );
+
+		ready = true;
+	}
+
+
+	//Copies world depth into the screen's with nearest filtering, so overlays stay occluded by the world
+	private static void LiftDepthToScreen( Frame frame )
+	{
+		var p = Pics;
+
+		if ( p.ScreenDepthImage.Handle == 0 ) return;
+
+		//Nothing drew the world this frame, so there is no shape to lift and the screen's depth is cleared by its own pass.
+		if ( !p.SceneDrawn && !p.DepthFilled ) return;
+
+		//Or the pre-pass wrote it here in the first place, which is what this copy exists to avoid - see Swapchain.DepthOnScreen.
+		if ( p.ScreenDepthFilled ) return;
+
+
+		MoveTo( frame.Commands, p.DepthImage, ref p.DepthLayout,
+			ImageLayout.TransferSrcOptimal, ImageAspectFlags.DepthBit );
+
+		MoveTo( frame.Commands, p.ScreenDepthImage, ref p.ScreenDepthLayout,
+			ImageLayout.TransferDstOptimal, ImageAspectFlags.DepthBit );
+
+		var region = new ImageBlit
+		{
+			SrcSubresource = new ImageSubresourceLayers( ImageAspectFlags.DepthBit, 0, 0, 1 ),
+			DstSubresource = new ImageSubresourceLayers( ImageAspectFlags.DepthBit, 0, 0, 1 ),
+		};
+
+		region.SrcOffsets[1] = new Offset3D( (int)p.Extent.Width, (int)p.Extent.Height, 1 );
+
+		if ( Current.WorldWanted.Width > 0 )
+		{
+			//Part of the screen, where the world was put down - stretched over it where the world is drawn smaller, see VkSwapchain.Scaled.
+			var area = VkSwapchain.WorldArea( Current, p );
+			region.DstOffsets[0] = new Offset3D( Current.WorldX, Current.WorldY, 0 );
+			region.DstOffsets[1] = new Offset3D( Current.WorldX + (int)area.Width,
+				Current.WorldY + (int)area.Height, 1 );
+		}
+		else
+		{
+			region.DstOffsets[1] = new Offset3D( (int)p.ScreenExtent.Width, (int)p.ScreenExtent.Height, 1 );
+		}
+
+		//Own zone so its cost isn't charged to whichever draw reopened the screen pass
+		ZoneBegin( "depth lift" );
+
+		VkDevice.vk.CmdBlitImage( frame.Commands,
+			p.DepthImage, ImageLayout.TransferSrcOptimal,
+			p.ScreenDepthImage, ImageLayout.TransferDstOptimal,
+			1, &region, Filter.Nearest );
+
+		ZoneEnd();
+	}
+
+	//Begins the pass that draws the world, if it has not begun already. Every draw calls this. What it costs when the pass is already open is one
+	//predictable branch; what it buys is that the shadow pass can be recorded in front of the world without the caller having to say so twice.
+	internal static void EnsureMainPass()
+	{
+		if ( Current.MainPass ) return;
+
+		//Opening the pass is the one thing in a draw that is not per draw - see DrawTrace, where it is broken out of the draw that happened to reach it.
+		var traced = DrawTrace.Begin();
+
+		var frame = CurrentFrame;
+
+		//The world's shape, at the screen's size, for whatever is drawn over the world. Does nothing where the two
+		//are the same picture. Again after the pass was interrupted for the world to be drawn - see ScreenInterrupt.
+		if ( !Current.MainBegun || Current.LiftPending ) LiftDepthToScreen( frame );
+
+		Current.LiftPending = false;
+
+		var p = Pics;
+
+		//Whichever depth this pass tests against - the world's own where the world is drawn at the screen's size, and the copy of it otherwise.
+		var scaled = p.ScreenDepthImage.Handle != 0;
+
+		var passDepthImage = scaled ? p.ScreenDepthImage : p.DepthImage;
+
+		//Whatever the depth was last used for, the screen writes it again.
+		if ( scaled )
+		{
+			MoveTo( frame.Commands, passDepthImage, ref p.ScreenDepthLayout,
+				ImageLayout.DepthAttachmentOptimal, ImageAspectFlags.DepthBit );
+		}
+		else
+		{
+			MoveTo( frame.Commands, passDepthImage, ref p.DepthLayout,
+				ImageLayout.DepthAttachmentOptimal, ImageAspectFlags.DepthBit );
+		}
+
+		//The screen of whichever viewport this is: the window's next image, or the view's own output. Everything above this line
+		//and everything below it is the same either way, which is the point of a view being a viewport rather than a special case.
+		var view = VkSwapchain.currentView;
+
+		if ( view is not null )
+		{
+			MoveTo( frame.Commands, view.OutputImage, ref view.OutputLayout, ImageLayout.ColorAttachmentOptimal );
+		}
+
+		var colour = new RenderingAttachmentInfo
+		{
+			SType = StructureType.RenderingAttachmentInfo,
+			ImageView = view is not null ? view.OutputView : Current.Views[Current.ImageIndex],
+			ImageLayout = ImageLayout.ColorAttachmentOptimal,
+
+			//A pass that was interrupted to take a copy resumes where it left off; clearing again would throw away the world it just drew.
+			LoadOp = Current.MainBegun ? AttachmentLoadOp.Load : AttachmentLoadOp.Clear,
+			StoreOp = AttachmentStoreOp.Store,
+		};
+
+		colour.ClearValue.Color = new ClearColorValue( Current.Clear[0], Current.Clear[1], Current.Clear[2], Current.Clear[3] );
+
+		//Always attached, whether or not anything drawn this frame tests against it: dynamic rendering demands that
+		//pipelines and the pass agree about the attachments, and one honest arrangement beats two to keep in step.
+		var depth = new RenderingAttachmentInfo
+		{
+			SType = StructureType.RenderingAttachmentInfo,
+			ImageView = scaled ? p.ScreenDepthView : p.DepthView,
+			ImageLayout = ImageLayout.DepthAttachmentOptimal,
+
+			//Keep depth if the world or the pre-pass already filled it; clearing would erase the world
+			LoadOp = Current.MainBegun || p.SceneDrawn || p.DepthFilled
+				? AttachmentLoadOp.Load
+				: AttachmentLoadOp.Clear,
+
+			//Store depth only if the pass may resume; portable frames drop it to save tile bandwidth
+			StoreOp = Current.MainBegun || Current.ResumedLastFrame || VkDevice.Tier != RenderTier.Portable
+				? AttachmentStoreOp.Store
+				: AttachmentStoreOp.DontCare,
+		};
+
+		if ( Current.MainBegun ) Current.ResumedThisFrame = true;
+
+		depth.ClearValue.DepthStencil = new ClearDepthStencilValue( 1.0f, 0 );
+
+		//Every eye at once, where the view holds more than one - see ViewMask.
+		var viewMask = ViewMask;
+
+		var rendering = new RenderingInfo
+		{
+			SType = StructureType.RenderingInfo,
+
+			//The screen's size, not the world's: what this pass writes is the window.
+			RenderArea = new Rect2D( default, p.ScreenExtent ),
+			LayerCount = 1,
+			ViewMask = viewMask,
+			ColorAttachmentCount = 1,
+			PColorAttachments = &colour,
+			PDepthAttachment = &depth,
+		};
+
+		var formats = VkPassFormats.Of( view is not null ? view.OutputFormat : Current.Format, VkDevice.DepthFormat );
+		formats.ViewMask = viewMask;
+
+		//Where the world is drawn straight onto the screen - the portable frame - this is the world's pass, and an eye's is foveated like the full frame's
+		//is. The full frame's world was drawn and foveated already; what is drawn here is the compose and what goes over it, which is looked at whole.
+		RenderingFragmentDensityMapAttachmentInfoEXT foveaDensity;
+		RenderingFragmentShadingRateAttachmentInfoKHR foveaRate;
+
+		//And the world shaded straight onto a window or a view, coarser where its last picture was smooth - see
+		//VkFrame.Adaptive. Only while the pass is the world's: one begun for the panels behind it goes without.
+		if ( view is not null && VkDevice.Tier != RenderTier.Full )
+			VkFovea.Attach( Fovea( frame, p, bothEyes: true ), &rendering, &foveaDensity, &foveaRate );
+		else if ( VkFovea.Adaptive && Current.WorldOnScreen )
+			VkFovea.Attach( Fovea( frame, p, bothEyes: false ), &rendering, &foveaDensity, &foveaRate );
+
+		VkDevice.dialect.BeginRendering( frame.Commands, &rendering, formats );
+
+		Current.MainPass = true;
+		Current.MainBegun = true;
+
+		//Multiview pipelines don't inherit earlier binds, so clear the bind cache as the pass opens
+		if ( viewMask != 0 )
+		{
+			frame.LastPipeline = default;
+			frame.LastTexture = 0;
+			frame.FrameSetBound = false;
+		}
+
+		DrawTrace.Phase( DrawTrace.Kind.MainPass, traced );
+	}
+
+	//Fovea map for this view's world passes, or null; only when the world is drawn at screen size
+	private static VkFovea.Map Fovea( Frame frame, VkSwapchain.Pictures p, bool bothEyes )
+	{
+		if ( VkFovea.Kind == VkFovea.Kinds.None ) return null;
+
+		//Without a headset, the map the last frame's picture laid - see VkFrame.Adaptive.
+		if ( VkFovea.Adaptive && AdaptiveMap( p ) is null ) return null;
+
+		if ( p?.Fovea is null ) return null;
+		if ( p.Extent.Width != p.ScreenExtent.Width || p.Extent.Height != p.ScreenExtent.Height ) return null;
+
+		var layers = VkSwapchain.currentView?.Layers ?? 1u;
+		if ( layers > 1 && !bothEyes ) return null;
+
+		var map = VkFovea.Prepare( frame, p, p.Extent, layers );
+		if ( map is not null ) map.DrawnWith = true;
+
+		return map;
+	}
+
+	//The layers the screen's pass draws at once, a bit each: both of a headset's eyes where the open
+	//view holds two, and nought - the one picture - for everything else. See VkDevice.multiview.
+	private static uint ViewMask
+		=> VkSwapchain.currentView is { Layers: > 1 } layered ? ( 1u << (int)layered.Layers ) - 1 : 0;
+
+	//-- the bind cache -----------------------------------------------------
+
+	//Sets viewport and scissor per draw, but only issues the call when they changed
+	private static void SetViewport( Frame frame )
+	{
+		Viewport viewport = default;
+		Rect2D scissor = default;
+
+		if ( Current.TargetPass && Current.Target == VkDevice.TargetShadow )
+		{
+			//One bake's rectangle of the layer, and nothing outside it: the rest of the layer holds pages that are still right.
+			viewport.X = Current.ShadowArea.Offset.X;
+			viewport.Y = Current.ShadowArea.Offset.Y;
+			viewport.Width = Current.ShadowArea.Extent.Width;
+			viewport.Height = Current.ShadowArea.Extent.Height;
+			scissor = Current.ShadowScissor;
+		}
+		else if ( Current.TargetPass && Current.Target == VkDevice.TargetDepth &&
+			VkSwapchain.DepthGoesToScreen )
+		{
+			//The depth into the screen's own buffer, at the place the world sits in the window - the same viewport
+			//the pass that reads it uses, which is the whole point of writing it there. See Swapchain.DepthOnScreen.
+			viewport.X = Current.WorldX;
+			viewport.Y = Current.WorldY;
+			viewport.Width = Pics.Extent.Width;
+			viewport.Height = Pics.Extent.Height;
+			scissor.Offset = new Offset2D( Current.WorldX, Current.WorldY );
+			scissor.Extent = Pics.Extent;
+		}
+		else if ( Current.TargetPass )
+		{
+			//The whole of the picture being filled, at the size the pass that opened it said: the world's own, the window's, one of the frame's pictures, the sky's
+			//table. Not the world's for every one of them - a smaller picture drawn through the world's viewport is its top-left corner spread over all of it.
+			viewport.Width = Current.TargetExtent.Width;
+			viewport.Height = Current.TargetExtent.Height;
+			scissor.Extent = Current.TargetExtent;
+		}
+		else if ( Current.WorldWanted.Width > 0 && Current.WorldOnScreen )
+		{
+			//The world on part of the screen: the area the window said, where it said. Only while the world is what is being drawn - see WorldOnScreen.
+			//The area, not the world's pictures: below a render scale of one they are smaller, and what is drawn here - the compose - fills the area.
+			var area = VkSwapchain.WorldArea( Current, Pics );
+			viewport.X = Current.WorldX;
+			viewport.Y = Current.WorldY;
+			viewport.Width = area.Width;
+			viewport.Height = area.Height;
+			scissor.Offset = new Offset2D( Current.WorldX, Current.WorldY );
+			scissor.Extent = area;
+		}
+		else
+		{
+			//The screen, which never is.
+			viewport.Width = Pics.ScreenExtent.Width;
+			viewport.Height = Pics.ScreenExtent.Height;
+			scissor.Extent = Pics.ScreenExtent;
+		}
+
+		viewport.MaxDepth = Current.DepthCeiling;
+
+		//The scissor always matches the viewport here, so comparing one is comparing both.
+		if ( frame.ViewportSet &&
+			viewport.X == frame.LastViewport.X && viewport.Y == frame.LastViewport.Y &&
+			viewport.Width == frame.LastViewport.Width && viewport.Height == frame.LastViewport.Height &&
+			viewport.MaxDepth == frame.LastViewport.MaxDepth )
+		{
+			frame.StatSkippedBinds++;
+			return;
+		}
+
+		VkDevice.vk.CmdSetViewport( frame.Commands, 0, 1, &viewport );
+		VkDevice.vk.CmdSetScissor( frame.Commands, 0, 1, &scissor );
+
+		frame.LastViewport = viewport;
+		frame.ViewportSet = true;
+	}
+
+	//Binds a pipeline, unless it is the one already bound - which in a queue sorted by pipeline is most draws.
+	private static void BindPipeline( Frame frame, Pipeline pipeline )
+	{
+		//A pass drawing both eyes at once draws with the same pipeline made again for such a pass - see VkPipelines.Multiview.
+		var mask = Current.MainPass && !Current.TargetPass ? ViewMask : 0;
+
+		if ( mask != 0 ) pipeline = VkPipelines.Multiview( pipeline, mask );
+
+		if ( frame.LastPipeline.Handle == pipeline.Handle )
+		{
+			frame.StatSkippedBinds++;
+			return;
+		}
+
+		VkDevice.vk.CmdBindPipeline( frame.Commands, PipelineBindPoint.Graphics, pipeline );
+		frame.LastPipeline = pipeline;
+	}
+
+	//Binds a texture's set for a draw, unless it is already bound. Every pipeline layout is identical, so a set bound once stays compatible.
+	private static void BindTexture( Frame frame, PipelineLayout layout, ulong texture )
+	{
+		if ( texture == 0 || layout.Handle == 0 ) return;
+
+		if ( frame.LastTexture == texture )
+		{
+			frame.StatSkippedBinds++;
+			return;
+		}
+
+		var set = VkTextures.SetOf( texture );
+		if ( set.Handle == 0 ) return;
+
+		VkDevice.vk.CmdBindDescriptorSets( frame.Commands, PipelineBindPoint.Graphics, layout, 0, 1, &set, 0, null );
+
+		frame.LastTexture = texture;
+	}
+
+	//Binds set 3: every picture at once, for a draw that indexes them. Once per pipeline change rather than once per draw - the
+	//set never changes, only what is written into it, and writes to it are legal while this is bound because the pool said so.
+	private static void BindBindless( Frame frame, PipelineLayout layout )
+	{
+		if ( !VkDevice.bindless || VkDevice.bindlessSet.Handle == 0 ) return;
+
+		var set = VkDevice.bindlessSet;
+
+		VkDevice.vk.CmdBindDescriptorSets( frame.Commands, PipelineBindPoint.Graphics, layout, 3, 1, &set, 0, null );
+	}
+
+	//Binds set 1 for a draw: its bones, its blend shape weights, and the frame's camera
+	//and lights. Skipped when the offsets have not moved - only skinned draws move them.
+	private static void BindFrameSet( Frame frame, PipelineLayout layout, ulong boneOffset, ulong morphOffset = 0 )
+	{
+		if ( frame.FrameSetBound && frame.LastBoneOffset == boneOffset && frame.LastMorphOffset == morphOffset )
+		{
+			frame.StatSkippedBinds++;
+			return;
+		}
+
+		var offsets = stackalloc uint[3];
+		offsets[0] = (uint)boneOffset;
+		offsets[1] = (uint)frame.FrameBlock;
+		offsets[2] = (uint)morphOffset;
+
+		var set = frame.BoneSet;
+
+		VkDevice.vk.CmdBindDescriptorSets( frame.Commands, PipelineBindPoint.Graphics, layout, 1, 1, &set, 3, offsets );
+
+		frame.FrameSetBound = true;
+		frame.LastBoneOffset = boneOffset;
+		frame.LastMorphOffset = morphOffset;
+
+		//World shaders now index the picture table for probe GI, so the set has to be bound on every mesh draw, not only the pulled voxel ones.
+		BindBindless( frame, layout );
+	}
+
+	//The push constants of a draw, clamped to the declared range and to whole words - Vulkan wants multiples of
+	//four, and a caller a byte over the range is a caller with a struct mismatch, not a reason to abort the draw.
+	private static void PushConstants( Frame frame, PipelineLayout layout, ShaderStageFlags stages,
+		void* data, int size )
+	{
+		if ( data is null || size <= 0 || layout.Handle == 0 ) return;
+
+		var take = (uint)size & ~3u;
+		if ( take > VkDevice.PushConstantSize ) take = VkDevice.PushConstantSize;
+
+		if ( take == 0 ) return;
+
+		VkDevice.vk.CmdPushConstants( frame.Commands, layout, stages, 0, take, data );
+	}
+
+	//-- the frame's scratch ------------------------------------------------
+
+	internal static bool EnsureScratch( Frame frame, ulong additional )
+	{
+		//What this frame came to want, so the next one can be given it before it records anything -
+		//see BeginRecording. Kept here because every allocation of scratch comes through this door.
+		var wanted = frame.ScratchUsed + additional;
+		if ( wanted > frame.ScratchPeak ) frame.ScratchPeak = wanted;
+
+		if ( wanted <= frame.ScratchCapacity ) return true;
+
+		var vk = VkDevice.vk;
+		var device = VkDevice.device;
+
+		//Doubles from a 64 KB floor, carrying over this frame's earlier contents
+		var capacity = frame.ScratchCapacity < 65536 ? 65536ul : frame.ScratchCapacity * 2;
+		while ( capacity < wanted ) capacity *= 2;
+
+		var info = new BufferCreateInfo
+		{
+			SType = StructureType.BufferCreateInfo,
+			Size = capacity,
+			Usage = BufferUsageFlags.VertexBufferBit | BufferUsageFlags.StorageBufferBit | BufferUsageFlags.TransferSrcBit,
+			SharingMode = SharingMode.Exclusive,
+		};
+
+		VkBuffer buffer;
+		DeviceMemory memory = default;
+		void* mapped = null;
+
+		if ( vk.CreateBuffer( device, &info, null, &buffer ) != Result.Success ) return false;
+
+		MemoryRequirements requirements;
+		vk.GetBufferMemoryRequirements( device, buffer, &requirements );
+
+		var allocate = new MemoryAllocateInfo
+		{
+			SType = StructureType.MemoryAllocateInfo,
+			AllocationSize = requirements.Size,
+
+			//Prefer host-visible device-local memory: CPU writes once, GPU reads it every draw
+			MemoryTypeIndex = VkDevice.FindMemoryType( requirements.MemoryTypeBits,
+				MemoryPropertyFlags.DeviceLocalBit | MemoryPropertyFlags.HostVisibleBit |
+				MemoryPropertyFlags.HostCoherentBit ),
+		};
+
+		if ( allocate.MemoryTypeIndex != uint.MaxValue &&
+			vk.AllocateMemory( device, &allocate, null, &memory ) != Result.Success )
+		{
+			//The window it lives in is a few hundred megabytes on some cards and is shared with
+			//whatever else wanted it. Falling back to system memory is slower and is still a frame.
+			memory = default;
+			allocate.MemoryTypeIndex = uint.MaxValue;
+		}
+
+		if ( allocate.MemoryTypeIndex == uint.MaxValue )
+		{
+			allocate.MemoryTypeIndex = VkDevice.FindMemoryType( requirements.MemoryTypeBits,
+				MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit );
+		}
+
+		if ( allocate.MemoryTypeIndex == uint.MaxValue ||
+			( memory.Handle == 0 && vk.AllocateMemory( device, &allocate, null, &memory ) != Result.Success ) ||
+			vk.BindBufferMemory( device, buffer, memory, 0 ) != Result.Success ||
+			vk.MapMemory( device, memory, 0, Vk.WholeSize, 0, &mapped ) != Result.Success )
+		{
+			if ( memory.Handle != 0 ) vk.FreeMemory( device, memory, null );
+			vk.DestroyBuffer( device, buffer, null );
+			return false;
+		}
+
+		//Copy from the old write-combined buffer; slow but rare, as frames start at last frame's peak
+		if ( frame.ScratchUsed > 0 && frame.ScratchMapped is not null )
+			System.Buffer.MemoryCopy( frame.ScratchMapped, mapped, capacity, frame.ScratchUsed );
+
+		var used = frame.ScratchUsed;
+
+		//The old buffer retires rather than dying: draws recorded moments ago in this very frame still point at it.
+		if ( frame.Scratch.Handle != 0 )
+		{
+			vk.UnmapMemory( device, frame.ScratchMemory );
+			frame.RetiredScratch.Add( ( frame.Scratch, frame.ScratchMemory ) );
+		}
+
+		frame.Scratch = buffer;
+		frame.ScratchMemory = memory;
+		frame.ScratchMapped = (byte*)mapped;
+		frame.ScratchCapacity = capacity;
+
+		frame.ScratchUsed = used;
+
+		//Point a new set at the grown buffer; the old set may still be held by this recording
+		if ( frame.BoneSet.Handle != 0 )
+		{
+			//A pool with nothing left is not a reason to lose the frame: writing the old set is what this did before and it
+			//draws, whatever validation makes of it. It takes a device out of memory to get here now that the pools grow.
+			if ( VkDevice.AllocateDescriptorSet( VkDevice.boneSetLayout, out var replacement ) )
+			{
+				VkDevice.RetireDescriptorSet( frame.BoneSet );
+
+				frame.BoneSet = replacement;
+				frame.FrameSetBound = false;
+			}
+
+			WriteFrameSet( frame );
+		}
+
+		return true;
+	}
+
+	//Writes a pose into scratch (fixed window, identity-padded) and returns its offset
+	private static bool PutBones( Frame frame, float* bones, int boneCount, out ulong where )
+	{
+		where = 0;
+
+		var alignment = (ulong)VkDevice.storageAlignment;
+		var aligned = ( frame.ScratchUsed + alignment - 1 ) / alignment * alignment;
+		var padding = aligned - frame.ScratchUsed;
+
+		if ( !EnsureScratch( frame, padding + VkDevice.BoneBlockSize ) ) return false;
+
+		var used = (ulong)boneCount * 64;
+
+		var into = frame.ScratchMapped + aligned;
+
+		System.Buffer.MemoryCopy( bones, into, VkDevice.BoneBlockSize, used );
+		System.Runtime.InteropServices.NativeMemory.Clear( into + used, (nuint)( VkDevice.BoneBlockSize - used ) );
+
+		for ( var i = (uint)boneCount; i < VkDevice.MaxBones; ++i )
+		{
+			var m = (float*)( into + ( (ulong)i * 64 ) );
+
+			m[0] = 1.0f;
+			m[5] = 1.0f;
+			m[10] = 1.0f;
+			m[15] = 1.0f;
+		}
+
+		frame.ScratchUsed = aligned + VkDevice.BoneBlockSize;
+		where = aligned;
+
+		return true;
+	}
+
+	//Writes blend shape weights into scratch as a zero-padded fixed block and returns its offset
+	private static bool PutMorphWeights( Frame frame, float* weights, int count, out ulong where )
+	{
+		where = 0;
+
+		var alignment = (ulong)VkDevice.storageAlignment;
+		var aligned = ( frame.ScratchUsed + alignment - 1 ) / alignment * alignment;
+		var padding = aligned - frame.ScratchUsed;
+
+		if ( !EnsureScratch( frame, padding + VkDevice.MorphBlockSize ) ) return false;
+
+		var used = (ulong)count * 4;
+
+		var into = frame.ScratchMapped + aligned;
+
+		System.Buffer.MemoryCopy( weights, into, VkDevice.MorphBlockSize, used );
+		System.Runtime.InteropServices.NativeMemory.Clear( into + used, (nuint)( VkDevice.MorphBlockSize - used ) );
+
+		frame.ScratchUsed = aligned + VkDevice.MorphBlockSize;
+		where = aligned;
+
+		return true;
+	}
+
+	private static void DestroyRetiredScratch( Frame frame )
+	{
+		for ( var i = 0; i < frame.RetiredScratch.Count; ++i )
+		{
+			VkDevice.vk.DestroyBuffer( VkDevice.device, frame.RetiredScratch[i].Buffer, null );
+			VkDevice.vk.FreeMemory( VkDevice.device, frame.RetiredScratch[i].Memory, null );
+		}
+
+		frame.RetiredScratch.Clear();
+	}
+
+	private static void DestroyScratch( Frame frame )
+	{
+		DestroyRetiredScratch( frame );
+
+		if ( frame.ScratchMemory.Handle != 0 ) VkDevice.vk.UnmapMemory( VkDevice.device, frame.ScratchMemory );
+		if ( frame.Scratch.Handle != 0 ) VkDevice.vk.DestroyBuffer( VkDevice.device, frame.Scratch, null );
+		if ( frame.ScratchMemory.Handle != 0 ) VkDevice.vk.FreeMemory( VkDevice.device, frame.ScratchMemory, null );
+
+		frame.Scratch = default;
+		frame.ScratchMemory = default;
+		frame.ScratchMapped = null;
+		frame.ScratchCapacity = 0;
+		frame.ScratchUsed = 0;
+	}
+
+	//-- making and unmaking a frame ----------------------------------------
+
+	internal static void UnmakeFrame( Frame frame )
+	{
+		var vk = VkDevice.vk;
+		var device = VkDevice.device;
+
+		//Wait for in-flight work first: what follows is destroyed outright, not retired
+		if ( frame.Submitted && frame.Finished.Handle != 0 && !VkDevice.Lost )
+		{
+			var pending = frame.Finished;
+
+			if ( vk.WaitForFences( device, 1, &pending, true, ulong.MaxValue ) == Result.Success )
+				VkDevice.TicketDone( frame.Ticket );
+			else
+				VkDevice.MarkLostIf( Result.ErrorDeviceLost );
+		}
+
+		frame.Submitted = false;
+
+		DestroyScratch( frame );
+
+		if ( frame.Queries.Handle != 0 ) vk.DestroyQueryPool( device, frame.Queries, null );
+		if ( frame.Stats.Handle != 0 ) vk.DestroyQueryPool( device, frame.Stats, null );
+
+		if ( frame.BoneSet.Handle != 0 ) VkDevice.FreeDescriptorSet( frame.BoneSet );
+
+		foreach ( var pair in frame.Readbacks )
+		{
+			if ( pair.Value.Mapped is not null ) vk.UnmapMemory( device, pair.Value.Memory );
+			if ( pair.Value.Staging.Handle != 0 ) vk.DestroyBuffer( device, pair.Value.Staging, null );
+			if ( pair.Value.Memory.Handle != 0 ) vk.FreeMemory( device, pair.Value.Memory, null );
+		}
+
+		frame.Readbacks.Clear();
+
+		if ( frame.Finished.Handle != 0 ) vk.DestroyFence( device, frame.Finished, null );
+		if ( frame.ImageAvailable.Handle != 0 ) vk.DestroySemaphore( device, frame.ImageAvailable, null );
+
+		//The pool owns the command buffer; freeing it separately is allowed but pointless.
+		if ( frame.Pool.Handle != 0 ) vk.DestroyCommandPool( device, frame.Pool, null );
+
+		Forget( frame );
+	}
+
+	private static void Forget( Frame frame )
+	{
+		frame.Pool = default;
+		frame.Commands = default;
+		frame.ImageAvailable = default;
+		frame.Finished = default;
+		frame.Submitted = false;
+		frame.FrameSetStale = false;
+		frame.BoneSet = default;
+		frame.FrameBlock = 0;
+		frame.NullBones = 0;
+		frame.Ticket = 0;
+		frame.Queries = default;
+		frame.QueryNext = 0;
+		frame.ZoneCount = 0;
+		frame.ZoneDepth = 0;
+		frame.DroppedOpen = 0;
+		frame.ZonesDropped = 0;
+		frame.CpuBegin = 0;
+		frame.CpuEnd = 0;
+		frame.ProfilePending = false;
+		frame.StatDraws = 0;
+		frame.StatDynamic = 0;
+		frame.StatSkinned = 0;
+		frame.StatInstances = 0;
+		frame.StatTriangles = 0;
+		frame.StatSkippedBinds = 0;
+		frame.StatDispatches = 0;
+		frame.StatIndirect = 0;
+		frame.LastPipeline = default;
+		frame.LastTexture = 0;
+		frame.LastBoneOffset = 0;
+		frame.LastMorphOffset = 0;
+		frame.FrameSetBound = false;
+		frame.LastViewport = default;
+		frame.ViewportSet = false;
+		frame.LastVertexBuffer = default;
+		frame.LastSkinBuffer = default;
+		frame.LastIndexBuffer = default;
+		frame.ScratchPeak = 0;
+	}
+
+	internal static void DestroyFrames( VkSwapchain.Swapchain one )
+	{
+		for ( var i = 0; i < one.Frames.Length; ++i ) UnmakeFrame( one.Frames[i] );
+	}
+
+	//One frame: a command buffer to record into, a fence to know when it is finished with, and the descriptor set every draw binds.
+	//The semaphore is only for a frame that waits on a swapchain image. A view's frame has no image to wait for, so it has none.
+	internal static bool MakeFrame( Frame frame, bool presents, ulong which )
+	{
+		var vk = VkDevice.vk;
+		var device = VkDevice.device;
+
+		var poolInfo = new CommandPoolCreateInfo
+		{
+			SType = StructureType.CommandPoolCreateInfo,
+
+			//One pool per frame, reset whole rather than per buffer: resetting a pool hands its memory back in
+			//one go, which is both faster and the only way to avoid the pool growing for the life of the process.
+			Flags = CommandPoolCreateFlags.TransientBit,
+			QueueFamilyIndex = VkDevice.graphicsFamily,
+		};
+
+		CommandPool pool;
+		if ( vk.CreateCommandPool( device, &poolInfo, null, &pool ) != Result.Success ) return false;
+
+		frame.Pool = pool;
+
+		var allocateInfo = new CommandBufferAllocateInfo
+		{
+			SType = StructureType.CommandBufferAllocateInfo,
+			CommandPool = pool,
+			Level = CommandBufferLevel.Primary,
+			CommandBufferCount = 1,
+		};
+
+		CommandBuffer commands;
+		if ( vk.AllocateCommandBuffers( device, &allocateInfo, &commands ) != Result.Success ) return false;
+
+		frame.Commands = commands;
+
+		if ( presents )
+		{
+			var semaphoreInfo = new SemaphoreCreateInfo { SType = StructureType.SemaphoreCreateInfo };
+
+			VkSemaphore semaphore;
+			if ( vk.CreateSemaphore( device, &semaphoreInfo, null, &semaphore ) != Result.Success ) return false;
+
+			frame.ImageAvailable = semaphore;
+		}
+
+		var fenceInfo = new FenceCreateInfo { SType = StructureType.FenceCreateInfo };
+
+		//Unsignalled is fine: the submitted flag says whether there is anything to wait for, so the first frame simply does not wait.
+		Fence fence;
+		if ( vk.CreateFence( device, &fenceInfo, null, &fence ) != Result.Success ) return false;
+
+		frame.Finished = fence;
+
+		//Numbered by where they sit in the ring: two frames are in flight, and a message about one of them is only readable if it says which.
+		VkDevice.NameHandle( ObjectType.CommandBuffer, (ulong)commands.Handle, "frame commands", which );
+		VkDevice.NameHandle( ObjectType.CommandPool, pool.Handle, "frame command pool", which );
+		VkDevice.NameHandle( ObjectType.Fence, fence.Handle, "frame finished", which );
+		VkDevice.NameHandle( ObjectType.Semaphore, frame.ImageAvailable.Handle, "image available", which );
+
+		//The profiler's timestamps, when the queue can write them at all. A frame without a
+		//pool still counts draws and CPU time - the profile just has no GPU numbers in it.
+		if ( VkDevice.timestampPeriod > 0.0f )
+		{
+			var queryInfo = new QueryPoolCreateInfo
+			{
+				SType = StructureType.QueryPoolCreateInfo,
+				QueryType = QueryType.Timestamp,
+				QueryCount = 2 + ( VkDevice.ProfileMaxZones * 2u ),
+			};
+
+			//A frame that cannot be timed is still a frame.
+			QueryPool queries;
+
+			if ( vk.CreateQueryPool( device, &queryInfo, null, &queries ) == Result.Success )
+				frame.Queries = queries;
+		}
+
+		//And the one statistics query, where the device has the feature and somebody asked for a zone by name.
+		//Five counters: what the assembler was handed, what the clipper kept, and the two stages' invocations.
+		if ( VkDevice.StatsZone is not null && VkDevice.statsQueries )
+		{
+			var statsInfo = new QueryPoolCreateInfo
+			{
+				SType = StructureType.QueryPoolCreateInfo,
+				QueryType = QueryType.PipelineStatistics,
+				QueryCount = 1,
+				PipelineStatistics =
+					QueryPipelineStatisticFlags.InputAssemblyPrimitivesBit |
+					QueryPipelineStatisticFlags.VertexShaderInvocationsBit |
+					QueryPipelineStatisticFlags.ClippingPrimitivesBit |
+					QueryPipelineStatisticFlags.FragmentShaderInvocationsBit |
+					QueryPipelineStatisticFlags.ComputeShaderInvocationsBit,
+			};
+
+			QueryPool stats;
+
+			if ( vk.CreateQueryPool( device, &statsInfo, null, &stats ) == Result.Success )
+				frame.Stats = stats;
+		}
+
+		if ( !VkDevice.AllocateDescriptorSet( VkDevice.boneSetLayout, out var boneSet ) ) return false;
+
+		frame.BoneSet = boneSet;
+
+		VkDevice.NameHandle( ObjectType.DescriptorSet, boneSet.Handle, "frame set", which );
+		VkDevice.NameHandle( ObjectType.QueryPool, frame.Queries.Handle, "frame timestamps", which );
+
+		return true;
+	}
+
+	internal static bool CreateFrames( VkSwapchain.Swapchain one )
+	{
+		for ( var i = 0; i < one.Frames.Length; ++i )
+		{
+			if ( !MakeFrame( one.Frames[i], true, (ulong)i ) ) return false;
+		}
+
+		return true;
+	}
+
+	//Consumes an acquired image's semaphore with an empty submit when the frame won't submit
+	internal static void DrainAcquiredImage( Frame frame )
+	{
+		if ( frame.ImageAvailable.Handle == 0 ) return;
+
+		//A lost device signals nothing and waits for nothing.
+		if ( VkDevice.Lost ) return;
+
+		//The fence has to be clear to be submitted with, and it is not while the frame's own last outing is still counted as pending.
+		if ( frame.Submitted ) return;
+
+		var wait = new SemaphoreSubmitInfo
+		{
+			SType = StructureType.SemaphoreSubmitInfo,
+			Semaphore = frame.ImageAvailable,
+			StageMask = PipelineStageFlags2.AllCommandsBit,
+		};
+
+		var submit = new SubmitInfo2
+		{
+			SType = StructureType.SubmitInfo2,
+			WaitSemaphoreInfoCount = 1,
+			PWaitSemaphoreInfos = &wait,
+		};
+
+		if ( VkDevice.dialect.Submit( VkDevice.graphicsQueue, &submit, frame.Finished ) != Result.Success ) return;
+
+		var fence = frame.Finished;
+		VkDevice.vk.WaitForFences( VkDevice.device, 1, &fence, true, ulong.MaxValue );
+		VkDevice.vk.ResetFences( VkDevice.device, 1, &fence );
+	}
+
+	//Reads back what the frame's last outing measured, into a viewport's profile. Only after its
+	//fence has passed: the fence is what makes the query results available without waiting for them.
+	internal static void ResolveProfile( Frame frame, Profile into )
+	{
+		if ( !frame.ProfilePending ) return;
+
+		frame.ProfilePending = false;
+
+		into.Valid = true;
+		into.GpuMs = 0.0f;
+		into.CpuMs = (float)( ( frame.CpuEnd - frame.CpuBegin ) / 1.0e6 );
+		into.Draws = frame.StatDraws;
+		into.DynamicDraws = frame.StatDynamic;
+		into.SkinnedDraws = frame.StatSkinned;
+		into.Instances = frame.StatInstances;
+		into.Triangles = frame.StatTriangles;
+		into.ScratchUsed = frame.ScratchUsed;
+		into.SkippedBinds = frame.StatSkippedBinds;
+		into.Dispatches = frame.StatDispatches;
+		into.Indirect = frame.StatIndirect;
+		into.ZonesDropped = frame.ZonesDropped;
+		into.ZoneCount = 0;
+
+		var ticks = stackalloc ulong[2 + ( VkDevice.ProfileMaxZones * 2 )];
+
+		var timed = frame.Queries.Handle != 0 && frame.QueryNext >= 2 &&
+			VkDevice.vk.GetQueryPoolResults( VkDevice.device, frame.Queries, 0, frame.QueryNext,
+				(nuint)( sizeof( ulong ) * frame.QueryNext ), ticks, sizeof( ulong ),
+				QueryResultFlags.Result64Bit ) == Result.Success;
+
+		var toMs = VkDevice.timestampPeriod / 1.0e6;
+
+		if ( timed )
+		{
+			into.GpuMs = (float)( ( ticks[1] - ticks[0] ) * toMs );
+			CountCardIdle( ticks[0], ticks[1], toMs );
+		}
+
+		//And what the named zone cost in work, where one was asked for. Said in the log rather than in the report, every hundred and
+		//twentieth frame: it is a diagnostic somebody turns on to answer one question, not a number the report carries for everybody.
+		if ( frame.Stats.Handle != 0 && frame.StatsTaken )
+		{
+			var counts = stackalloc ulong[5];
+
+			if ( VkDevice.vk.GetQueryPoolResults( VkDevice.device, frame.Stats, 0, 1,
+				(nuint)( sizeof( ulong ) * 5 ), counts, sizeof( ulong ) * 5,
+				QueryResultFlags.Result64Bit ) == Result.Success && ( ++VkDevice.statsFrame % 120 ) == 5 )
+			{
+				Log.Info( $"zone stats '{VkDevice.StatsZone}': {counts[0]:N0} primitives in, {counts[2]:N0} kept by the clipper, " +
+					$"{counts[1]:N0} vertex stages, {counts[3]:N0} fragment stages, {counts[4]:N0} compute stages" );
+			}
+		}
+
+		for ( var at = 0u; at < frame.ZoneCount; ++at )
+		{
+			ref var zone = ref frame.Zones[at];
+			ref var outZone = ref into.Zones[into.ZoneCount++];
+
+			for ( var i = 0; i < VkDevice.ProfileNameSize; ++i ) outZone.Name[i] = zone.Name[i];
+
+			outZone.Depth = zone.Depth;
+			outZone.CpuMs = (float)( ( zone.CpuEnd - zone.CpuBegin ) / 1.0e6 );
+			outZone.GpuMs = timed ? (float)( ( ticks[zone.End] - ticks[zone.Begin] ) * toMs ) : 0.0f;
+		}
+
+		frame.ZoneCount = 0;
+	}
+
+	//Total GPU idle time between our recordings since CardIdleReset, to tell GPU-bound from not
+	internal static double CardIdleMs { get; private set; }
+
+	internal static long CardIdleRecordings { get; private set; }
+
+	private static ulong lastCardEnd;
+
+	internal static void CardIdleReset()
+	{
+		CardIdleMs = 0;
+		CardIdleRecordings = 0;
+	}
+
+	private static void CountCardIdle( ulong begin, ulong end, double toMs )
+	{
+		if ( lastCardEnd != 0 && begin > lastCardEnd )
+		{
+			var gap = ( begin - lastCardEnd ) * toMs;
+
+			//A gap of a whole second is a window nobody drew into, not a frame.
+			if ( gap < 1000.0 ) CardIdleMs += gap;
+		}
+
+		if ( end > lastCardEnd ) lastCardEnd = end;
+		CardIdleRecordings++;
+	}
+
+	//Labels the command buffer with the zone name for RGP/RenderDoc; no-op without debug utils
+	private static void PushLabel( Frame frame, byte* name )
+	{
+		if ( VkDevice.extDebugUtils is null ) return;
+		if ( frame.Commands.Handle == 0 || name is null ) return;
+
+		var label = new DebugUtilsLabelEXT
+		{
+			SType = StructureType.DebugUtilsLabelExt,
+			PLabelName = name,
+		};
+
+		VkDevice.extDebugUtils.CmdBeginDebugUtilsLabel( frame.Commands, &label );
+	}
+
+	//The matching end. Every path that opened a label has to reach exactly one of these, or a capture is
+	//left holding an unbalanced stack - which reads as the whole rest of the frame nested inside one pass.
+	private static void PopLabel( Frame frame )
+	{
+		if ( VkDevice.extDebugUtils is null ) return;
+		if ( frame.Commands.Handle == 0 ) return;
+
+		VkDevice.extDebugUtils.CmdEndDebugUtilsLabel( frame.Commands );
+	}
+
+	//Ends every zone still open - a caller that forgot an end, or a frame cut short - so
+	//every reserved query slot is written and the readback finds only available results.
+	internal static void CloseOpenZones( Frame frame )
+	{
+		var now = VkSwapchain.NowNs();
+
+		while ( frame.ZoneDepth > 0 )
+		{
+			ref var zone = ref frame.Zones[frame.ZoneOpen[--frame.ZoneDepth]];
+
+			zone.CpuEnd = now;
+
+			if ( frame.Queries.Handle != 0 )
+			{
+				VkDevice.dialect.Timestamp( frame.Commands, PipelineStageFlags2.AllCommandsBit,
+					frame.Queries, zone.End );
+			}
+
+			//A counted zone closed by the frame ending rather than by its own end: the query has to be ended
+			//all the same, or the pool is left with a query open and the next frame's reset is refused.
+			if ( frame.StatsRunning && frame.StatsDepth == frame.ZoneDepth )
+			{
+				VkDevice.vk.CmdEndQuery( frame.Commands, frame.Stats, 0 );
+				frame.StatsRunning = false;
+			}
+
+			PopLabel( frame );
+		}
+
+		frame.DroppedOpen = 0;
+	}
+
+	//Everything a frame does before anything is recorded into it: waits for its last outing to finish, hands its pool's memory back in one
+	//go, and reserves the two blocks every draw expects to find - a block of zeroed bones for draws that have none, and the camera and lights.
+	internal static bool BeginRecording( Frame frame )
+	{
+		var vk = VkDevice.vk;
+		var device = VkDevice.device;
+
+		if ( frame.Submitted )
+		{
+			//Checked, because a wait that returns because the device is gone returns just as fast as one that returns because the GPU
+			//finished. Carrying on would reset a command pool the GPU may still be reading and record over a buffer that is still in use.
+			var fence = frame.Finished;
+			var waited = vk.WaitForFences( device, 1, &fence, true, ulong.MaxValue );
+
+			if ( waited != Result.Success )
+			{
+				VkDevice.MarkLostIf( waited );
+				return false;
+			}
+
+			vk.ResetFences( device, 1, &fence );
+			frame.Submitted = false;
+
+			VkDevice.TicketDone( frame.Ticket );
+		}
+
+		//Clear the transient set cache after the fence, before recording; views begin here, not BeginFrame
+		frame.ObjectSetCount = 0;
+
+		vk.ResetCommandPool( device, frame.Pool, 0 );
+		frame.ScratchUsed = 0;
+		DestroyRetiredScratch( frame );
+
+		//Where a recording begins is where "a frame" is counted from, under -drawtrace - see DrawTrace.
+		DrawTrace.Frame();
+
+		//Pre-size scratch to last frame's peak so mid-frame growth is rare
+		if ( frame.ScratchPeak > 0 ) EnsureScratch( frame, frame.ScratchPeak );
+
+		//Its fence has been waited by now, so nothing is reading the set.
+		if ( frame.FrameSetStale && frame.BoneSet.Handle != 0 && frame.Scratch.Handle != 0 )
+		{
+			WriteFrameSet( frame );
+			frame.FrameSetStale = false;
+		}
+
+		var alignment = (ulong)VkDevice.storageAlignment;
+		var frameStart = ( VkDevice.BoneBlockSize + alignment - 1 ) / alignment * alignment;
+
+		//Nothing has been recorded yet - the command buffer has not even begun - so a failure here needs nothing unwound.
+		if ( !EnsureScratch( frame, frameStart + VkDevice.FrameBlockReach ) ) return false;
+
+		frame.NullBones = 0;
+		frame.FrameBlock = frameStart;
+		frame.ScratchUsed = frameStart + VkDevice.FrameBlockReach;
+
+		//Zeroed, so a frame nobody described draws black rather than from whatever the last one left.
+		System.Runtime.InteropServices.NativeMemory.Clear( frame.ScratchMapped, (nuint)frame.ScratchUsed );
+
+		//From here on, what is retired may be named by this recording - the graveyard holds it until this recording's own fence.
+		VkDevice.RecordingBegan();
+
+		var begin = new CommandBufferBeginInfo
+		{
+			SType = StructureType.CommandBufferBeginInfo,
+			Flags = CommandBufferUsageFlags.OneTimeSubmitBit,
+		};
+
+		vk.BeginCommandBuffer( frame.Commands, &begin );
+
+		//A clean slate for the profiler and for the bind cache: dynamic state and bindings belong to the command buffer, which has just been reset.
+		Current.WorldOnScreen = false;
+		frame.ZoneCount = 0;
+		frame.ZoneDepth = 0;
+		frame.DroppedOpen = 0;
+		frame.ZonesDropped = 0;
+		frame.StatDraws = 0;
+		frame.StatInstances = 0;
+		frame.StatDynamic = 0;
+		frame.StatSkinned = 0;
+		frame.StatTriangles = 0;
+		frame.StatSkippedBinds = 0;
+		frame.StatDispatches = 0;
+		frame.StatIndirect = 0;
+		frame.LastPipeline = default;
+		frame.LastTexture = 0;
+		frame.FrameSetBound = false;
+		frame.ViewportSet = false;
+		frame.LastVertexBuffer = default;
+		frame.LastSkinBuffer = default;
+		frame.LastIndexBuffer = default;
+		frame.CpuBegin = VkSwapchain.NowNs();
+		frame.QueryNext = 0;
+
+		if ( frame.Queries.Handle != 0 )
+		{
+			vk.CmdResetQueryPool( frame.Commands, frame.Queries, 0, 2 + ( VkDevice.ProfileMaxZones * 2u ) );
+			VkDevice.dialect.Timestamp( frame.Commands, PipelineStageFlags2.TopOfPipeBit, frame.Queries, 0 );
+			frame.QueryNext = 2;
+		}
+
+		frame.StatsTaken = false;
+		frame.StatsRunning = false;
+
+		if ( frame.Stats.Handle != 0 ) vk.CmdResetQueryPool( frame.Commands, frame.Stats, 0, 1 );
+
+		return true;
+	}
+
+	//Closes whatever pass is open, for a command that may not be recorded inside one. The next draw reopens the main pass by itself.
+	private static void CloseOpenPasses( Frame frame )
+	{
+		if ( Current.TargetPass )
+		{
+			VkDevice.dialect.EndRendering( frame.Commands );
+			Current.TargetPass = false;
+		}
+
+		if ( Current.MainPass )
+		{
+			VkDevice.dialect.EndRendering( frame.Commands );
+			Current.MainPass = false;
+		}
+
+		//The pipeline that was bound belonged to a pass that has just closed, and the next draw has to say its own again.
+		frame.LastPipeline = default;
+		frame.FrameSetBound = false;
+	}
+}

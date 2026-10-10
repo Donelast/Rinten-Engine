@@ -1,0 +1,112 @@
+﻿//The error list: three switches over a list of what the open graphs are complaining about.
+
+.error-list
+{
+	flex-direction: column;
+	flex-grow: 1;
+	background-color: $panel-background;
+
+	> .toolbar
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		padding: 5px;
+		gap: 8px;
+
+		> .spacer { flex-grow: 1; }
+
+		> .clear
+		{
+			pointer-events: all;
+			font-size: 18px;
+			color: $text-light;
+			cursor: pointer;
+
+			&:hover { color: $text; }
+		}
+	}
+
+	> .list
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		overflow-y: scroll;
+	}
+}
+
+.level-toggle
+{
+	flex-direction: row;
+	pointer-events: all;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	border: 2px solid transparent;
+	border-radius: 2px;
+	background-color: rgba( 141, 181, 62, 0.1 );
+	cursor: pointer;
+
+	> .icon { font-size: 16px; }
+
+	> .text
+	{
+		color: $text;
+		font-size: $control-text-size;
+		opacity: 0.4;
+		white-space: nowrap;
+	}
+
+	&.on
+	{
+		border-color: rgba( 141, 181, 62, 0.4 );
+
+		> .text { opacity: 1; }
+	}
+
+	&:hover { background-color: rgba( 141, 181, 62, 0.2 ); }
+}
+
+.error-row
+{
+	flex-direction: row;
+	pointer-events: all;
+	align-items: center;
+	flex-shrink: 0;
+	height: 48px;
+	padding: 8px 12px;
+	gap: 12px;
+	cursor: pointer;
+
+	> .mark { font-size: 24px; }
+
+	> .words
+	{
+		flex-direction: column;
+		justify-content: center;
+		flex-grow: 1;
+		min-width: 0px;
+
+		> .message
+		{
+			color: $text;
+			opacity: 0.8;
+			@include one-line;
+		}
+
+		> .context
+		{
+			color: $text;
+			opacity: 0.4;
+			font-size: 11px;
+			@include one-line;
+		}
+	}
+
+	&:hover
+	{
+		> .mark { opacity: 1; }
+		> .words > .message { opacity: 1; }
+		> .words > .context { opacity: 0.5; }
+	}
+}

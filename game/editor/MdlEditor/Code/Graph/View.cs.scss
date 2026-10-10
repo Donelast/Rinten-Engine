@@ -1,0 +1,50 @@
+//What an anim graph adds to the node graph: a grip for reordering an input, the badge on a selector, and a layer's live weight.
+
+.plug.reorderable
+{
+	> .reorder-grip
+	{
+		flex-shrink: 0;
+		pointer-events: all;
+		cursor: ns-resize;
+		margin-left: 4px;
+		font-size: $type-default;
+		color: $text-control;
+		opacity: 0.55;
+
+		&:hover { opacity: 1; }
+	}
+}
+
+.plug.reorder-target
+{
+	background-color: rgba( 255, 153, 200, 0.2 );
+	border-radius: 2px;
+}
+
+.entry-hint
+{
+	position: absolute;
+	right: 5px;
+	top: 5px;
+	width: 15px;
+	height: 15px;
+	justify-content: center;
+	align-items: center;
+	border-radius: 8px;
+	background-color: rgba( 42, 42, 42, 0.8 );
+	color: $red;
+	font-size: $type-micro;
+}
+
+.layer-weight
+{
+	align-self: stretch;
+	margin: 4px 8px;
+	padding: 2px 0px;
+	background-color: $widget-background;
+	border-radius: 4px;
+	color: $text;
+	font-size: $type-body;
+	text-align: center;
+}

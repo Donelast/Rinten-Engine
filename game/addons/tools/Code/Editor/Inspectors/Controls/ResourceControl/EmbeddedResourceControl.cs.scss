@@ -1,0 +1,77 @@
+﻿EmbeddedResourceControl.control.no-background
+{
+	flex-grow: 1;
+	min-width: 0;
+	cursor: pointer;
+
+	> .field
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-grow: 1;
+		min-width: 0;
+		min-height: $control-row-height;
+		padding: $control-text-padding;
+		padding-right: 28px;
+		background-color: $control-background;
+		border: $control-border;
+		border-radius: $control-radius;
+
+		> .value
+		{
+			flex-grow: 1;
+			min-width: 0;
+			color: $text-control;
+			font-size: $control-text-size;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+
+			&.multiple { color: $multiple-values; }
+		}
+
+	}
+
+	&:hover > .field > .value
+	{
+		color: $text;
+	}
+
+	&.open > .field
+	{
+		border-color: $primary;
+	}
+
+	&.readonly
+	{
+		cursor: default;
+	}
+}
+
+EmbeddedResourcePopup.popup-panel
+{
+	flex-direction: column;
+	padding: 4px;
+	background-color: $popup-background;
+	border: $popup-border;
+	border-radius: $control-radius;
+	max-height: 520px;
+	overflow: hidden;
+
+	//What you can do to the resource, above the properties it has.
+	> .toolbar
+	{
+		flex-direction: row;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 2px;
+		padding-bottom: 4px;
+		margin-bottom: 4px;
+		border-bottom: $control-border;
+	}
+
+	> .controlsheet
+	{
+		overflow: scroll;
+	}
+}

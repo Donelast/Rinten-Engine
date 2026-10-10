@@ -1,0 +1,18 @@
+SettingsTreePanel
+{
+	flex-direction: column;
+	flex-grow: 1;
+	min-width: 0;
+	min-height: 0;
+	background-color: $control-background;
+	border-radius: $control-radius;
+	pointer-events: all;
+
+	> .body
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-height: 0;
+		overflow: scroll;
+	}
+}

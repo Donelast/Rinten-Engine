@@ -1,0 +1,108 @@
+@using System
+@using Rinten.UI
+@namespace Editor.Inspectors
+@inherits Popup
+
+@* The colour picker in a popup: over the swatch that opened it, over any panel
+   for a colour held by whoever asked rather than by a property, or under the
+   cursor for a widget - a tool, a shortcut - that has no panel to hang it off. *@
+
+<root>
+	<ColorPickerControl class="picker" Property="@_property" OnEditingStarted="@Started" OnEditingFinished="@Finished" />
+</root>
+
+@code
+{
+	SerializedProperty _property;
+	Action _started;
+	Action _finished;
+
+	//Between a drag's start and its finish, so the two always come in pairs.
+	bool _dragging;
+
+	//Whether the colour has moved since whoever asked was last told the choosing was over.
+	bool _edited;
+
+	//Over anchor, editing property as it goes.
+	public static ColorPickerPopup Open( Panel anchor, SerializedProperty property )
+	{
+		if ( anchor is null || property is null ) return null;
+
+		var popup = new ColorPickerPopup();
+		popup._property = property;
+		popup.SetPositioning( anchor, PositionMode.BelowLeft, 2 );
+		popup.CloseWhenParentIsHidden = true;
+		popup.AddClass( "color-picker-popup" );
+		return popup;
+	}
+
+	//Over anchor, for a colour that is nobody's property: changed hears every colour on the way, and finished once the choosing is over.
+	public static ColorPickerPopup Open( Panel anchor, Color color, Action<Color> changed,
+		bool hasAlpha = true, bool hdr = true, Action finished = null, Action started = null )
+	{
+		if ( anchor is null ) return null;
+
+		var popup = new ColorPickerPopup();
+		popup.Hold( color, changed, hasAlpha, hdr, finished, started );
+		popup.SetPositioning( anchor, PositionMode.BelowLeft, 2 );
+		popup.CloseWhenParentIsHidden = true;
+		popup.AddClass( "color-picker-popup" );
+		return popup;
+	}
+
+	//Under the cursor, in the window owner is in. For a widget, which has no panel of its
+	//own to open a popup from - it goes on the window's overlay, the layer menus open on.
+	public static ColorPickerPopup OpenFor( Widget owner, Color color, Action<Color> changed,
+		bool hasAlpha = true, bool hdr = true, Action finished = null, Action started = null )
+	{
+		var layer = EditorOverlay.For( owner );
+		if ( layer is null ) return null;
+
+		var popup = new ColorPickerPopup();
+		popup.Hold( color, changed, hasAlpha, hdr, finished, started );
+		popup.SetPositioning( layer, PositionMode.UnderMouse, 0 );
+		popup.AddClass( "color-picker-popup" );
+		return popup;
+	}
+
+	//The colour, held here, as the property the picker edits.
+	void Hold( Color color, Action<Color> changed, bool hasAlpha, bool hdr, Action finished, Action started )
+	{
+		var held = color;
+
+		_started = started;
+		_finished = finished;
+		_property = TypeLibrary.CreateProperty<Color>( "Color",
+			() => held,
+			value =>
+			{
+				held = value;
+				_edited = true;
+				changed?.Invoke( value );
+			},
+			new Attribute[] { new ColorUsageAttribute( hasAlpha, hdr ) } );
+	}
+
+	void Started()
+	{
+		_dragging = true;
+		_started?.Invoke();
+	}
+
+	//After a drag, whether or not it changed anything - a start is always paired with a finish - and otherwise only once the colour has moved.
+	void Finished()
+	{
+		if ( !_dragging && !_edited ) return;
+
+		_dragging = false;
+		_edited = false;
+		_finished?.Invoke();
+	}
+
+	//Closed on an edit nobody was told had finished - a code typed into the line, say.
+	public override void OnDeleted()
+	{
+		base.OnDeleted();
+		Finished();
+	}
+}

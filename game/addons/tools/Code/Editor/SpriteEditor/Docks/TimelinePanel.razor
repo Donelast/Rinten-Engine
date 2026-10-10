@@ -1,0 +1,166 @@
+@namespace Editor.SpriteEditor
+@using System
+@using System.Collections.Generic
+@using Rinten.UI
+@using Editor.Inspectors
+@attribute [StyleSheet( "TimelinePanel.razor.scss" )]
+@inherits EditorPanel
+
+@* The transport - which frame, first, previous, play, next, last, and how big the
+   frames are drawn - and the strip of frames under it. An EditorPanel so the keys
+   that duplicate and delete frames can be declared on it: they fire only while the
+   keyboard is here. *@
+
+<root class="timeline">
+	<div class="toolbar">
+		<label class="caption">Frame:</label>
+		<TextField @ref="_frameField" class="frame-field" tooltip="The frame the preview is on" />
+
+		<div class="stretch"></div>
+
+		<ToolbarButton Icon="first_page" ToolTip="First Frame" OnPressed="@( () => Playback.GotoFirst() )" />
+		<ToolbarButton Icon="navigate_before" ToolTip="Previous Frame" OnPressed="@( () => Playback.GotoPrevious() )" />
+		<ToolbarButton Icon="@( Playing ? "pause" : "play_arrow" )" ToolTip="@( Playing ? "Pause" : "Play" )" OnPressed="@( () => Playback.TogglePlayPause() )" />
+		<ToolbarButton Icon="navigate_next" ToolTip="Next Frame" OnPressed="@( () => Playback.GotoNext() )" />
+		<ToolbarButton Icon="last_page" ToolTip="Last Frame" OnPressed="@( () => Playback.GotoLast() )" />
+
+		<div class="stretch"></div>
+
+		<i class="zoom-glyph">search</i>
+		<SliderControl @ref="_zoom" class="zoom toolbar-slider" tooltip="Frame size"
+			Min="@FrameStrip.MinZoom" Max="@FrameStrip.MaxZoom" Step="@( 0.0025f )" ShowScale="@false" />
+	</div>
+
+	<FrameStrip @ref="_strip" Timeline="@this" AnimationSelection="@Selection" Playback="@Playback" Frames="@Frames" />
+</root>
+
+@code
+{
+	public ISpriteDocument Document { get; set; }
+	public IAnimationSelection Selection { get; set; }
+	public ISpritePlayback Playback { get; set; }
+	public FrameCommands Frames { get; set; }
+	public FrameImporter Importer { get; set; }
+
+	TextField _frameField;
+	SliderControl _zoom;
+	FrameStrip _strip;
+	bool _wired;
+
+	bool Playing => Playback?.IsPlaying ?? false;
+
+	public TimelinePanel()
+	{
+		AcceptsFocus = true;
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+
+		if ( _wired || Document is null || !_strip.IsValid() || !_zoom.IsValid() || !_frameField.IsValid() ) return;
+		_wired = true;
+
+		_frameField.Submitted = OnFrameTyped;
+
+		_zoom.ShowBackground = false;
+		_zoom.Value = _strip.Zoom;
+		_zoom.OnValueChanged = value => _strip.Zoom = value;
+
+		Document.Changed += OnDocumentChanged;
+		Selection.Changed += OnSelectionChanged;
+		Playback.Changed += OnPlaybackChanged;
+
+		_strip.Rebuild();
+	}
+
+	public override void OnDeleted()
+	{
+		base.OnDeleted();
+
+		if ( !_wired ) return;
+
+		Document.Changed -= OnDocumentChanged;
+		Selection.Changed -= OnSelectionChanged;
+		Playback.Changed -= OnPlaybackChanged;
+	}
+
+	//A load or an undo re-resolves the selection, which says so; the strip is rebuilt from there rather than twice.
+	void OnDocumentChanged( SpriteChange change ) => _strip?.Sync();
+
+	void OnSelectionChanged() => _strip?.Rebuild();
+
+	void OnPlaybackChanged() => StateHasChanged();
+
+	protected override int BuildHash() => HashCode.Combine( Playing );
+
+	//Once a frame: the playhead moved on its own, and the strip and the field follow it.
+	[EditorEvent.Frame]
+	void OnFrame()
+	{
+		if ( !IsVisible || !_strip.IsValid() ) return;
+
+		_strip.RefreshCurrent();
+
+		//Not over what is being typed into it.
+		if ( _frameField.IsValid() && !_frameField.HasFocus )
+			_frameField.Value = Playback.CurrentFrame.ToString();
+	}
+
+	void OnFrameTyped( string text )
+	{
+		if ( int.TryParse( text?.Trim(), out var frame ) )
+			Playback.CurrentFrame = frame;
+
+		Focus();
+	}
+
+	//What the strip asks for
+
+	internal void SetZoom( float zoom )
+	{
+		_strip.Zoom = zoom;
+		_zoom.Value = _strip.Zoom;
+	}
+
+	//The pointer's shape over the whole window, said only while a loop handle is dragged.
+	internal void SetCursor( CursorShape shape )
+	{
+		if ( HostWidget is { } host && host.IsValid() )
+			host.Cursor = shape;
+	}
+
+	internal void OpenAddMenu()
+	{
+		if ( Selection.Selected is null ) return;
+
+		var menu = new Menu();
+
+		menu.AddOption( "Add Empty Frame", "add", Frames.AddEmpty );
+		menu.AddOption( "Import Image(s)", "image", () => Importer.ImportImages( HostWidget ) );
+		menu.AddOption( "Import from Spritesheet", "grid_view", () => Importer.ImportSpritesheet( HostWidget ) );
+
+		menu.OpenAtCursor();
+	}
+
+	internal void EditFrames( IReadOnlyCollection<int> indices )
+		=> FrameEditPanel.Open( Document, Selection.Selected, indices );
+
+	//Keys
+
+	[Shortcut( "editor.duplicate", "CTRL+D" )]
+	void DuplicateSelection()
+	{
+		if ( _strip.Selection.Count == 0 ) return;
+
+		Frames.Duplicate( _strip.Selection.Indices );
+	}
+
+	[Shortcut( "editor.delete", "DEL" )]
+	void DeleteSelection()
+	{
+		if ( _strip.Selection.Count == 0 ) return;
+
+		Frames.Delete( _strip.Selection.Indices );
+	}
+}

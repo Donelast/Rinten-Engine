@@ -1,0 +1,493 @@
+﻿//The timeline: a window, the layer that moves inside it, and what is pinned to the edges.
+
+.timeline
+{
+	position: relative;
+	flex-grow: 1;
+	overflow: hidden;
+	pointer-events: all;
+	cursor: default;
+}
+
+.timeline-background
+{
+	position: absolute;
+	background-color: $control-background;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+
+	> .range
+	{
+		position: absolute;
+		top: 0px;
+		height: 100%;
+	}
+}
+
+.timeline-grid
+{
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+
+	//Grid lines: one per tile, with code measuring the interval and offset.
+	> .grid-lines
+	{
+		position: absolute;
+		left: 0px;
+		width: 100%;
+		background-repeat: repeat-x;
+		background-size-y: 100%;
+	}
+}
+
+//The layer that moves; it catches no mouse itself, but what sits on it does.
+.pan
+{
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.timeline-item
+{
+	position: absolute;
+	overflow: visible;
+
+	//Off the edge of the window: out of the layout until it comes back.
+	&.culled
+	{
+		display: none;
+	}
+}
+
+.timeline-track
+{
+	pointer-events: all;
+}
+
+.snap-target
+{
+	pointer-events: none;
+
+	//A dashed line: a 2px dash and gap, repeated downwards.
+	> .dashes
+	{
+		width: 1px;
+		height: 100%;
+		background-repeat: repeat-y;
+		background-size-x: 100%;
+		background-size-y: 4px;
+	}
+}
+
+.scrub-bar
+{
+	position: absolute;
+	left: 0px;
+	width: 100%;
+	pointer-events: all;
+	overflow: hidden;
+
+	&.top
+	{
+		top: 0px;
+		border-bottom: 2px solid rgba( white, 0.1 );
+	}
+
+	&.bottom
+	{
+		bottom: 0px;
+		border-top: 2px solid rgba( white, 0.1 );
+	}
+
+	> .range
+	{
+		position: absolute;
+		top: 0px;
+		height: 100%;
+	}
+
+	> .tick-label
+	{
+		position: absolute;
+		font-family: Roboto;
+		font-size: $type-micro;
+		font-weight: 300;
+	}
+
+	&.top > .tick-label
+	{
+		top: 2px;
+	}
+
+	&.bottom > .tick-label
+	{
+		bottom: 2px;
+	}
+}
+
+.scrub-range
+{
+	position: absolute;
+	top: 0px;
+	height: 100%;
+
+	> .edge
+	{
+		position: absolute;
+		top: 0px;
+		width: 1px;
+		height: 100%;
+		background-color: rgba( white, 0.5 );
+
+		&.start { left: 0px; }
+		&.end { right: 0px; }
+	}
+
+	> .corner
+	{
+		position: absolute;
+		width: 6px;
+		height: 6px;
+
+		&.start { left: 0px; }
+		&.end { right: 0px; transform: scaleX( -1 ); }
+	}
+
+	&.paste
+	{
+		background-color: rgba( white, 0.2 );
+
+		> .icon
+		{
+			position: absolute;
+			left: 0px;
+			top: 0px;
+			width: 100%;
+			height: 100%;
+			font-family: Material Icons;
+			font-size: $type-large;
+			align-items: center;
+			justify-content: center;
+			color: rgba( white, 0.8 );
+		}
+	}
+
+	&.loop
+	{
+		background-color: rgba( white, 0.05 );
+
+		> .edge { background-color: white; }
+	}
+
+	&.loop.top > .corner { bottom: 0px; }
+	&.loop.bottom > .corner { top: 0px; }
+}
+
+.time-cursor
+{
+	position: absolute;
+	width: 1px;
+	pointer-events: none;
+	overflow: visible;
+
+	&.hidden
+	{
+		display: none;
+	}
+
+	> .line
+	{
+		position: absolute;
+		left: 0px;
+		top: 12px;
+		bottom: 12px;
+		width: 1px;
+	}
+
+	> .marker
+	{
+		position: absolute;
+		left: -4px;
+		width: 9px;
+		height: 12px;
+
+		&.top { top: 0px; }
+		&.bottom { bottom: 0px; }
+	}
+
+	> .time-cursor-label
+	{
+		position: absolute;
+		left: 8px;
+		height: 20px;
+		padding: 0px 8px;
+		align-items: center;
+		border-radius: 3px;
+		background-color: rgba( $control-background, 0.75 );
+		font-family: $font-family;
+		font-size: $type-small;
+		white-space: nowrap;
+
+		&.top { top: 0px; }
+		&.bottom { bottom: 0px; }
+	}
+}
+
+.timeline-scrollbar
+{
+	position: absolute;
+	right: 0px;
+	top: 0px;
+	width: 8px;
+	height: 100%;
+	pointer-events: all;
+
+	&.hidden
+	{
+		display: none;
+	}
+
+	> .thumb
+	{
+		position: absolute;
+		left: 2px;
+		width: 4px;
+		border-radius: 2px;
+		background-color: rgba( $text-control, 0.3 );
+	}
+
+	&:hover > .thumb
+	{
+		background-color: rgba( $text-control, 0.6 );
+	}
+}
+
+//Blocks on tracks
+
+.block-item
+{
+	pointer-events: all;
+	overflow: hidden;
+	border-left: 1px solid rgba( white, 0.1 );
+	border-right: 1px solid rgba( white, 0.1 );
+
+	&.locked
+	{
+		border-left-color: transparent;
+		border-right-color: transparent;
+		pointer-events: none;
+	}
+
+	&.preview
+	{
+		opacity: 0.7;
+	}
+
+	.block-text
+	{
+		position: absolute;
+		top: 0px;
+		height: 100%;
+		align-items: center;
+		font-family: $font-family;
+		font-size: 12px;
+		color: rgba( white, 0.5 );
+		white-space: nowrap;
+		overflow: hidden;
+	}
+
+	.block-span
+	{
+		position: absolute;
+		top: 0px;
+		height: 100%;
+
+		> .thumb
+		{
+			position: absolute;
+			left: 0px;
+			top: 0px;
+			width: 30px;
+			height: 100%;
+			opacity: 0.5;
+		}
+
+		> .block-text
+		{
+			left: 0px;
+			width: 100%;
+		}
+	}
+}
+
+.curve-tile
+{
+	position: absolute;
+	top: 0px;
+	pointer-events: none;
+}
+
+//A sequence block: it can be picked up and dragged.
+.sequence-block
+{
+	cursor: pointer;
+	border-radius: 2px;
+	border-left-width: 0px;
+	border-right-width: 0px;
+
+	//Film: a tile-wide frame repeated along the block.
+	> .film-strip
+	{
+		position: absolute;
+		background-repeat: repeat-x;
+		background-size-x: 3px;
+		background-size-y: 100%;
+		left: 0px;
+		top: 0px;
+		width: 100%;
+		height: 100%;
+		border-radius: 2px;
+	}
+
+	> .loop-line
+	{
+		position: absolute;
+		top: 6px;
+		bottom: 6px;
+		width: 1px;
+	}
+
+	> .icon
+	{
+		position: absolute;
+		left: 8px;
+		top: 0px;
+		height: 100%;
+		align-items: center;
+		font-family: Material Icons;
+		font-size: $type-large;
+		color: $text-control;
+	}
+
+	> .title
+	{
+		position: absolute;
+		left: 28px;
+		top: 0px;
+		height: 100%;
+		align-items: center;
+		font-family: $font-family;
+		font-size: 12px;
+		color: $text-control;
+		white-space: nowrap;
+		overflow: hidden;
+	}
+
+	> .time
+	{
+		position: absolute;
+		top: 0px;
+		height: 100%;
+		align-items: center;
+		font-family: $font-family;
+		font-size: 12px;
+		color: $text-control;
+		white-space: nowrap;
+
+		&.start { left: 8px; }
+		&.end { right: 8px; }
+	}
+}
+
+//Keyframes and the time selection
+
+//A key on a track: it gets picked up and dragged.
+.keyframe-handle
+{
+	pointer-events: all;
+	cursor: pointer;
+
+	&.hidden
+	{
+		display: none;
+		pointer-events: none;
+	}
+
+	> .glyph
+	{
+		position: absolute;
+		left: 0px;
+		top: 0px;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+	}
+}
+
+.time-selection
+{
+	pointer-events: all;
+
+	//The cursor: the body of the selection is dragged, the edge is stretched.
+	&.peak,
+	&.fade { cursor: pointer; }
+	&.handle { cursor: e-resize; }
+
+	&.hidden
+	{
+		display: none;
+		pointer-events: none;
+	}
+
+	&.peak
+	{
+		border: 1px solid rgba( white, 0.5 );
+
+		> .action
+		{
+			position: absolute;
+			left: 0px;
+			top: 0px;
+			width: 100%;
+			height: 100%;
+			align-items: center;
+			justify-content: center;
+			font-family: Material Icons;
+			font-size: 32px;
+			color: white;
+			pointer-events: none;
+		}
+	}
+
+	&.fade > .fade-shape
+	{
+		position: absolute;
+		left: 0px;
+		top: 0px;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+	}
+
+	&.handle > .line
+	{
+		position: absolute;
+		left: 50%;
+		top: 0px;
+		width: 1px;
+		height: 100%;
+		pointer-events: none;
+	}
+}

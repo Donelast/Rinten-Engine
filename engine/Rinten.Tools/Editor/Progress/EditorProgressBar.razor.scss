@@ -1,0 +1,172 @@
+//The one bar that says something long is happening: the editor starting, a project opening, a compile, a scatter of clutter. Bottom left of
+//the window, out from the left edge while there is anything to say. The design tokens are put in front of this as it is parsed (EditorTokens).
+
+EditorProgressBar,
+.editor-progress
+{
+	position: absolute;
+	left: 16px;
+	bottom: 16px;
+	width: 340px;
+
+	flex-direction: column;
+
+	//Over a sheet if one is up - the launcher is one, and the editor coming up behind it is exactly what the bar is saying. Under a menu, which is 100.
+	z-index: 60;
+
+	//The layer it lies on is deaf to the pointer so that the window under it still hears. The bar takes it only while it is
+	//out: off the edge it is still laid out in the corner, and a panel nobody can see should not be swallowing presses there.
+	pointer-events: none;
+
+	padding: 8px 10px;
+
+	background-color: $glass-deep;
+	border: 1px solid $edge;
+	border-radius: $radius-3;
+	box-shadow: $shadow-float;
+
+	font-family: $font;
+	color: $ink;
+
+	//Off the left edge until there is a job. A transform rather than a left, because a left animates the layout and this only moves the picture.
+	opacity: 0;
+	transform: translateX( -380px );
+
+	transition: opacity $normal $ease, transform $normal $ease, border-color $normal $ease, background-color $normal $ease;
+
+	&.shown
+	{
+		opacity: 1;
+		transform: translateX( 0px );
+
+		pointer-events: all;
+	}
+
+	//The whole of a window of its own, in the corner of the screen: it fills that window, and the window appearing is what the slide
+	//was for. The shadow goes with it - the window is what casts one - and the corners stay, because what is around them is the desktop.
+	&.floating
+	{
+		left: auto;
+		bottom: auto;
+		width: 100%;
+		height: 100%;
+
+		transform: none;
+		box-shadow: none;
+
+		background-color: $glass-deep;
+	}
+
+	//Green is yes and red is no - the editor's two state colours, and the only two the bar is ever painted in.
+	&.ok { border-color: $green; }
+	//A failure turns the whole bar red, not only its edge: it is on the screen for a few seconds and has to be seen in them.
+	&.bad
+	{
+		border-color: $red;
+		background-color: darken( $red, 0.55 );
+	}
+
+	&.pressable { cursor: pointer; }
+
+	.row
+	{
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.glyph
+	{
+		font-family: Material Icons;
+		font-size: $type-large;
+		color: $accent;
+
+		margin-right: 8px;
+	}
+
+	&.ok .glyph { color: $green; }
+	&.bad .glyph { color: $red; }
+
+	//The words. It shrinks rather than pushing the count and the percent off the end - see the one-line mixin, whose min-width is the half of that.
+	.body
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		min-width: 0;
+	}
+
+	.title
+	{
+		font-size: $type-small;
+		font-weight: 600;
+
+		@include one-line;
+	}
+
+	.status
+	{
+		font-size: $type-micro;
+		color: $ink-off;
+
+		@include one-line;
+	}
+
+	.count
+	{
+		@include micro;
+
+		margin-left: 6px;
+	}
+
+	.percent
+	{
+		font-size: $type-micro;
+		font-weight: 600;
+		color: $accent;
+
+		margin-left: 8px;
+	}
+
+	&.ok .percent { color: $green; }
+	&.bad .percent { color: $red; }
+
+	//Only there for a job that can actually be stopped.
+	.stop
+	{
+		font-family: Material Icons;
+		font-size: $type-default;
+		color: $ink-off;
+
+		margin-left: 8px;
+
+		@include pressable;
+
+		&:hover { color: $ink; }
+	}
+
+	.track
+	{
+		position: relative;
+
+		height: 3px;
+		margin-top: 8px;
+
+		border-radius: $radius-round;
+		background-color: rgba( 255, 255, 255, 0.08 );
+	}
+
+	//Placed by code: how far along where that is known, a third of the track sliding back and forth where it is not.
+	.fill
+	{
+		position: absolute;
+		top: 0px;
+		height: 3px;
+
+		border-radius: $radius-round;
+		background-color: $accent;
+	}
+
+	&.ok .fill { background-color: $green; }
+	&.bad .fill { background-color: $red; }
+
+	.hidden { display: none; }
+}

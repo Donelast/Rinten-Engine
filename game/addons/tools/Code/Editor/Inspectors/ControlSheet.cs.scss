@@ -1,0 +1,27 @@
+ControlSheet,
+.controlsheet
+{
+	flex-direction: column;
+	font-family: Inter;
+	font-size: $type-default;
+	flex-shrink: 0;
+	flex-grow: 1;
+	min-height: 0;
+}
+
+ControlSheet > .body,
+.controlsheet > .body
+{
+	flex-direction: column;
+	flex-grow: 1;
+	overflow: scroll;
+	gap: $gap-row;
+	min-height: 0;
+	align-items: stretch;
+}
+
+ControlSheet > .body > *,
+.controlsheet > .body > *
+{
+	flex-shrink: 0;
+}
