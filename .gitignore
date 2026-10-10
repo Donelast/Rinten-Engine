@@ -46,6 +46,8 @@
 !*.modulemap
 !*.cmd
 !/engine/Core/extern/*/LICENSE
+!/engine/Core/extern/**/*.in
+!/engine/Tests/**/*.ps1
 
 # Basis Universal: licences, encoder exports for the Windows link, and the web transcoder with its notice
 !/engine/Core/extern/basisu/NOTICE
