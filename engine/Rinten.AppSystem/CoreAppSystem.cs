@@ -84,6 +84,15 @@ public class CoreAppSystem : AppSystem
 			return;
 		}
 
+		//The engine's own models built beside their definitions, a build step like the shaders
+		if ( Utility.CommandLine.HasSwitch( "-bakemodels" ) )
+		{
+			Application.WantsExit = true;
+			ExitCode = BakeModels( root ) ? 0 : 1;
+			Environment.ExitCode = ExitCode;
+			return;
+		}
+
 		//A headset asked for at launch makes the graphics device. Settings/VR restarts the editor after a successful
 		//probe and marks that one child process through its environment, rather than making the user type -vr.
 		CoreHeadset.Wanted = !Application.IsHeadless && !Utility.CommandLine.HasSwitch( "-novr" ) &&
@@ -130,6 +139,10 @@ public class CoreAppSystem : AppSystem
 
 		StartScene();
 	}
+
+	//Never inlined: it names Rinten.Tools, which a shipped game has not got
+	[System.Runtime.CompilerServices.MethodImpl( System.Runtime.CompilerServices.MethodImplOptions.NoInlining )]
+	private static bool BakeModels( string root ) => EngineModels.BakeAll( root );
 
 	private CoreUiWindow shellWindow;
 

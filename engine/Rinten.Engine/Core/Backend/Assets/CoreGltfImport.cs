@@ -226,6 +226,9 @@ internal static unsafe class CoreGltfImport
 					var skinBones = new byte[count * 4];
 					var skinWeights = new byte[count * 4];
 
+					//Out of the loop: a stackalloc holds until the method returns
+					Span<float> weightValues = stackalloc float[4];
+
 					for ( var v = 0; v < count; ++v )
 					{
 						if ( !hasJoints || !hasWeights )
@@ -241,7 +244,6 @@ internal static unsafe class CoreGltfImport
 
 						file.ReadFloat( jointsAccessor, v, scratch4 );
 
-						Span<float> weightValues = stackalloc float[4];
 						file.ReadFloat( weightsAccessor, v, weightValues );
 
 						//Weights come as floats summing to one; bytes summing to 255 is the same thing at

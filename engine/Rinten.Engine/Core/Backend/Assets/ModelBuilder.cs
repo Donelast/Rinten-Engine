@@ -637,6 +637,10 @@ internal sealed unsafe partial class ModelBuilder : IDisposable
 
 		var morph = morphs[at];
 
+		//Out of the loop: a stackalloc holds until the method returns
+		var position = stackalloc float[3];
+		var normal = stackalloc float[3];
+
 		for ( var i = 0; i < count; i++ )
 		{
 			var vertex = movedVertices[i];
@@ -644,8 +648,10 @@ internal sealed unsafe partial class ModelBuilder : IDisposable
 
 			morph.Vertices.Add( (uint)vertex );
 
-			var position = stackalloc float[3] { positions[i * 3], positions[( i * 3 ) + 1], positions[( i * 3 ) + 2] };
-			var normal = stackalloc float[3];
+			position[0] = positions[i * 3];
+			position[1] = positions[( i * 3 ) + 1];
+			position[2] = positions[( i * 3 ) + 2];
+			normal[0] = normal[1] = normal[2] = 0;
 
 			if ( normals is not null )
 			{

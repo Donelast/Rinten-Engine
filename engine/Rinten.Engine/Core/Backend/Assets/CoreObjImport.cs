@@ -82,6 +82,10 @@ internal static unsafe class CoreObjImport
 			return index;
 		}
 
+		//Out of the loop: a stackalloc holds until the method returns, and a file is millions of lines
+		Span<float> xyz = stackalloc float[3];
+		Span<float> uv = stackalloc float[2];
+
 		for ( var at = 0; at < lines.Length; ++at )
 		{
 			var line = lines[at].TrimEnd( '\r' );
@@ -96,8 +100,6 @@ internal static unsafe class CoreObjImport
 
 			if ( line.StartsWith( "v ", StringComparison.Ordinal ) )
 			{
-				Span<float> xyz = stackalloc float[3];
-
 				if ( ReadFloats( line.AsSpan( 2 ), xyz ) == 3 )
 					positions.Add( Read( xyz[0], xyz[1], xyz[2], unitScale ) );
 
@@ -106,8 +108,6 @@ internal static unsafe class CoreObjImport
 
 			if ( line.StartsWith( "vn ", StringComparison.Ordinal ) )
 			{
-				Span<float> xyz = stackalloc float[3];
-
 				//A direction, so it is not scaled.
 				if ( ReadFloats( line.AsSpan( 3 ), xyz ) == 3 )
 					normals.Add( Read( xyz[0], xyz[1], xyz[2], 1.0f ) );
@@ -117,7 +117,7 @@ internal static unsafe class CoreObjImport
 
 			if ( line.StartsWith( "vt ", StringComparison.Ordinal ) )
 			{
-				Span<float> uv = stackalloc float[2];
+				uv.Clear();
 
 				if ( ReadFloats( line.AsSpan( 3 ), uv ) >= 1 )
 				{

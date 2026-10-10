@@ -92,7 +92,8 @@ internal static class ModelInputs
 		var keeping = RecordPath( definition ) is not null;
 		var record = keeping ? RecordOf( definition ) : null;
 
-		if ( record is null ) return !keeping;
+		//An engine model is built before it ships, and no project has its record: its named exports are the whole check
+		if ( record is null ) return !keeping || !InProject( definition );
 
 		foreach ( var file in record.Files )
 		{
@@ -225,6 +226,13 @@ internal static class ModelInputs
 		if ( file.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) ) return false;
 
 		return File.Exists( file );
+	}
+
+	private static bool InProject( string definition )
+	{
+		if ( Project.Current?.GetRootPath() is not { } root ) return true;
+
+		return definition.StartsWith( Normal( root ).TrimEnd( '/' ) + "/", StringComparison.OrdinalIgnoreCase );
 	}
 
 	private static string Normal( string path ) => Path.GetFullPath( path ).Replace( '\\', '/' );

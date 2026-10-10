@@ -477,6 +477,10 @@ internal static unsafe class CoreFbxImport
 
 		var inverseBind = stackalloc float[16];
 
+		//Up here: a stackalloc in a loop holds until the method returns, megabytes on a big skin
+		var bones = stackalloc byte[4];
+		var vertexWeights = stackalloc byte[4];
+
 		for ( var b = 0; b < skeleton.Count; b++ )
 		{
 			var node = skeleton[b];
@@ -620,9 +624,6 @@ internal static unsafe class CoreFbxImport
 					if ( skeleton.Count == 0 ) continue;
 
 					//The four heaviest bones of this vertex, which is what the vertex format holds. ufbx has already sorted each vertex's weights heaviest first.
-					var bones = stackalloc byte[4];
-					var vertexWeights = stackalloc byte[4];
-
 					for ( var k = 0; k < 4; k++ ) { bones[k] = 0; vertexWeights[k] = 0; }
 
 					if ( deformer >= 0 )

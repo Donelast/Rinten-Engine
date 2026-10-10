@@ -46,6 +46,9 @@ internal static class ShippedBuild
 		if ( watching ) return;
 		if ( !Application.IsStandalone ) return;
 
+		//A release build step, which builds models with the editor's compiler on purpose
+		if ( Rinten.Utility.CommandLine.HasSwitch( "-bakemodels" ) ) return;
+
 		watching = true;
 
 		//Listening before looking, so nothing can load between the two unseen.

@@ -21,6 +21,7 @@ internal class Program
 		AddFetchNativesCommand( rootCommand );
 		AddVerifyNativesCommand( rootCommand );
 		AddBuildShadersCommand( rootCommand );
+		AddBuildModelsCommand( rootCommand );
 		AddWriteVersionCommand( rootCommand );
 		AddNvPatchCommand( rootCommand );
 		AddSignBinariesCommand( rootCommand );
@@ -146,6 +147,13 @@ internal class Program
 		{
 			Environment.ExitCode = (int)new BuildShaders( forced ).Run();
 		}, forcedOption );
+		rootCommand.Add( cmd );
+	}
+
+	private static void AddBuildModelsCommand( RootCommand rootCommand )
+	{
+		var cmd = new Command( "build-models", "Build the models the engine ships, for a release" );
+		cmd.SetHandler( () => { Environment.ExitCode = (int)new BuildModels().Run(); } );
 		rootCommand.Add( cmd );
 	}
 

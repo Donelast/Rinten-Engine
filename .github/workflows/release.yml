@@ -76,6 +76,10 @@ jobs:
       - name: Bake shaders
         run: dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- build-shaders
 
+      # The engine's own models built, or every install builds them on its first project (17 s for the skeleton)
+      - name: Build models
+        run: dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- build-models
+
       - name: Export kits
         run: dotnet run --project ./engine/Tools/RintenBuild/RintenBuild.csproj -- build-export-kits
 
@@ -99,6 +103,7 @@ jobs:
             game/bin/linuxsteamrt64/
             game/launchers/
             game/core/shaders/
+            game/addons/*/Assets/**/*_c
             dist/kits/
           if-no-files-found: error
 
